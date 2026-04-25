@@ -4,6 +4,34 @@ A detailed log of what's built.
 
 ---
 
+### MIDI learn — user-defined CC → param bindings
+
+- The MIDI input path used to consult only a static built-in CC
+  table (`cc_to_param_path` — CC74→cutoff, CC91→reverb_mix, etc.).
+  Anything outside that ten-entry list was ignored, and there was
+  no way to point a hardware knob at a less-common parameter
+  without editing source.
+- New `UiPrefs.midi_cc_bindings: BTreeMap<u8, String>` persists
+  user bindings across sessions.  The MIDI handler now consults
+  user bindings first; the static table is the fallback.  All user
+  bindings normalize 0..127 → 0..1 and apply via the existing
+  `dot_path_to_json + apply_llm_update` pipeline, so any
+  parameter reachable by the LLM apply path is bindable (bass /
+  fx / drum kit / etc.).
+- New Preferences → Controls → MIDI BINDINGS section: lists
+  current bindings (delete with ✕), plus an "Add binding" form —
+  type a dot-path, click "learn next CC", turn a knob on the
+  controller, the next CC heard saves the pair.  A pending learn
+  shows a "Waiting for CC… → path" banner with a cancel button.
+- `ImpulseApp.midi_learn_target: Option<String>` is the transient
+  cell holding the in-flight learn target; never persisted, so
+  pending learns reset cleanly on app start.
+- 8 new MIDI learn tests cover serde round-trip, default-empty,
+  field-missing-from-old-session deserialization, removal, the
+  apply-path normalize-to-0-1 invariant, multi-domain (bass + fx)
+  routing, bogus-path no-panic, and the user-overrides-static
+  precedence contract.  Full suite at 1514 passing.
+
 ### Auto-retry on lane failure with temperature bump
 
 - When a lane inference returned an error (parse failure, repair

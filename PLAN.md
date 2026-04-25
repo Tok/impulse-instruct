@@ -18,10 +18,6 @@ they ship and are reflected in `features.md`.
   internally; surface it as a horizontal scrubber above the log so
   users can A/B compare past states visually instead of mashing Ctrl-Z
   blind.
-- [ ] **Per-knob MIDI-learn** - right-click any knob -> "Learn MIDI CC"
-  -> user sends a CC -> app binds it.  Stored in `UiPrefs` / session
-  so it persists.  Current MIDI path is input-only on the sequencer;
-  this extends it to every parameter.
 - [ ] **Pattern snapshot slots (A/B/C/D)** - four one-shot slots that
   capture the full sequencer pattern state (all voices + steps +
   notes + accents).  Click to swap between them live.  Keyboard:

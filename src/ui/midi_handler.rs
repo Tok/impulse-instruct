@@ -54,7 +54,32 @@ impl ImpulseApp {
                         }));
                 }
                 MidiEvent::ControlChange { cc, value, .. } => {
-                    if let Some((path, scale)) = cc_to_param_path(cc) {
+                    // 1. If a learn-next-CC request is pending, this CC
+                    //    becomes the binding instead of acting on a
+                    //    parameter.  Save and clear; let the next CC
+                    //    of the same number drive the param normally.
+                    if let Some(target) = self.midi_learn_target.take() {
+                        let mut s = self.state.write();
+                        s.ui_prefs.midi_cc_bindings.insert(cc, target.clone());
+                        log::info!("[midi] learned CC{} → {}", cc, target);
+                        self.session_dirty = true;
+                        continue;
+                    }
+                    // 2. User binding wins over the static table.
+                    let user_binding = self
+                        .state
+                        .read()
+                        .ui_prefs
+                        .midi_cc_bindings
+                        .get(&cc)
+                        .cloned();
+                    if let Some(path) = user_binding {
+                        let scaled = value as f32 / 127.0;
+                        let update = super::dot_path_to_json(&path, scaled);
+                        let next = apply_llm_update(self.state.read().clone(), &update, &[]);
+                        *self.state.write() = next;
+                        self.push_audio_params();
+                    } else if let Some((path, scale)) = cc_to_param_path(cc) {
                         let scaled = scale(value);
                         let update = super::dot_path_to_json(path, scaled);
                         let next = apply_llm_update(self.state.read().clone(), &update, &[]);

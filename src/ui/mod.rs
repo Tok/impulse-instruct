@@ -257,6 +257,15 @@ pub struct ImpulseApp {
     midi_rx: Receiver<MidiEvent>,
     midi_port: Option<String>,
     pressed_notes: std::collections::HashSet<u8>,
+    /// Transient target for "learn next CC".  When `Some(path)`, the
+    /// next incoming CC binds itself to that dot-path in
+    /// `UiPrefs.midi_cc_bindings` and clears the field.  Cleared on
+    /// app start; never persisted.  See Preferences → Controls → MIDI.
+    pub(crate) midi_learn_target: Option<String>,
+    /// Text-input buffer for the "Add MIDI binding" form in
+    /// Preferences → Controls.  Holds the dot-path the user is
+    /// typing before they click "Learn next CC".
+    pub(crate) midi_learn_input: String,
     piano_mouse_note: Option<u8>, // mouse-held note, separate from MIDI
     prompt_input: String,
     log_text: String,
@@ -449,6 +458,8 @@ impl ImpulseApp {
             midi_rx,
             midi_port,
             pressed_notes: std::collections::HashSet::new(),
+            midi_learn_target: None,
+            midi_learn_input: String::new(),
             piano_mouse_note: None,
             prompt_input: String::new(),
             log_text,

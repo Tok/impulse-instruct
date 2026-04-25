@@ -118,5 +118,98 @@ impl ImpulseApp {
                 .size(8.0)
                 .color(theme::IRON),
         );
+
+        // ── MIDI bindings ────────────────────────────────────────────────────
+        ui.add_space(8.0);
+        widgets::section_header(ui, "MIDI BINDINGS");
+        ui.label(
+            egui::RichText::new("  User CC→param map.  Wins over the built-in table; persists.")
+                .monospace()
+                .size(8.0)
+                .color(theme::IRON),
+        );
+
+        // Learn-pending banner
+        if let Some(target) = self.midi_learn_target.clone() {
+            let mut cancel = false;
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("Waiting for CC… → {target}"))
+                        .monospace()
+                        .size(9.0)
+                        .color(theme::CHALK),
+                );
+                if ui
+                    .small_button(egui::RichText::new("cancel").monospace().size(8.5))
+                    .clicked()
+                {
+                    cancel = true;
+                }
+            });
+            if cancel {
+                self.midi_learn_target = None;
+            }
+        }
+
+        // Existing bindings — one row per CC, with a delete button.
+        let bindings: Vec<(u8, String)> = self
+            .state
+            .read()
+            .ui_prefs
+            .midi_cc_bindings
+            .iter()
+            .map(|(c, p)| (*c, p.clone()))
+            .collect();
+        for (cc, path) in bindings {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("CC{:>3}", cc))
+                        .monospace()
+                        .size(9.0)
+                        .color(theme::FOG),
+                );
+                ui.label(
+                    egui::RichText::new(&path)
+                        .monospace()
+                        .size(9.0)
+                        .color(theme::SMOKE),
+                );
+                if ui
+                    .small_button(egui::RichText::new("✕").monospace().size(9.0))
+                    .clicked()
+                {
+                    let mut s = self.state.write();
+                    s.ui_prefs.midi_cc_bindings.remove(&cc);
+                    self.session_dirty = true;
+                }
+            });
+        }
+
+        // Add-new form: text field for the dot-path + "Learn next CC" button.
+        ui.add_space(2.0);
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("path:")
+                    .monospace()
+                    .size(9.0)
+                    .color(theme::FOG),
+            );
+            ui.add(
+                egui::TextEdit::singleline(&mut self.midi_learn_input)
+                    .font(egui::TextStyle::Monospace)
+                    .desired_width(160.0)
+                    .hint_text("bass.cutoff"),
+            );
+            if ui
+                .small_button(egui::RichText::new("learn next CC").monospace().size(9.0))
+                .clicked()
+            {
+                let trimmed = self.midi_learn_input.trim().to_string();
+                if !trimmed.is_empty() {
+                    self.midi_learn_target = Some(trimmed);
+                    self.midi_learn_input.clear();
+                }
+            }
+        });
     }
 }

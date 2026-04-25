@@ -129,6 +129,14 @@ pub struct UiPrefs {
     /// who prefer a clean slate each time they relaunch a style.
     #[serde(default)]
     pub autosync_rack_on_start: bool,
+    /// User-defined MIDI CC → parameter dot-path bindings.  Checked
+    /// before the static `cc_to_param_path` table, so a user binding
+    /// always wins.  All bindings normalize the CC's 0..127 value to
+    /// 0..1 via `apply_llm_update`; finer scales (toggles, ranges)
+    /// are out of V1 scope.  Persisted in session so bindings
+    /// survive relaunches.
+    #[serde(default)]
+    pub midi_cc_bindings: std::collections::BTreeMap<u8, String>,
 }
 
 fn default_grid_cols() -> u8 {
@@ -201,6 +209,7 @@ impl Default for UiPrefs {
             stream_stereo: false,
             rack_grid_cols: 5,
             autosync_rack_on_start: false,
+            midi_cc_bindings: std::collections::BTreeMap::new(),
         }
     }
 }
