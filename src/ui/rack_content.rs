@@ -825,20 +825,61 @@ pub(super) fn draw_lfo_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_i
 pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     use crate::ui::widgets;
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let mut master_vol = app.state.read().fx.master_volume;
+    let (
+        mut master_vol,
+        mut mid_gain,
+        mut mid_tilt,
+        mut mid_sat,
+        mut side_gain,
+        mut side_tilt,
+        mut side_sat,
+    ) = {
+        let s = app.state.read();
+        (
+            s.fx.master_volume,
+            s.fx.ms_mid_gain,
+            s.fx.ms_mid_tilt,
+            s.fx.ms_mid_sat,
+            s.fx.ms_side_gain,
+            s.fx.ms_side_tilt,
+            s.fx.ms_side_sat,
+        )
+    };
+    let locked = app.state.read().llm.locked_params.clone();
+    let focused = app.state.read().llm.focused_params.clone();
+    let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
+    let mut changed = false;
 
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new("MASTER VOLUME")
+            egui::RichText::new("MASTER")
                 .monospace()
                 .size(9.0)
                 .color(theme::ASH),
         );
-        if widgets::param_control(ui, "", &mut master_vol, crate::state::ParamMode::Free, ctrl).0 {
-            app.state.write().fx.master_volume = master_vol;
-            app.push_audio_params();
+        if widgets::param_control(ui, "VOL", &mut master_vol, pm("fx.master_volume"), ctrl).0 {
+            changed = true;
         }
-
+        ui.separator();
+        if widgets::param_control(ui, "MID G", &mut mid_gain, pm("fx.ms_mid_gain"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "MID T", &mut mid_tilt, pm("fx.ms_mid_tilt"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "MID S", &mut mid_sat, pm("fx.ms_mid_sat"), ctrl).0 {
+            changed = true;
+        }
+        ui.separator();
+        if widgets::param_control(ui, "SIDE G", &mut side_gain, pm("fx.ms_side_gain"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "SIDE T", &mut side_tilt, pm("fx.ms_side_tilt"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "SIDE S", &mut side_sat, pm("fx.ms_side_sat"), ctrl).0 {
+            changed = true;
+        }
         ui.separator();
         let rack = app.state.read();
         let voice_kinds = [
@@ -864,51 +905,9 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         }
     });
 
-    // Mid/side master strip — 6 knobs arranged MID {G T S} | SIDE {G T S}.
-    let (mut mid_gain, mut mid_tilt, mut mid_sat, mut side_gain, mut side_tilt, mut side_sat) = {
-        let s = app.state.read();
-        (
-            s.fx.ms_mid_gain,
-            s.fx.ms_mid_tilt,
-            s.fx.ms_mid_sat,
-            s.fx.ms_side_gain,
-            s.fx.ms_side_tilt,
-            s.fx.ms_side_sat,
-        )
-    };
-    let locked = app.state.read().llm.locked_params.clone();
-    let focused = app.state.read().llm.focused_params.clone();
-    let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
-    let mut ms_changed = false;
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new("M/S")
-                .monospace()
-                .size(9.0)
-                .color(theme::ASH),
-        );
-        if widgets::param_control(ui, "MID G", &mut mid_gain, pm("fx.ms_mid_gain"), ctrl).0 {
-            ms_changed = true;
-        }
-        if widgets::param_control(ui, "MID T", &mut mid_tilt, pm("fx.ms_mid_tilt"), ctrl).0 {
-            ms_changed = true;
-        }
-        if widgets::param_control(ui, "MID S", &mut mid_sat, pm("fx.ms_mid_sat"), ctrl).0 {
-            ms_changed = true;
-        }
-        ui.separator();
-        if widgets::param_control(ui, "SIDE G", &mut side_gain, pm("fx.ms_side_gain"), ctrl).0 {
-            ms_changed = true;
-        }
-        if widgets::param_control(ui, "SIDE T", &mut side_tilt, pm("fx.ms_side_tilt"), ctrl).0 {
-            ms_changed = true;
-        }
-        if widgets::param_control(ui, "SIDE S", &mut side_sat, pm("fx.ms_side_sat"), ctrl).0 {
-            ms_changed = true;
-        }
-    });
-    if ms_changed {
+    if changed {
         let mut s = app.state.write();
+        s.fx.master_volume = master_vol;
         s.fx.ms_mid_gain = mid_gain;
         s.fx.ms_mid_tilt = mid_tilt;
         s.fx.ms_mid_sat = mid_sat;
