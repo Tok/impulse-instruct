@@ -4,6 +4,27 @@ A detailed log of what's built.
 
 ---
 
+### Rack mini-map — bird's-eye navigator with click-to-pan
+
+- New optional overlay anchored bottom-right of the rack canvas
+  showing every module as a thumbnail rectangle plus a viewport
+  indicator that highlights what's currently in view.  Click /
+  drag inside the mini-map to scroll there — the clicked y becomes
+  the centre of the viewport.
+- Useful for tall racks (Crew preset + many FX cards stacked) where
+  the scroll bar is otherwise uninformative.  Off by default; toggle
+  in Preferences → Display → "Rack mini-map".
+- New module `ui/rack_minimap.rs` (~165 lines) reads the cached
+  `module_card_rects` published by the rack canvas + the
+  ScrollAreaOutput state; pure helpers
+  `card_to_content_space` / `content_y_to_map_y` /
+  `map_y_to_content_y` keep the coordinate math out of the painter.
+- 7 tests cover viewport-relative card mapping, x-axis isolation
+  from scroll, proportional y mapping, out-of-range clamps, the
+  zero-content edge case, and inverse round-trip / pointer-out-of-
+  range clamping for click-to-pan.  Full suite at 1570 tests
+  passing.
+
 ### WebSocket state push — `/api/ws/state`
 
 - New `GET /api/ws/state` upgrades the connection to a WebSocket

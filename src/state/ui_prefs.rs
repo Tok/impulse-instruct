@@ -151,6 +151,14 @@ pub struct UiPrefs {
     /// header view menu.
     #[serde(default)]
     pub performance_mode: bool,
+    /// When true, draw a bird's-eye mini-map overlay in the bottom-
+    /// right corner of the rack canvas — module rectangles scaled
+    /// to fit, plus a viewport indicator showing what's currently
+    /// in view.  Click-to-pan jumps the scroll offset.  Off by
+    /// default; meant for tall racks with many agents / FX where
+    /// scroll position is otherwise hard to track.
+    #[serde(default)]
+    pub show_rack_minimap: bool,
 }
 
 fn default_grid_cols() -> u8 {
@@ -226,6 +234,7 @@ impl Default for UiPrefs {
             midi_cc_bindings: std::collections::BTreeMap::new(),
             show_automation_overlay: false,
             performance_mode: false,
+            show_rack_minimap: false,
         }
     }
 }

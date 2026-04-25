@@ -10,10 +10,6 @@ they ship and are reflected in `features.md`.
 
 ## UI / UX
 
-- [ ] **Rack mini-map** - bird's-eye navigator in a corner of the rack
-  view showing the full module grid as thumbnails, with a draggable
-  viewport rectangle for quick nav on tall racks (many agents + many
-  FX).
 - [ ] **Undo/redo timeline scrubber** - the undo stack already exists
   internally; surface it as a horizontal scrubber above the log so
   users can A/B compare past states visually instead of mashing Ctrl-Z

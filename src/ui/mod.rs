@@ -26,6 +26,7 @@ pub(crate) mod rack_content_pad;
 pub(crate) mod rack_content_param_eq;
 pub(crate) mod rack_content_pitch_shift;
 mod rack_grid;
+pub(crate) mod rack_minimap;
 mod rack_scroll;
 mod rack_toolbar;
 mod scope_footer;

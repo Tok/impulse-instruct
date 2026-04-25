@@ -97,6 +97,17 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     ctx.memory_mut(|m| m.data.insert_temp(ports_mem_id, ports.clone()));
     rack_cables::draw_cable_overlay(app, ctx, &ports, canvas_rect);
 
+    // Bird's-eye mini-map — opt-in via Preferences → Display.  Reads
+    // the cached card_rects published at the bottom of draw_rack_inner.
+    if app.state.read().ui_prefs.show_rack_minimap {
+        let cards: Vec<(crate::state::ModuleKind, egui::Rect)> = ctx
+            .memory(|m| m.data.get_temp(egui::Id::new("module_card_rects")))
+            .unwrap_or_default();
+        if !cards.is_empty() {
+            super::rack_minimap::draw(ctx, canvas_rect, &cards, &scroll_out);
+        }
+    }
+
     if (app.rack_flipped || app.cable_drag.is_some())
         && let Some(pointer) = ctx.pointer_latest_pos()
     {

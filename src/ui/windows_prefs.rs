@@ -433,6 +433,8 @@ impl ImpulseApp {
                                 "Automation overlay (LFO sparkline)",
                                 prefs.show_automation_overlay,
                             );
+                            let minimap =
+                                viz_toggle(ui, "Rack mini-map", prefs.show_rack_minimap);
                             if spectrum != prefs.show_spectrum_bars {
                                 self.state.write().ui_prefs.show_spectrum_bars = spectrum;
                             }
@@ -450,6 +452,9 @@ impl ImpulseApp {
                             }
                             if automation != prefs.show_automation_overlay {
                                 self.state.write().ui_prefs.show_automation_overlay = automation;
+                            }
+                            if minimap != prefs.show_rack_minimap {
+                                self.state.write().ui_prefs.show_rack_minimap = minimap;
                             }
                         }
                     }
