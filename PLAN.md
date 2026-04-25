@@ -6,18 +6,6 @@ they ship and are reflected in `features.md`.
 
 ---
 
-## Modulation
-
-- [ ] **Native per-voice `BassLfoTarget::Pan` + phase offset** — the
-  Bach demo's anti-phase pan sweep between voice 0 and voice 1
-  currently runs as a 10 Hz Python loop over `/api/params`, because
-  `BassLfoTarget` (Pitch / PulseWidth / FilterCutoff / Amplitude) has
-  no `Pan` variant and `BassVoice` has no phase field.  Add `Pan` to
-  the enum, a `lfo_phase: f32` (0..1 → 0..2π) to `BassVoice`, and
-  wire both into the DSP — the scenario can then configure the
-  anti-phase sweep once and let the audio thread animate it, zero
-  HTTP traffic, zero state-lock contention.
-
 ## Sequencer
 
 - [ ] **Polymeter** - per-voice step length independent of the global

@@ -4,6 +4,39 @@ A detailed log of what's built.
 
 ---
 
+### Native bass LFO `Pan` target + per-voice `lfo_phase` offset
+
+- **Replaces the Bach demo's 10 Hz Python pan loop** with a DSP
+  path: two voices configured once, audio thread animates the
+  stereo motion, zero HTTP traffic, zero state-lock contention.
+- **`BassLfoTarget::Pan`** added to the enum (label "PAN", cycle
+  rotation Amplitude → Pan → Off).  When selected, the LFO writes
+  `output * lfo_value * 0.5` to the voice's `pan_side` field every
+  sample; the master mixer sums per-voice `pan_side` into the
+  global pan_side bus, additive on top of the existing `bus_bass *
+  bass_pan * 0.5` static-pan path so non-Pan patches behave
+  identically.
+- **`bass.lfo_phase` 0..1** added to `BassState` — applied to the
+  running LFO phase before the waveform lookup, so two voices
+  sharing a rate can be 90° apart (0.25), anti-phase (0.5), etc.
+  The Bach scenario now sets voice 0 to `phase=0.0` and voice 1 to
+  `phase=0.5` and gets a perfect anti-phase pan sweep for free.
+- **UI**: PHASE knob next to RATE / DEPTH on the bass LFO group.
+- **LLM schema**: `bass.lfo_target ∈ {off,pitch,pwm,cutoff,amp,pan}`
+  (with `stereo` accepted as an alias) + `bass.lfo_phase` 0..1.
+  As part of the same change the previously-undocumented
+  `lfo_rate` / `lfo_depth` / `lfo_delay` / `lfo_bpm_sync` /
+  `lfo_sync_beats` got added to the bass schema too — they were
+  always wired through `apply_bass_update` but the schema's
+  `additionalProperties: false` was rejecting them.
+- 7 tests cover the enum cycle / label, default state, LLM apply
+  for the new fields + per-voice update path, lock respect on
+  `bass.lfo_phase`, non-Pan targets leaving `pan_side` at zero,
+  and the key behavioral check — two voices triggered at the same
+  note with phases 0 / 0.5 produce per-sample `pan_side`
+  contributions whose pair sum averages near zero across an 8 k-
+  sample window while the individual peak stays audibly nonzero.
+
 ### Wavetable voice (Serum-format frame stacks, single-table scan)
 
 - **New `ModuleKind::WavetableVoice`** — user-supplied `.wav` files
