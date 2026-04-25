@@ -91,6 +91,7 @@ mod song_mode_tests {
                 bpm: Some(160.0),
                 style: Some("jungle".into()),
                 repeats: 2,
+                morph_bars: 0,
             },
             ChainSlotOverride::default(),
         ];

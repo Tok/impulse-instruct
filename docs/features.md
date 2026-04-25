@@ -4,6 +4,39 @@ A detailed log of what's built.
 
 ---
 
+### Pattern morphing on chain advance — step-by-step crossfade
+
+- New `ChainSlotOverride.morph_bars: u8` field (0 = classic hard
+  cut, 1..=8 = N-loop morph).  When the chain advances into a slot
+  with `morph_bars > 0`, the audio thread keeps the prior pattern
+  playing and stashes the new pattern as `AppState.chain_morph =
+  Some(ChainMorph)`.
+- On every subsequent loop boundary, `morph_tick()` increments
+  `bars_done` and replaces a growing fraction of step indices with
+  the target's same-index step.  Index ordering is **bit-reversal
+  dispersal**: rank 0 → index 0, rank 1 → index N/2, rank 2 → index
+  N/4, etc.  This makes the rhythm gain the new pattern's
+  character evenly across the bar instead of swapping front-half /
+  back-half.
+- Step counts and BPM/swing apply immediately (transport changes
+  shouldn't lag behind the morph); only the per-step active /
+  velocity / note / accent / cond / probability fields evolve over
+  the morph window.  Final tick snaps the live sequencer to the
+  full target and clears `chain_morph`.
+- Morphed voices: drum patterns (all kinds), bass voice patterns +
+  legacy mirror, hoover, an1x, pluck, wavetable.
+- New `set_chain_slot_morph()` transition (clamps 0..=8) and a
+  matching `morph` drag-value in the chain-slot popover (next to
+  `×repeats`).  `POST /api/song` accepts `morph_bars` inside each
+  override entry — JSON path is `chain_overrides[i].morph_bars`.
+- 13 morph tests cover bit-reversal rank purity / range,
+  threshold semantics (no swap at 0%, full swap at 100%, quarter
+  progress swaps a quarter), the dispersal-first invariant
+  (index 0 always swaps first), final-tick wholesale replacement,
+  intermediate-tick partial replacement on a 64-step pattern,
+  step-count / tempo immutability mid-morph, bass voice 0
+  progressive replacement, and `morph_bars` clamping (0→1, 100→8).
+
 ### Conditional triggers — per-step every-Nth-cycle gating
 
 - New `cond: u8` field on `Step` and `TB303Step` (2-bit semantic:

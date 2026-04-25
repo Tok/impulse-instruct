@@ -8,10 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## Sequencer
 
-- [ ] **Pattern morphing on chain advance** - smooth crossfade / step-
-  by-step pattern swap instead of the current hard cut.  New
-  `ChainSlotOverride::morph_bars` field (0 = hard cut, >0 = bars to
-  crossfade over).
 - [ ] **Rackable viz modules (visualizers as rack modules)** - move
   the header oscillographs / spectrum / event stream into optional
   visualizer rack modules so the user can add / remove / position

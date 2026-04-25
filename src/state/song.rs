@@ -37,6 +37,16 @@ pub struct ChainSlotOverride {
     /// without burning minutes on a stuck slot.
     #[serde(default = "default_repeats")]
     pub repeats: u8,
+    /// Pattern-morph length in loops when entering this slot.  `0`
+    /// (the default) is the classic hard cut: the new pattern replaces
+    /// the previous one instantly on advance.  `>0` schedules a
+    /// step-by-step crossfade — over `morph_bars` loop boundaries,
+    /// indices from the new pattern progressively replace the old
+    /// using a bit-reversal dispersal order so the rhythm evolves
+    /// gradually rather than swapping front-half / back-half.  See
+    /// `crate::state::ChainMorph`.  Clamped to `0..=8` by setters.
+    #[serde(default)]
+    pub morph_bars: u8,
 }
 
 fn default_repeats() -> u8 {
@@ -49,6 +59,7 @@ impl Default for ChainSlotOverride {
             bpm: None,
             style: None,
             repeats: default_repeats(),
+            morph_bars: 0,
         }
     }
 }
@@ -57,6 +68,6 @@ impl ChainSlotOverride {
     /// True when the override carries no information — purely decorative.
     /// Used to strip no-op entries from serialized song payloads.
     pub fn is_empty(&self) -> bool {
-        self.bpm.is_none() && self.style.is_none() && self.repeats <= 1
+        self.bpm.is_none() && self.style.is_none() && self.repeats <= 1 && self.morph_bars == 0
     }
 }

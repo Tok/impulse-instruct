@@ -340,6 +340,25 @@ impl AudioEngine {
                             s.global_step_count += (curr_step - prev_step) as u64;
                         }
                         s.sequencer.current_step = clock.current_step;
+                        if clock.loop_count != prev_loop_count {
+                            // Pattern morph in flight — progress it
+                            // before the chain-advance logic that may
+                            // create a *new* morph below.  Each tick
+                            // replaces a growing fraction of step
+                            // indices with the target pattern's
+                            // same-index step (bit-reversal dispersal
+                            // order); the final tick swaps wholesale
+                            // and clears the morph.
+                            if let Some(mut morph) = s.chain_morph.take() {
+                                let new_seq =
+                                    crate::state::morph_tick(s.sequencer.clone(), &mut morph);
+                                s.sequencer = new_seq;
+                                s.sequencer.current_step = clock.current_step;
+                                if !morph.is_complete() {
+                                    s.chain_morph = Some(morph);
+                                }
+                            }
+                        }
                         if clock.loop_count != prev_loop_count
                             && chain_enabled
                             && !chain_snap.is_empty()
@@ -388,6 +407,7 @@ impl AudioEngine {
                                 let next_pos = (cur_pos + 1) % chain_snap.len();
                                 let next_slot = chain_snap[next_pos];
                                 let next_override = chain_overrides_snap.get(next_pos);
+                                let morph_bars = next_override.map(|o| o.morph_bars).unwrap_or(0);
                                 let bpm = s.sequencer.bpm;
                                 let swing = s.sequencer.swing;
                                 let running = s.sequencer.running;
@@ -429,7 +449,7 @@ impl AudioEngine {
                                 // user-composed songs (chain_loop=true, the
                                 // legacy default) we replace everything,
                                 // preserving the classic per-bank behaviour.
-                                s.sequencer = if chain_loop_snap {
+                                let target = if chain_loop_snap {
                                     crate::state::chain_advance_transport(
                                         loaded, eff_bpm, eff_swing, running,
                                     )
@@ -438,6 +458,23 @@ impl AudioEngine {
                                         loaded, &seq_snap, running,
                                     )
                                 };
+                                if morph_bars > 0 {
+                                    // Pattern-morph path: keep the prior
+                                    // sequencer playing and stash the
+                                    // target.  Subsequent loop boundaries
+                                    // run `morph_tick` which progressively
+                                    // swaps step indices in the live
+                                    // patterns.  Apply BPM / swing
+                                    // immediately so transport changes
+                                    // don't lag behind the morph.
+                                    s.sequencer.bpm = target.bpm;
+                                    s.sequencer.swing = target.swing;
+                                    s.chain_morph =
+                                        Some(crate::state::ChainMorph::new(target, morph_bars));
+                                } else {
+                                    s.sequencer = target;
+                                    s.chain_morph = None;
+                                }
                                 s.sequencer.current_step = clock.current_step;
                                 s.pattern_edit = next_slot;
                                 if effective_style.is_some() {

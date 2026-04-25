@@ -39,6 +39,9 @@ pub use sequencer_state::{SequencerState, Step, TB303Step};
 pub mod fx;
 pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
 
+pub mod morph;
+pub use morph::{ChainMorph, bit_reverse_rank, morph_tick, step_swapped};
+
 pub mod song;
 pub use song::ChainSlotOverride;
 
@@ -262,6 +265,15 @@ pub struct AppState {
     /// this to false so the piece plays exactly once.
     #[serde(default = "default_chain_loop")]
     pub chain_loop: bool,
+    /// Pattern morph in flight — set when the audio thread advances
+    /// into a chain slot whose `ChainSlotOverride.morph_bars > 0`.
+    /// While this is `Some`, each loop boundary applies one morph
+    /// tick (replacing a growing fraction of step indices with the
+    /// target pattern's same-index step) instead of jumping directly
+    /// to the new pattern.  Cleared automatically when the morph
+    /// completes.  Skipped from serialization — purely transient.
+    #[serde(skip)]
+    pub chain_morph: Option<ChainMorph>,
     /// When true, piano/MIDI note-ons while running write into the bass pattern.
     #[serde(default)]
     pub live_record: bool,
@@ -334,6 +346,7 @@ impl Default for AppState {
             chain_pos: 0,
             chain_repeat_count: 0,
             chain_loop: true,
+            chain_morph: None,
             live_record: false,
             spectrum: Default::default(),
             rack: Default::default(),

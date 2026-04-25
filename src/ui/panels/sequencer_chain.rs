@@ -5,7 +5,8 @@
 use crate::llm::styles::StyleCatalog;
 use crate::state::{
     bank_swap, bank_write, chain_pop, chain_push, clear_chain_slot_override, set_chain_enabled,
-    set_chain_slot_bpm, set_chain_slot_repeats, set_chain_slot_style, swap_chain_slots,
+    set_chain_slot_bpm, set_chain_slot_morph, set_chain_slot_repeats, set_chain_slot_style,
+    swap_chain_slots,
 };
 use crate::ui::{ImpulseApp, theme};
 
@@ -603,6 +604,25 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     {
                         let s = app.state.read().clone();
                         *app.state.write() = set_chain_slot_repeats(s, pos, r.max(1) as u8);
+                    }
+                });
+
+                // Morph bars — step-by-step crossfade on chain advance.
+                // 0 = hard cut (default); 1..=8 = N-loop morph.
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("morph")
+                            .color(theme::FOG)
+                            .monospace()
+                            .size(9.0),
+                    );
+                    let mut m = cur.morph_bars as i32;
+                    if ui
+                        .add(egui::DragValue::new(&mut m).range(0..=8).speed(0.1))
+                        .changed()
+                    {
+                        let s = app.state.read().clone();
+                        *app.state.write() = set_chain_slot_morph(s, pos, m.max(0) as u8);
                     }
                 });
 

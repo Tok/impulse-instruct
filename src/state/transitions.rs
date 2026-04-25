@@ -719,6 +719,20 @@ pub fn set_chain_slot_repeats(state: AppState, pos: usize, repeats: u8) -> AppSt
     s
 }
 
+/// Set the pattern-morph length for chain slot `pos`.  `0` is the
+/// classic hard cut; `1..=8` schedules a step-by-step crossfade over
+/// that many loop boundaries when the chain advances into this slot.
+/// See `crate::state::morph::ChainMorph`.
+pub fn set_chain_slot_morph(state: AppState, pos: usize, bars: u8) -> AppState {
+    let mut s = state;
+    if pos >= s.chain.len() {
+        return s;
+    }
+    ensure_chain_overrides_len(&mut s, pos + 1);
+    s.chain_overrides[pos].morph_bars = bars.min(8);
+    s
+}
+
 /// Clear every override on the given slot — brings it back to plain
 /// chain-position behaviour (no style swap, no BPM force, one loop).
 pub fn clear_chain_slot_override(state: AppState, pos: usize) -> AppState {
