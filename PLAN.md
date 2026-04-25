@@ -25,10 +25,6 @@ they ship and are reflected in `features.md`.
 - [ ] **Keyboard shortcut overlay** - F1 (or ?) pops a translucent
   overlay listing every shortcut in groups (sequencer / rack /
   agents).  Reads the actual keybinding map so it can't drift.
-- [ ] **Performance mode** - bigger knobs + touch-friendly targets,
-  hide the LLM console and log, expose only the sequencer + master
-  section.  Toggle via header button; state saved per-session so
-  demos can launch straight into it.
 
 ## Intelligence
 

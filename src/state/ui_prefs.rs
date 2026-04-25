@@ -143,6 +143,14 @@ pub struct UiPrefs {
     /// who don't use modulation.  Toggle in Preferences → Display.
     #[serde(default)]
     pub show_automation_overlay: bool,
+    /// Performance-mode toggle.  When `true`, the layout hides the
+    /// LLM log / event stream / ring scope strip, the piano panel,
+    /// and the menu bar — leaving only the header transport, rack
+    /// canvas, and footer status.  Persisted so demos / live sets
+    /// can launch straight into stripped chrome.  Toggle in the
+    /// header view menu.
+    #[serde(default)]
+    pub performance_mode: bool,
 }
 
 fn default_grid_cols() -> u8 {
@@ -217,6 +225,7 @@ impl Default for UiPrefs {
             autosync_rack_on_start: false,
             midi_cc_bindings: std::collections::BTreeMap::new(),
             show_automation_overlay: false,
+            performance_mode: false,
         }
     }
 }

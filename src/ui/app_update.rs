@@ -219,6 +219,11 @@ impl eframe::App for ImpulseApp {
         }) {
             self.show_shortcuts = !self.show_shortcuts;
         }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F2)) {
+            let mut s = self.state.write();
+            s.ui_prefs.performance_mode = !s.ui_prefs.performance_mode;
+            self.session_dirty = true;
+        }
 
         // ── Startup hook — auto-prompt after wizard closes ──────────────────
         // Once the wizard is dismissed and the LLM is ready, send a one-shot
@@ -439,12 +444,15 @@ impl eframe::App for ImpulseApp {
                     )
                 };
                 let was_flipped = self.rack_flipped;
+                let mut perf = self.state.read().ui_prefs.performance_mode;
+                let was_perf = perf;
                 scope_footer::draw_footer_status(
                     ui,
                     &self.midi_port,
                     &self.dsp_load_buf,
                     &mut self.rack_flipped,
                     &mut self.ctrl_locked,
+                    &mut perf,
                     scope_footer::FooterStats {
                         n_modules: nm,
                         n_agents: na,
@@ -457,18 +465,27 @@ impl eframe::App for ImpulseApp {
                     self.rack_flipped = was_flipped;
                     self.toggle_rack_flip();
                 }
+                if perf != was_perf {
+                    self.state.write().ui_prefs.performance_mode = perf;
+                    self.session_dirty = true;
+                }
             });
 
-        TopBottomPanel::bottom("piano")
-            .frame(
-                Frame::none()
-                    .fill(theme::VOID)
-                    .inner_margin(egui::Margin::symmetric(0.0, 0.0)),
-            )
-            .exact_height(80.0)
-            .show(ctx, |ui| {
-                panels::draw_piano(self, ui, ctx);
-            });
+        // Performance mode hides the piano panel to free up vertical
+        // space for the rack canvas.  Re-enabled when the user toggles
+        // performance mode off in the header view menu.
+        if !self.state.read().ui_prefs.performance_mode {
+            TopBottomPanel::bottom("piano")
+                .frame(
+                    Frame::none()
+                        .fill(theme::VOID)
+                        .inner_margin(egui::Margin::symmetric(0.0, 0.0)),
+                )
+                .exact_height(80.0)
+                .show(ctx, |ui| {
+                    panels::draw_piano(self, ui, ctx);
+                });
+        }
 
         // ── Rack canvas (replaces tab panels) ────────────────────────────────
         // When the startup wizard is visible, show an empty central panel

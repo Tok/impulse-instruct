@@ -40,10 +40,17 @@ pub(crate) fn list_recent_projects_in(dir: &Path) -> Vec<PathBuf> {
 
 impl ImpulseApp {
     /// Menu bar + header transport strip + log/scope combined panel.
+    /// Performance mode hides the menu bar and the log/scope strip so
+    /// only the transport + rack canvas remain visible.
     pub(super) fn draw_menu_and_header(&mut self, ctx: &egui::Context) {
-        self.draw_menu_bar(ctx);
+        let performance = self.state.read().ui_prefs.performance_mode;
+        if !performance {
+            self.draw_menu_bar(ctx);
+        }
         self.draw_header_bar(ctx);
-        self.draw_log_and_scope(ctx);
+        if !performance {
+            self.draw_log_and_scope(ctx);
+        }
     }
 
     /// Combined log + visualizations panel.

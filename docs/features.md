@@ -4,6 +4,21 @@ A detailed log of what's built.
 
 ---
 
+### Performance mode — stripped chrome for live use
+
+- New `UiPrefs.performance_mode` toggle persists across sessions.
+  When on, the layout hides the menu bar, the log + event-stream
+  + scope strip, and the piano keyboard — leaving only the header
+  transport, rack canvas, and footer.  Demos / live sets can
+  launch straight into it because the flag is in `session.json`.
+- Toggle from three places: the footer's "PERF" indicator (always
+  visible — clickable even when chrome is hidden), F2 keyboard
+  shortcut, and the underlying preference field.  No menu entry
+  yet because the menu is itself one of the things that hides.
+- 4 tests cover default-off, serde round-trip, missing-field-from-
+  old-session graceful upgrade, and a regression guard that
+  toggling performance mode doesn't disturb sibling prefs.
+
 ### OSC API mirror — TouchOSC-driven control surface
 
 - The pre-existing OSC listener handled `/impulse/<section>/<param>`

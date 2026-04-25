@@ -164,6 +164,7 @@ pub fn draw_footer_status(
     dsp_buf: &[f32],
     rack_flipped: &mut bool,
     ctrl_locked: &mut bool,
+    performance_mode: &mut bool,
     stats: FooterStats,
 ) {
     ui.horizontal(|ui| {
@@ -206,6 +207,23 @@ pub fn draw_footer_status(
             *rack_flipped = !*rack_flipped;
         }
         tab_resp.on_hover_text("Tab: flip rack. Double-click to toggle.");
+
+        // ── Performance mode toggle (always visible — exits performance mode) ──
+        let perf_resp = ui.add(
+            egui::Label::new(
+                egui::RichText::new(if *performance_mode { "PERF●" } else { "PERF" })
+                    .monospace()
+                    .size(8.0)
+                    .color(c(*performance_mode, *performance_mode)),
+            )
+            .sense(egui::Sense::click()),
+        );
+        if perf_resp.clicked() {
+            *performance_mode = !*performance_mode;
+        }
+        perf_resp.on_hover_text(
+            "Performance mode: hide menu / log / piano for live use. F2 also toggles.",
+        );
 
         // ── LEFT: MIDI status ──
         ui.separator();
