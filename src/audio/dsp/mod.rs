@@ -4,6 +4,7 @@ pub mod an1x;
 pub mod bass303;
 pub mod conv_reverb;
 mod dsp_util;
+pub mod formant_shifter;
 pub mod fx;
 pub mod fx_extras;
 pub mod fx_freq_shift;

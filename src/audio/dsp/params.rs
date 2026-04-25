@@ -688,6 +688,11 @@ pub struct AudioParams {
     pub sample_filter_resonance: f32,
     pub sample_filter_mode: u8,
     pub sample_filter_mix: f32,
+    /// Formant-preserving pitch shift opt-in (V2 Stage 8).  When true,
+    /// the slot reads the source at rate = 1 and routes through a
+    /// per-slot phase-vocoder shifter that does the pitch transform
+    /// in the spectral domain with envelope flatten/restore.
+    pub sample_formant_preserve: bool,
     // Hoover lead
     pub hoover_enabled: bool,
     pub hoover_filter_start: f32,

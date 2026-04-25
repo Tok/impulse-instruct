@@ -196,11 +196,15 @@ V2 status — most stages shipped:
 - [x] Stage 6 — per-voice SVF (LP/BP/HP) + LFO routing
   (`SampleVolume` / `SamplePan` / `SamplePitch` / `SampleCutoff`).
 - [x] Stage 7 — zone-map + waveform-thumb visualizer strip.
-- [-] Stage 8 — formant-preserving pitch shift.  Flag wired
-  (`sample_instrument.formant_preserve` + UI toggle + LLM apply);
-  the actual PSOLA / phase-vocoder DSP is *deferred* to a follow-up.
-  Pinning the API now means user sessions that opt in pick up the
-  real implementation transparently when it lands.
+- [x] Stage 8 — formant-preserving pitch shift.  Per-slot
+  phase-vocoder DSP in `src/audio/dsp/formant_shifter.rs`: STFT
+  (FFT 512, hop 128, 75 % OLA), moving-average smoothed
+  log-magnitude as the spectral envelope, whitened excitation
+  shifted by ratio in the bin domain with phase-vocoder coherence,
+  then re-multiplied by the *original* envelope so formants stay
+  anchored.  Allocated up-front per slot; the realtime path is
+  alloc-free.  Engages when `sample_formant_preserve` is on; the
+  cheap linear-resample path stays the default.
 - [x] Stage 9 — starter sample pack scaffolding
   (`samples/instruments/{,starter,README.md}` with author + free-pack
   source links).  Curation of the actual bundled CC0 content is the

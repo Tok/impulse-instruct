@@ -325,6 +325,7 @@ impl AudioParams {
             sample_filter_resonance: s.sample_instrument.filter_resonance.clamp(0.0, 1.0),
             sample_filter_mode: s.sample_instrument.filter_mode.min(2),
             sample_filter_mix: s.sample_instrument.filter_mix.clamp(0.0, 1.0),
+            sample_formant_preserve: s.sample_instrument.formant_preserve,
             hoover_enabled: s.hoover.enabled,
             hoover_filter_start: s.hoover.filter_start,
             hoover_sweep_time: s.hoover.sweep_time.clamp(0.1, 4.0),

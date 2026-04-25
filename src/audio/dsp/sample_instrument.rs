@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use super::AudioParams;
 use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
+use super::formant_shifter::FormantShifter;
 use super::fx_extras::Svf;
 use crate::state::SfzRegion;
 
@@ -77,6 +78,16 @@ struct SampleInstrumentSlot {
     /// values into each other.  Constant per-process Hz cost — the
     /// SVF is allocation-free.
     filter: Svf,
+    /// Per-slot phase-vocoder state for formant-preserving pitch
+    /// shift.  Allocated once at voice construction; only used when
+    /// `AudioParams.sample_formant_preserve` is on.  When the flag is
+    /// off, `process_slot` uses the cheap linear-resample path.
+    formant: FormantShifter,
+    /// Cached pitch ratio computed at trigger time — used by the
+    /// formant-preserve path.  In SFZ mode this absorbs region
+    /// transpose / tune cents so the shifter ratio matches the
+    /// played note's effective pitch shift relative to the source.
+    pitch_ratio: f32,
 }
 
 impl SampleInstrumentSlot {
@@ -93,6 +104,8 @@ impl SampleInstrumentSlot {
             region_gain: 1.0,
             age: 0,
             filter: Svf::new(),
+            formant: FormantShifter::new(),
+            pitch_ratio: 1.0,
         }
     }
 
@@ -319,6 +332,12 @@ impl SampleInstrumentVoice {
         slot.gate = true;
         slot.accent = accent.clamp(0.0, 1.0);
         slot.age = self.next_age;
+        // Cache the pitch ratio + reset the formant shifter so the
+        // new note starts with clean state.  When formant_preserve
+        // is on, `process_slot` reads the source at rate=1 and
+        // routes through this shifter; otherwise it's untouched.
+        slot.pitch_ratio = (shape.freq / shape.root_freq).clamp(0.05, 64.0);
+        slot.formant.reset();
     }
 
     /// Release every currently-gated slot.  Slots already in Release
@@ -393,7 +412,17 @@ impl SampleInstrumentVoice {
         }
         Self::step_adsr(slot, sr, p);
 
-        let rate = (slot.freq / slot.root_freq).clamp(0.05, 64.0);
+        // Formant-preserve path reads the source at rate=1 (no
+        // resample → formants are preserved within each STFT frame)
+        // and routes through the phase-vocoder shifter, which
+        // applies the pitch shift via spectral bin movement +
+        // envelope flatten/restore.  Cheap path (flag off) keeps
+        // V1.1's linear resample.
+        let rate = if p.sample_formant_preserve {
+            1.0
+        } else {
+            slot.pitch_ratio
+        };
 
         let ls = (p.sample_loop_start.clamp(0.0, 1.0) * n as f32) as usize;
         let le_raw = (p.sample_loop_end.clamp(0.0, 1.0) * n as f32) as usize;
@@ -420,8 +449,17 @@ impl SampleInstrumentVoice {
             }
         }
 
+        // Apply formant-preserving shift (when the flag is on) before
+        // ADSR + accent so the envelope shapes the post-shift signal
+        // — matches the V1.1 path's tone (filter / amp envelope last).
+        let voiced = if p.sample_formant_preserve {
+            slot.formant.process(sample, slot.pitch_ratio)
+        } else {
+            sample
+        };
+
         let accent_gain = 1.0 + slot.accent * 0.4;
-        let dry = sample * slot.adsr_value * accent_gain * slot.region_gain;
+        let dry = voiced * slot.adsr_value * accent_gain * slot.region_gain;
         // Per-voice SVF — applied before the global volume.  At
         // `filter_mix == 0` the SVF returns the dry input as-is and
         // the integrator state stays at rest, so the cost of a
