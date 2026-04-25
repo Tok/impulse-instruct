@@ -189,17 +189,7 @@ impl ImpulseApp {
                         // Respect style lock — agents can't override user-selected style
                         if !self.state.read().llm.style_lock {
                             use crate::llm::styles::StyleCatalog;
-                            let cat = StyleCatalog::get();
-                            let resolved = cat
-                                .find_by_id(sid)
-                                .or_else(|| {
-                                    let lo = sid.to_lowercase();
-                                    cat.styles().iter().find(|s| {
-                                        s.id.to_lowercase() == lo || s.name.to_lowercase() == lo
-                                    })
-                                })
-                                .map(|s| s.id.clone());
-                            if let Some(id) = resolved {
+                            if let Some(id) = StyleCatalog::get().resolve_style_id(sid) {
                                 self.state.write().llm.active_style = Some(id);
                             }
                             self.session_dirty = true;
