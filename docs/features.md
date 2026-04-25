@@ -4,6 +4,41 @@ A detailed log of what's built.
 
 ---
 
+### Standalone pitch-shifter FX (PSOLA, ±24 st + feedback)
+
+- **New `FxPitchShift` module + `FxStep::PitchShift`** — dedicated
+  continuous pitch shifter, distinct from `FxAutotune` (upward
+  snap-to-key).  Covers harmonies (±7 st fifth), octave doubles
+  (±12 st), and two-octave extremes for gabber / vaporwave stunts.
+- **Two-grain overlap-add PSOLA with explicit grain respawn** in
+  `src/audio/dsp/pitch_shift.rs`.  Each grain has its own triangular
+  envelope + read position; when a grain's envelope wraps 1 → 0 the
+  grain is silent, so the respawn places its read head one grain
+  length behind the write.  The walk over the grain cycle stays in
+  freshly-written audio for both upshift and downshift, eliminating
+  the read-overtakes-write failure mode of naive single-envelope
+  implementations.  16 k-sample ring, 2048-sample grains (~43 ms
+  @ 48 kHz).
+- **Feedback** (clamped to 0.95) pipes the wet back into the input
+  so stacked shifts accumulate — `+7 st` with high `fbk` ladders
+  into +7, +14, +21 … fifth-stack harmonies without re-instancing
+  the module.
+- **State fields**: `fx.pitch_shift_semi` (-24..+24 st), `_fine`
+  (-100..+100 cents, additive), `_mix`, `_fbk`.  Stored as musical
+  values so LLM writes feel natural (`{"pitch_shift_semi": 7}`);
+  the UI knob maps them onto 0..1 with 0.5 at the zero-offset
+  detent.
+- **Card extracted** to `src/ui/rack_content_pitch_shift.rs`; the
+  drag/cable helpers at the bottom of `rack_content.rs` also moved
+  to `rack_content_drag.rs` in the same refactor so the main file
+  has room for future FX cards.
+- Schema + prompt + apply path wired through `fx.pitch_shift_*`;
+  ramps work via `jam_tools`.
+- 6 new tests: defaults, LLM write, lock respect, module flags, two
+  bypass paths (mix=0, zero-semi), and the key correctness check —
+  1 kHz sine through ±12 st produces wet at ~2 kHz / ~500 Hz
+  measured by zero-crossing count (10 % window).
+
 ### 8-band parametric EQ with draggable curve editor
 
 - **New `FxParamEq` module + `FxStep::ParamEq`** — lives alongside the

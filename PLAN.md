@@ -8,11 +8,6 @@ they ship and are reflected in `features.md`.
 
 ## DSP
 
-- [ ] **Standalone pitch-shifter FX** - grain-based pitch shift (reuse
-  the preserve-pitch stretch code in `samplers.rs`) as a dedicated
-  FxStep so lanes can patch it into an arbitrary voice.  Autotune
-  already covers the "snap to key" use case; this covers harmonies
-  and octave doubles.
 - [ ] **Mid/side master processing** - mid/side split with separate
   width / EQ / saturation per side on the `MasterOutput` module.
   Opens up "wider than stereo" moves that stay mono-sum-safe.
