@@ -1,0 +1,13 @@
+# Pin the Rust toolchain so local pre-commit clippy and CI clippy run
+# against the same lint set.  CI uses `dtolnay/rust-toolchain@stable`
+# which always pulls the newest stable; if local rustup is even one
+# minor behind, new clippy lints sneak past the pre-commit hook and
+# fail the CI build (e.g. clippy::collapsible_match landed in 1.95).
+#
+# To bump: edit `channel`, run `cargo clippy -- -D warnings` locally
+# until clean, then commit.  Both pre-commit and CI then run the same
+# version and stay in lockstep.
+
+[toolchain]
+channel = "1.95.0"
+components = ["rustfmt", "clippy"]

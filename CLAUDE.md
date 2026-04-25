@@ -73,6 +73,14 @@ Quick summary of the key rules:
 - Lock `Arc<RwLock<AppState>>` only for the duration of a `.clone()`, never across inference or I/O.
 - **No allocations inside `process_block()` or the cpal callback.** No `Vec::new()`, no locks.
 - Every new pure function gets a test in `src/tests/`.
+- **Toolchain alignment**: the Rust version is pinned via `rust-toolchain.toml`
+  to keep local pre-commit clippy and CI clippy on the same lint set. CI runs
+  `cargo clippy -- -D warnings` against `@stable`; if local were one minor
+  behind, new clippy lints would sneak past the pre-commit hook and fail CI
+  (e.g. `collapsible_match` landed in 1.95). To bump Rust: edit the channel
+  in `rust-toolchain.toml`, run `cargo clippy -- -D warnings` locally until
+  clean, then commit. Don't add a `#[allow(clippy::...)]` to silence a CI
+  failure — fix the underlying pattern instead.
 
 ---
 

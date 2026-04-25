@@ -701,20 +701,16 @@ pub(super) fn draw_fx_content(
             }
         }
         ModuleKind::FxParamEq => {
-            if super::rack_content_param_eq::draw_param_eq(app, ui, module_id) {
-                changed = true;
-            }
+            changed |= super::rack_content_param_eq::draw_param_eq(app, ui, module_id);
         }
         ModuleKind::FxPitchShift => {
-            if super::rack_content_pitch_shift::draw_pitch_shift(
+            changed |= super::rack_content_pitch_shift::draw_pitch_shift(
                 app,
                 ui,
                 module_id,
                 pad_expanded,
                 &mut pad_pair,
-            ) {
-                changed = true;
-            }
+            );
         }
         ModuleKind::FxRingMod => {
             let (mut fr, mut mi) = {
