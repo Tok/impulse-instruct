@@ -39,7 +39,11 @@ pub(super) fn try_draw_fx_extras_content(
         | ModuleKind::FxComb
         | ModuleKind::FxTilt
         | ModuleKind::FxTransient
-        | ModuleKind::FxExciter => {}
+        | ModuleKind::FxExciter
+        | ModuleKind::FxMultitap
+        | ModuleKind::FxRevDelay
+        | ModuleKind::FxTapeStop
+        | ModuleKind::FxStutter => {}
         _ => return None,
     }
 
@@ -368,6 +372,144 @@ pub(super) fn try_draw_fx_extras_content(
                 s.fx.exciter_amount = a;
                 s.fx.exciter_freq = f;
                 s.fx.exciter_mix = m;
+            }
+        }
+        ModuleKind::FxMultitap => {
+            let (mut t, mut sp, mut fb, mut m) = {
+                let s = app.state.read();
+                (
+                    s.fx.multitap_time,
+                    s.fx.multitap_spread,
+                    s.fx.multitap_feedback,
+                    s.fx.multitap_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("TIME", &mut t, pm("fx.multitap_time")),
+                ("SPREAD", &mut sp, pm("fx.multitap_spread"))
+            );
+            hk!(
+                ui,
+                ("FBK", &mut fb, pm("fx.multitap_feedback")),
+                ("MIX", &mut m, pm("fx.multitap_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("multitap_xy_{module_id}"),
+                    ["TIME", "SPREAD", "MIX"],
+                    &mut pad_pair,
+                    (&mut t, &mut sp, &mut m),
+                    [
+                        user_owned("fx.multitap_time"),
+                        user_owned("fx.multitap_spread"),
+                        user_owned("fx.multitap_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || t != app.state.read().fx.multitap_time {
+                let mut s = app.state.write();
+                s.fx.multitap_time = t;
+                s.fx.multitap_spread = sp;
+                s.fx.multitap_feedback = fb;
+                s.fx.multitap_mix = m;
+            }
+        }
+        ModuleKind::FxRevDelay => {
+            let (mut t, mut fb, mut m) = {
+                let s = app.state.read();
+                (
+                    s.fx.revdelay_time,
+                    s.fx.revdelay_feedback,
+                    s.fx.revdelay_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("TIME", &mut t, pm("fx.revdelay_time")),
+                ("FBK", &mut fb, pm("fx.revdelay_feedback"))
+            );
+            hk!(ui, ("MIX", &mut m, pm("fx.revdelay_mix")));
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("revdelay_xy_{module_id}"),
+                    ["TIME", "FBK", "MIX"],
+                    &mut pad_pair,
+                    (&mut t, &mut fb, &mut m),
+                    [
+                        user_owned("fx.revdelay_time"),
+                        user_owned("fx.revdelay_feedback"),
+                        user_owned("fx.revdelay_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || t != app.state.read().fx.revdelay_time {
+                let mut s = app.state.write();
+                s.fx.revdelay_time = t;
+                s.fx.revdelay_feedback = fb;
+                s.fx.revdelay_mix = m;
+            }
+        }
+        ModuleKind::FxTapeStop => {
+            let (mut m, mut t) = {
+                let s = app.state.read();
+                (s.fx.tapestop_mix, s.fx.tapestop_time)
+            };
+            hk!(
+                ui,
+                ("STOP", &mut m, pm("fx.tapestop_mix")),
+                ("TIME", &mut t, pm("fx.tapestop_time"))
+            );
+            if changed || m != app.state.read().fx.tapestop_mix {
+                let mut s = app.state.write();
+                s.fx.tapestop_mix = m;
+                s.fx.tapestop_time = t;
+            }
+        }
+        ModuleKind::FxStutter => {
+            let (mut r, mut sl, mut m) = {
+                let s = app.state.read();
+                (s.fx.stutter_rate, s.fx.stutter_slice, s.fx.stutter_mix)
+            };
+            hk!(
+                ui,
+                ("RATE", &mut r, pm("fx.stutter_rate")),
+                ("SLICE", &mut sl, pm("fx.stutter_slice"))
+            );
+            hk!(ui, ("MIX", &mut m, pm("fx.stutter_mix")));
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("stutter_xy_{module_id}"),
+                    ["RATE", "SLICE", "MIX"],
+                    &mut pad_pair,
+                    (&mut r, &mut sl, &mut m),
+                    [
+                        user_owned("fx.stutter_rate"),
+                        user_owned("fx.stutter_slice"),
+                        user_owned("fx.stutter_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || r != app.state.read().fx.stutter_rate {
+                let mut s = app.state.write();
+                s.fx.stutter_rate = r;
+                s.fx.stutter_slice = sl;
+                s.fx.stutter_mix = m;
             }
         }
         _ => unreachable!("guarded by the early return above"),

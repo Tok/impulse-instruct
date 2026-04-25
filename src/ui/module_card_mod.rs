@@ -90,6 +90,17 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::ExciterAmount,
     LfoTarget::ExciterFreq,
     LfoTarget::ExciterMix,
+    LfoTarget::MultitapTime,
+    LfoTarget::MultitapSpread,
+    LfoTarget::MultitapFeedback,
+    LfoTarget::MultitapMix,
+    LfoTarget::RevDelayTime,
+    LfoTarget::RevDelayFeedback,
+    LfoTarget::RevDelayMix,
+    LfoTarget::TapeStopMix,
+    LfoTarget::StutterRate,
+    LfoTarget::StutterSlice,
+    LfoTarget::StutterMix,
     LfoTarget::WaveshaperDrive,
     LfoTarget::WaveshaperMix,
     LfoTarget::DistortionDrive,
@@ -190,6 +201,10 @@ pub fn has_audio_in(kind: ModuleKind) -> bool {
             | FxTilt
             | FxTransient
             | FxExciter
+            | FxMultitap
+            | FxRevDelay
+            | FxTapeStop
+            | FxStutter
             | FxRingMod
             | FxWaveshaper
             | FxBitcrush

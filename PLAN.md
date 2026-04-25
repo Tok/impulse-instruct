@@ -54,33 +54,30 @@ share):
   a new kind.
 
 Tier 3 (heavier — build once Tier 1+2 settle):
-- [ ] **Multitap / ping-pong delay (`FxMultitap`)** — 4–8 taps
-  with per-tap level + pan + filter. Existing `FxDelay` is a
-  single-tap tape model; this is the rhythmic / dub variant.
-- [ ] **Reverse delay (`FxRevDelay`)** — buffer-then-reverse
-  per beat. Different state model from `FxDelay` (segment
-  accumulator), worth its own module.
-- [ ] **Spectral freezer (`FxFreeze`)** — FFT a frame on
-  trigger, hold magnitudes + randomised phase forever. Pure
-  drone-pad button; trigger via mod cable / sequencer step.
-- [ ] **Stutter / glitch repeater (`FxStutter`)** — beat-synced
-  buffer repeat (1/4, 1/8, 1/16, 1/32) with optional
-  pitch-down-on-repeat for tape-stop flavour. Trigger on a
-  sequencer step or LFO gate.
-- [ ] **Tape stop (`FxTapeStop`)** — pitch + lowpass cutoff
-  ramp to zero on trigger; one-shot, releases. Could be
-  triggered by a sequencer cell.
-- [ ] **Cabinet / amp IR (`FxCabinet`)** — short-IR (≤ 200 ms)
-  variant of `FxConvReverb` for guitar/bass cab simulation. Same
-  convolution kernel, different IR-folder (`samples/cabinets/`)
-  and a smaller buffer cap.
-- [ ] **Mid/side EQ (`FxMsEq`)** — `FxParamEq` with a
-  mid-or-side selector per band. Heavy reuse — could fold into
-  the existing param-EQ module via a "ms mode" toggle rather
-  than a new module.
-- [ ] **Shimmer mode on `FxConvReverb`** — pitch-shift (+12 /
-  +7) inside the feedback loop. A flag on the existing module,
-  not a new module.
+- [x] **Multitap delay (`FxMultitap`)** — shipped, 4 fixed taps
+  with knob-controlled spread.  Per-tap pan + filter from the
+  original spec is deferred — the simpler 4-tap mono variant
+  covers the rhythmic-dub use case.
+- [x] **Reverse delay (`FxRevDelay`)** — shipped, ping-pong
+  segment buffer (one fills while the other plays back reversed).
+- [x] **Stutter / glitch repeater (`FxStutter`)** — shipped,
+  BPM-synced (1/4, 1/8, 1/16, 1/32 quartiles).
+- [x] **Tape stop (`FxTapeStop`)** — shipped, mix knob doubles as
+  ramp progress (0=normal, 1=halted) with darkening lowpass that
+  tracks the slowing.
+- [ ] **Spectral freezer (`FxFreeze`)** — *deferred*.  Needs FFT +
+  IFFT plumbing with framing / overlap-add — bigger than a batch
+  slot and worth doing properly when picked up.
+- [ ] **Cabinet / amp IR (`FxCabinet`)** — *deferred*.  Could be
+  a flag on `FxConvReverb` (cap IR length, point at
+  `samples/cabinets/`) or its own module; pick a direction next
+  pass.
+- [ ] **Mid/side EQ flag on `FxParamEq`** — *deferred*.  Per-band
+  `ms_mode: u8` selector (stereo / mid / side); needs care around
+  default migration so existing sessions don't drift.
+- [ ] **Shimmer mode flag on `FxConvReverb`** — *deferred*.
+  Pitch-shift (+12 / +7) inside the feedback loop; same default-
+  migration concern as the mid/side flag.
 
 ## Visualizations — new analysis modules
 

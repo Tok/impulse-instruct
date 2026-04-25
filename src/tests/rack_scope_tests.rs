@@ -82,6 +82,10 @@ fn parse_module_kind_handles_fx_aliases() {
         Some(ModuleKind::FxTransient),
     );
     assert_eq!(parse_module_kind("exciter"), Some(ModuleKind::FxExciter));
+    assert_eq!(parse_module_kind("multitap"), Some(ModuleKind::FxMultitap));
+    assert_eq!(parse_module_kind("revdelay"), Some(ModuleKind::FxRevDelay));
+    assert_eq!(parse_module_kind("tapestop"), Some(ModuleKind::FxTapeStop));
+    assert_eq!(parse_module_kind("stutter"), Some(ModuleKind::FxStutter));
     assert_eq!(parse_module_kind("eq"), Some(ModuleKind::FxEq));
     assert_eq!(
         parse_module_kind("compressor"),
@@ -141,6 +145,10 @@ fn rack_kind_name_matches_fx_catchall_covers_all_fx_kinds() {
         ModuleKind::FxTilt,
         ModuleKind::FxTransient,
         ModuleKind::FxExciter,
+        ModuleKind::FxMultitap,
+        ModuleKind::FxRevDelay,
+        ModuleKind::FxTapeStop,
+        ModuleKind::FxStutter,
         ModuleKind::FxRingMod,
         ModuleKind::FxWaveshaper,
         ModuleKind::FxBitcrush,

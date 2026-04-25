@@ -24,6 +24,10 @@ pub enum FxStep {
     Tilt,
     Transient,
     Exciter,
+    Multitap,
+    RevDelay,
+    TapeStop,
+    Stutter,
     RingMod,
     Eq,
     Compressor,
@@ -39,7 +43,7 @@ pub enum FxStep {
 /// Total FxStep variants — sized to pack dense per-FX audio-thread
 /// caches (e.g. previous-sample outputs for feedback routes) without
 /// allocating a HashMap every block.
-pub const FX_STEP_COUNT: usize = 23;
+pub const FX_STEP_COUNT: usize = 27;
 
 impl FxStep {
     /// Dense 0..`FX_STEP_COUNT` index — stable; keep in lock-step with
@@ -60,16 +64,20 @@ impl FxStep {
             FxStep::Tilt => 10,
             FxStep::Transient => 11,
             FxStep::Exciter => 12,
-            FxStep::RingMod => 13,
-            FxStep::Eq => 14,
-            FxStep::Compressor => 15,
-            FxStep::TapeSat => 16,
-            FxStep::Drive => 17,
-            FxStep::Autotune => 18,
-            FxStep::Pan => 19,
-            FxStep::ConvReverb => 20,
-            FxStep::ParamEq => 21,
-            FxStep::PitchShift => 22,
+            FxStep::Multitap => 13,
+            FxStep::RevDelay => 14,
+            FxStep::TapeStop => 15,
+            FxStep::Stutter => 16,
+            FxStep::RingMod => 17,
+            FxStep::Eq => 18,
+            FxStep::Compressor => 19,
+            FxStep::TapeSat => 20,
+            FxStep::Drive => 21,
+            FxStep::Autotune => 22,
+            FxStep::Pan => 23,
+            FxStep::ConvReverb => 24,
+            FxStep::ParamEq => 25,
+            FxStep::PitchShift => 26,
         }
     }
 }

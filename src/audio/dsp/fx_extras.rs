@@ -476,3 +476,313 @@ impl Exciter {
         input + sat * mix
     }
 }
+
+// ─── Multitap delay ──────────────────────────────────────────────────────────
+//
+// 4 fixed taps with linearly-spread spacing.  `time` sets the spacing of
+// the *furthest* tap (1..1000 ms), `spread` controls how the inner taps
+// distribute (0 = all bunched at the furthest, 1 = evenly spaced from
+// 0..time).  `feedback` recirculates the summed-tap output back into the
+// input.  Distinct from `FxDelay` (single-tap tape) and `FxConvReverb`
+// (impulse-response convolution): a deliberate rhythmic / dub flavour
+// from N evenly-spaced echoes.
+
+const MULTITAP_BUF: usize = 96_000; // 2 s @ 48 kHz
+const MULTITAP_TAPS: usize = 4;
+
+pub(crate) struct Multitap {
+    buf: Box<[f32; MULTITAP_BUF]>,
+    write: usize,
+}
+
+impl Multitap {
+    pub(crate) fn new() -> Self {
+        Self {
+            buf: Box::new([0.0; MULTITAP_BUF]),
+            write: 0,
+        }
+    }
+
+    /// `time`: 0–1 → 1 ms..1000 ms furthest tap.
+    /// `spread`: 0–1 → 0=collapsed onto furthest tap, 1=evenly distributed.
+    /// `feedback`: 0–1 → 0..0.85.
+    /// `mix`: 0–1 wet/dry.
+    pub(crate) fn process(
+        &mut self,
+        input: f32,
+        time: f32,
+        spread: f32,
+        feedback: f32,
+        mix: f32,
+        sr: f32,
+    ) -> f32 {
+        if mix < 0.001 && feedback < 0.001 {
+            self.buf[self.write] = input;
+            self.write = (self.write + 1) % MULTITAP_BUF;
+            return input;
+        }
+        let max_delay_s = (0.001 + time.clamp(0.0, 1.0) * 0.999) * sr;
+        let max_delay = max_delay_s.clamp(2.0, (MULTITAP_BUF - 2) as f32) as usize;
+        let s = spread.clamp(0.0, 1.0);
+
+        let mut wet = 0.0f32;
+        for tap in 0..MULTITAP_TAPS {
+            // Tap n (1-indexed): position = max_delay * lerp(1.0, n/N, spread).
+            let collapsed = 1.0;
+            let spread_pos = (tap + 1) as f32 / MULTITAP_TAPS as f32;
+            let pos_frac = collapsed * (1.0 - s) + spread_pos * s;
+            let off = ((max_delay as f32 * pos_frac) as usize).clamp(1, MULTITAP_BUF - 1);
+            let read = (self.write + MULTITAP_BUF - off) % MULTITAP_BUF;
+            wet += self.buf[read];
+        }
+        wet /= MULTITAP_TAPS as f32;
+
+        let fb = feedback.clamp(0.0, 0.85);
+        self.buf[self.write] = input + wet * fb;
+        self.write = (self.write + 1) % MULTITAP_BUF;
+        input * (1.0 - mix) + wet * mix
+    }
+}
+
+// ─── Reverse delay ───────────────────────────────────────────────────────────
+//
+// Fills a buffer for `time` seconds, then plays it back reversed for the
+// next `time` seconds while the next segment fills.  Two ping-pong segments
+// keep the output continuous at every segment boundary.
+
+const REVDELAY_BUF: usize = 96_000; // 2 s @ 48 kHz per segment
+
+pub(crate) struct RevDelay {
+    /// Two ping-pong segments — one writes while the other plays back.
+    seg: [Box<[f32; REVDELAY_BUF]>; 2],
+    /// Current write segment (0 or 1).
+    write_seg: usize,
+    /// Position within the active write segment (0..len).
+    write_pos: usize,
+    /// Position within the active read segment (counts down for reverse).
+    read_pos: usize,
+    /// Length of the current segment in samples.
+    seg_len: usize,
+}
+
+impl RevDelay {
+    pub(crate) fn new() -> Self {
+        Self {
+            seg: [Box::new([0.0; REVDELAY_BUF]), Box::new([0.0; REVDELAY_BUF])],
+            write_seg: 0,
+            write_pos: 0,
+            read_pos: 0,
+            seg_len: 1,
+        }
+    }
+
+    /// `time`: 0–1 → 50 ms..2 s segment length.
+    /// `feedback`: 0–1 → 0..0.85 (the reversed wet feeds back into the
+    /// new segment).
+    /// `mix`: 0–1 wet/dry.
+    pub(crate) fn process(
+        &mut self,
+        input: f32,
+        time: f32,
+        feedback: f32,
+        mix: f32,
+        sr: f32,
+    ) -> f32 {
+        // Segment length — clamped to the buffer.
+        let len_s = (0.05 + time.clamp(0.0, 1.0) * 1.95) * sr;
+        let len = (len_s as usize).clamp(64, REVDELAY_BUF);
+        // Refresh the segment length on each pass; if it shrinks mid-flight
+        // we'll wrap a touch sooner, which is acceptable.
+        if self.seg_len != len {
+            self.seg_len = len;
+            // Reset read so we don't index outside the current segment.
+            self.read_pos = self.read_pos.min(len.saturating_sub(1));
+        }
+
+        let read_seg = 1 - self.write_seg;
+        let wet = if self.read_pos < self.seg_len {
+            self.seg[read_seg][self.seg_len - 1 - self.read_pos]
+        } else {
+            0.0
+        };
+
+        let fb = feedback.clamp(0.0, 0.85);
+        self.seg[self.write_seg][self.write_pos] = input + wet * fb;
+        self.write_pos += 1;
+        self.read_pos += 1;
+
+        if self.write_pos >= self.seg_len {
+            // Swap segments at the boundary; the just-written segment
+            // becomes the next read source.
+            self.write_pos = 0;
+            self.read_pos = 0;
+            self.write_seg = 1 - self.write_seg;
+        }
+
+        input * (1.0 - mix) + wet * mix
+    }
+}
+
+// ─── Tape stop ───────────────────────────────────────────────────────────────
+//
+// Mix knob doubles as ramp progress — 0 = normal pass-through, 1 = fully
+// stopped (silent).  Internally maintains a delay line; the read head's
+// playback rate ramps from 1.0 down to 0.0 as `mix` rises, simulating the
+// platter winding to a halt.  A tone-darkening lowpass that tracks the
+// rate keeps the signal from sounding edgy as it slows.
+
+const TAPESTOP_BUF: usize = 96_000; // 2 s @ 48 kHz
+
+pub(crate) struct TapeStop {
+    buf: Box<[f32; TAPESTOP_BUF]>,
+    write: usize,
+    /// Fractional read head — advances by `rate` per sample.  Re-anchors to
+    /// `write` whenever mix drops back to 0 (preventing drift).
+    read: f32,
+    /// One-pole LP state for the dynamic darkening.
+    lp_state: f32,
+    /// Last-frame mix to detect rising-edge re-engage.
+    last_mix: f32,
+}
+
+impl TapeStop {
+    pub(crate) fn new() -> Self {
+        Self {
+            buf: Box::new([0.0; TAPESTOP_BUF]),
+            write: 0,
+            read: 0.0,
+            lp_state: 0.0,
+            last_mix: 0.0,
+        }
+    }
+
+    /// `mix`: 0–1 — also acts as the ramp position (0 = pass-through, 1
+    /// = silenced).  Curve is shaped so the perceived slow-down feels
+    /// closer to logarithmic than linear.
+    /// `time`: 0–1 → 0.05..2 s scratch-tail buffer length cap.
+    pub(crate) fn process(&mut self, input: f32, mix: f32, _time: f32, _sr: f32) -> f32 {
+        // Always write the dry signal so re-engagements can pull from
+        // recent material without an attack-lag glitch.
+        self.buf[self.write] = input;
+        self.write = (self.write + 1) % TAPESTOP_BUF;
+
+        // Re-anchor read head when mix returns from > 0 to 0.
+        if self.last_mix > 0.001 && mix < 0.001 {
+            self.read = self.write as f32;
+            self.lp_state = 0.0;
+        }
+        self.last_mix = mix;
+
+        if mix < 0.001 {
+            return input;
+        }
+
+        // Ramp curve: rate = (1 - mix)^2 — slows perceptually.
+        let rate = (1.0 - mix.clamp(0.0, 1.0)).powi(2);
+        // Advance read by `rate` samples per output sample.
+        let mut read_pos = self.read;
+        // Linear-interp read.
+        let idx = read_pos as usize % TAPESTOP_BUF;
+        let frac = read_pos - read_pos.floor();
+        let next = (idx + 1) % TAPESTOP_BUF;
+        let raw = self.buf[idx] + (self.buf[next] - self.buf[idx]) * frac;
+
+        read_pos += rate;
+        if read_pos >= TAPESTOP_BUF as f32 {
+            read_pos -= TAPESTOP_BUF as f32;
+        }
+        self.read = read_pos;
+
+        // Lowpass darkens with the ramp.  alpha → 0 as mix → 1.
+        let alpha = (1.0 - mix.clamp(0.0, 1.0)) * 0.6 + 0.05;
+        self.lp_state += alpha * (raw - self.lp_state);
+        // Output is the slowed+darkened wet, scaled by (1-mix) so it
+        // smoothly trails to silence as the ramp completes.
+        self.lp_state * (1.0 - mix.clamp(0.0, 1.0))
+    }
+}
+
+// ─── Stutter / repeater ──────────────────────────────────────────────────────
+//
+// Captures a slice every `period` samples and loops it for the remainder of
+// the period.  `period` is derived from BPM and the user's rate
+// subdivision, so the stutter is automatically beat-synced.
+
+const STUTTER_BUF: usize = 48_000; // 1 s @ 48 kHz captures plenty of slice
+
+pub(crate) struct Stutter {
+    /// Slice buffer — captured once per period, replayed across the period.
+    slice: Box<[f32; STUTTER_BUF]>,
+    slice_len: usize,
+    /// Position within the slice for the current period playback.
+    play_pos: usize,
+    /// Counts samples since the slice was last captured.
+    period_pos: usize,
+}
+
+impl Stutter {
+    pub(crate) fn new() -> Self {
+        Self {
+            slice: Box::new([0.0; STUTTER_BUF]),
+            slice_len: 0,
+            play_pos: 0,
+            period_pos: 0,
+        }
+    }
+
+    /// `rate`: 0–1 → quantised to 1/4, 1/8, 1/16, 1/32 note divisions.
+    /// `slice_frac`: 0–1 → fraction of the period that's captured (rest
+    /// of the period replays the captured slice).
+    /// `mix`: 0–1 wet/dry.
+    /// `bpm`: passed in so the period stays musically aligned.
+    pub(crate) fn process(
+        &mut self,
+        input: f32,
+        rate: f32,
+        slice_frac: f32,
+        mix: f32,
+        bpm: f32,
+        sr: f32,
+    ) -> f32 {
+        if mix < 0.001 {
+            self.period_pos = 0;
+            self.play_pos = 0;
+            return input;
+        }
+        // Quantise rate to 1/4, 1/8, 1/16, 1/32.
+        let div = match (rate.clamp(0.0, 0.999) * 4.0) as usize {
+            0 => 4u32,  // quarter
+            1 => 8u32,  // eighth
+            2 => 16u32, // sixteenth
+            _ => 32u32, // thirty-second
+        };
+        let beat_s = 60.0 / bpm.max(20.0);
+        let period_s = beat_s * 4.0 / div as f32;
+        let period = ((period_s * sr) as usize).clamp(64, STUTTER_BUF);
+        let cap_len = ((period as f32 * slice_frac.clamp(0.05, 1.0)) as usize)
+            .clamp(8, period.min(STUTTER_BUF));
+
+        // Capture phase: write input into the slice buffer for the first
+        // `cap_len` samples of the period.
+        if self.period_pos < cap_len {
+            self.slice[self.period_pos] = input;
+            self.slice_len = cap_len;
+            self.play_pos = 0;
+        }
+
+        let wet = if self.slice_len > 0 {
+            let s = self.slice[self.play_pos % self.slice_len];
+            self.play_pos = (self.play_pos + 1) % self.slice_len;
+            s
+        } else {
+            input
+        };
+
+        self.period_pos += 1;
+        if self.period_pos >= period {
+            self.period_pos = 0;
+        }
+
+        input * (1.0 - mix) + wet * mix
+    }
+}

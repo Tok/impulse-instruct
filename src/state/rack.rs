@@ -492,6 +492,13 @@ impl RackState {
                 ModuleKind::FxTransient => 32,
                 ModuleKind::FxExciter => 33,
                 ModuleKind::FxLimiter => 34,
+                // Multitap / RevDelay sit next to the regular Delay.
+                ModuleKind::FxMultitap => 22,
+                ModuleKind::FxRevDelay => 22,
+                // Tape stop / Stutter are rhythmic-modulation FX —
+                // park them near the bitcrush / drive cluster.
+                ModuleKind::FxTapeStop => 23,
+                ModuleKind::FxStutter => 23,
                 ModuleKind::FxEq => 27,
                 ModuleKind::FxCompressor => 28,
                 ModuleKind::FxTapeSat => 29,

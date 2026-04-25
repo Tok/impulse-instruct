@@ -158,7 +158,7 @@ mod llm_apply_fx_tests {
 
     #[test]
     fn fx_xy_pads_cover_every_declared_pair() {
-        // Smoke test across all 20 FX pads: send a distinct [x,y] to each
+        // Smoke test across all 23 FX pads: send a distinct [x,y] to each
         // pad's _xy path and verify the pair's fields land on those
         // values.  Guards the XY_PAIRS table against field renames.
         let cases: &[(&str, [f32; 2], fn(&crate::state::FxState) -> (f32, f32))] = &[
@@ -180,6 +180,15 @@ mod llm_apply_fx_tests {
             }),
             ("exciter_xy", [0.45, 0.55], |f| {
                 (f.exciter_amount, f.exciter_freq)
+            }),
+            ("multitap_xy", [0.34, 0.66], |f| {
+                (f.multitap_time, f.multitap_spread)
+            }),
+            ("revdelay_xy", [0.51, 0.49], |f| {
+                (f.revdelay_time, f.revdelay_feedback)
+            }),
+            ("stutter_xy", [0.4, 0.7], |f| {
+                (f.stutter_rate, f.stutter_slice)
             }),
             ("ring_mod_xy", [0.12, 0.24], |f| {
                 (f.ring_mod_freq, f.ring_mod_mix)

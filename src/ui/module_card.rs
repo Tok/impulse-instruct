@@ -60,6 +60,10 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxTilt
         | ModuleKind::FxTransient
         | ModuleKind::FxExciter
+        | ModuleKind::FxMultitap
+        | ModuleKind::FxRevDelay
+        | ModuleKind::FxTapeStop
+        | ModuleKind::FxStutter
         | ModuleKind::FxRingMod
         | ModuleKind::FxWaveshaper
         | ModuleKind::FxBitcrush

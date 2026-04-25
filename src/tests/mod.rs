@@ -15,6 +15,7 @@ mod conditional_trigger_tests;
 mod conv_reverb_tests;
 mod coverage_tests;
 mod drum_voice_tests;
+mod dsp_fx_extras_tests;
 mod dsp_fx_tests;
 mod dsp_mod_apply_tests;
 mod dsp_tests;

@@ -119,6 +119,17 @@ pub fn apply_mod_target(p: &mut AudioParams, target: u8, mod_val: f32) {
         95 => p.exciter_amount = (p.exciter_amount + mod_val).clamp(0.0, 1.0),
         96 => p.exciter_freq = (p.exciter_freq + mod_val).clamp(0.0, 1.0),
         97 => p.exciter_mix = (p.exciter_mix + mod_val).clamp(0.0, 1.0),
+        98 => p.multitap_time = (p.multitap_time + mod_val).clamp(0.0, 1.0),
+        99 => p.multitap_spread = (p.multitap_spread + mod_val).clamp(0.0, 1.0),
+        100 => p.multitap_feedback = (p.multitap_feedback + mod_val * 0.5).clamp(0.0, 1.0),
+        101 => p.multitap_mix = (p.multitap_mix + mod_val).clamp(0.0, 1.0),
+        102 => p.revdelay_time = (p.revdelay_time + mod_val).clamp(0.0, 1.0),
+        103 => p.revdelay_feedback = (p.revdelay_feedback + mod_val * 0.5).clamp(0.0, 1.0),
+        104 => p.revdelay_mix = (p.revdelay_mix + mod_val).clamp(0.0, 1.0),
+        105 => p.tapestop_mix = (p.tapestop_mix + mod_val).clamp(0.0, 1.0),
+        106 => p.stutter_rate = (p.stutter_rate + mod_val).clamp(0.0, 1.0),
+        107 => p.stutter_slice = (p.stutter_slice + mod_val).clamp(0.0, 1.0),
+        108 => p.stutter_mix = (p.stutter_mix + mod_val).clamp(0.0, 1.0),
         _ => {}
     }
 }

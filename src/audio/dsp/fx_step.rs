@@ -150,6 +150,32 @@ impl DspState {
                 self.exciter
                     .process(sig, p.exciter_amount, p.exciter_freq, p.exciter_mix, sr)
             }
+            FxStep::Multitap => self.multitap.process(
+                sig,
+                p.multitap_time,
+                p.multitap_spread,
+                p.multitap_feedback,
+                p.multitap_mix,
+                sr,
+            ),
+            FxStep::RevDelay => self.rev_delay.process(
+                sig,
+                p.revdelay_time,
+                p.revdelay_feedback,
+                p.revdelay_mix,
+                sr,
+            ),
+            FxStep::TapeStop => self
+                .tape_stop
+                .process(sig, p.tapestop_mix, p.tapestop_time, sr),
+            FxStep::Stutter => self.stutter.process(
+                sig,
+                p.stutter_rate,
+                p.stutter_slice,
+                p.stutter_mix,
+                p.sequencer_bpm,
+                sr,
+            ),
             FxStep::RingMod => {
                 if p.ring_mod_mix > 0.001 {
                     let freq_hz = 50.0 + p.ring_mod_freq * 450.0;

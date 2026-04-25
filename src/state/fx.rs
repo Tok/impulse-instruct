@@ -256,6 +256,46 @@ pub struct FxState {
     /// Exciter wet/dry on the added harmonics 0..1.
     #[serde(default)]
     pub exciter_mix: f32,
+    /// Multitap delay base time 0..1 → 1 ms..1 s.
+    #[serde(default = "default_multitap_time")]
+    pub multitap_time: f32,
+    /// Multitap delay tap-spread 0..1 (0 = collapsed, 1 = even).
+    #[serde(default = "default_multitap_spread")]
+    pub multitap_spread: f32,
+    /// Multitap feedback 0..1.
+    #[serde(default)]
+    pub multitap_feedback: f32,
+    /// Multitap wet/dry 0..1.
+    #[serde(default)]
+    pub multitap_mix: f32,
+    /// Reverse-delay segment length 0..1 → 50 ms..2 s.
+    #[serde(default = "default_revdelay_time")]
+    pub revdelay_time: f32,
+    /// Reverse-delay feedback 0..1.
+    #[serde(default)]
+    pub revdelay_feedback: f32,
+    /// Reverse-delay wet/dry 0..1.
+    #[serde(default)]
+    pub revdelay_mix: f32,
+    /// Tape stop ramp progress 0..1 (also acts as effect "engage" — 0 =
+    /// pass-through, 1 = fully halted).
+    #[serde(default)]
+    pub tapestop_mix: f32,
+    /// Tape stop scratch-tail length 0..1 → 50 ms..2 s.
+    #[serde(default = "default_tapestop_time")]
+    pub tapestop_time: f32,
+    /// Stutter / repeater rate quantisation 0..1 (mapped to 1/4, 1/8,
+    /// 1/16, 1/32 by quartiles).
+    #[serde(default = "default_stutter_rate")]
+    pub stutter_rate: f32,
+    /// Stutter slice fraction 0..1 — fraction of the period that's
+    /// captured for the loop slice; the remainder of the period replays
+    /// the captured slice.
+    #[serde(default = "default_stutter_slice")]
+    pub stutter_slice: f32,
+    /// Stutter wet/dry 0..1.
+    #[serde(default)]
+    pub stutter_mix: f32,
     pub waveshaper_drive: f32, // 0–1 → soft-clip drive amount (pre-FX)
     pub waveshaper_mix: f32,   // 0–1 wet/dry
     pub ring_mod_freq: f32,    // 0–1 → 50–500 Hz carrier frequency
@@ -417,6 +457,30 @@ fn default_exciter_freq() -> f32 {
     0.3 // ~2 kHz HP
 }
 
+fn default_multitap_time() -> f32 {
+    0.3 // ~300 ms
+}
+
+fn default_multitap_spread() -> f32 {
+    0.7 // mostly evenly distributed
+}
+
+fn default_revdelay_time() -> f32 {
+    0.25 // ~500 ms segment
+}
+
+fn default_tapestop_time() -> f32 {
+    0.3 // ~600 ms scratch tail
+}
+
+fn default_stutter_rate() -> f32 {
+    0.5 // 1/16 (third quartile)
+}
+
+fn default_stutter_slice() -> f32 {
+    0.5
+}
+
 fn default_conv_reverb_size() -> f32 {
     1.0
 }
@@ -499,6 +563,18 @@ impl Default for FxState {
             exciter_amount: 0.0,
             exciter_freq: default_exciter_freq(),
             exciter_mix: 0.0,
+            multitap_time: default_multitap_time(),
+            multitap_spread: default_multitap_spread(),
+            multitap_feedback: 0.0,
+            multitap_mix: 0.0,
+            revdelay_time: default_revdelay_time(),
+            revdelay_feedback: 0.0,
+            revdelay_mix: 0.0,
+            tapestop_mix: 0.0,
+            tapestop_time: default_tapestop_time(),
+            stutter_rate: default_stutter_rate(),
+            stutter_slice: default_stutter_slice(),
+            stutter_mix: 0.0,
             waveshaper_drive: 0.0,
             waveshaper_mix: 0.0,
             ring_mod_freq: 0.2,

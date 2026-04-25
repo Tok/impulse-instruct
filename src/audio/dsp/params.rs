@@ -189,6 +189,17 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         ExciterAmount => 95,
         ExciterFreq => 96,
         ExciterMix => 97,
+        MultitapTime => 98,
+        MultitapSpread => 99,
+        MultitapFeedback => 100,
+        MultitapMix => 101,
+        RevDelayTime => 102,
+        RevDelayFeedback => 103,
+        RevDelayMix => 104,
+        TapeStopMix => 105,
+        StutterRate => 106,
+        StutterSlice => 107,
+        StutterMix => 108,
     }
 }
 
@@ -467,6 +478,22 @@ pub struct AudioParams {
     pub exciter_amount: f32,
     pub exciter_freq: f32,
     pub exciter_mix: f32,
+    // Multitap delay
+    pub multitap_time: f32,
+    pub multitap_spread: f32,
+    pub multitap_feedback: f32,
+    pub multitap_mix: f32,
+    // Reverse delay
+    pub revdelay_time: f32,
+    pub revdelay_feedback: f32,
+    pub revdelay_mix: f32,
+    // Tape stop
+    pub tapestop_mix: f32,
+    pub tapestop_time: f32,
+    // Stutter
+    pub stutter_rate: f32,
+    pub stutter_slice: f32,
+    pub stutter_mix: f32,
     // Waveshaper
     pub waveshaper_drive: f32,
     pub waveshaper_mix: f32,

@@ -59,6 +59,10 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxTilt
         | ModuleKind::FxTransient
         | ModuleKind::FxExciter
+        | ModuleKind::FxMultitap
+        | ModuleKind::FxRevDelay
+        | ModuleKind::FxTapeStop
+        | ModuleKind::FxStutter
         | ModuleKind::FxRingMod
         | ModuleKind::FxWaveshaper
         | ModuleKind::FxBitcrush
@@ -103,6 +107,10 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxtilt" | "tilt" | "tilteq" => Some(FxTilt),
         "fxtransient" | "transient" | "transients" | "envshape" => Some(FxTransient),
         "fxexciter" | "exciter" | "aural" | "shimmer" => Some(FxExciter),
+        "fxmultitap" | "multitap" | "tappeddelay" | "pingpong" => Some(FxMultitap),
+        "fxrevdelay" | "revdelay" | "reversedelay" | "reverseecho" => Some(FxRevDelay),
+        "fxtapestop" | "tapestop" | "halt" | "stop" => Some(FxTapeStop),
+        "fxstutter" | "stutter" | "repeater" | "glitch" => Some(FxStutter),
         "fxeq" | "eq" | "equalizer" | "equaliser" => Some(FxEq),
         "fxcompressor" | "compressor" | "comp" => Some(FxCompressor),
         "fxtapesat" | "tapesat" | "tape" | "saturation" => Some(FxTapeSat),
@@ -147,6 +155,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxTilt => matches!(n.as_str(), "tilt" | "tilteq" | "fx"),
         ModuleKind::FxTransient => matches!(n.as_str(), "transient" | "transients" | "fx"),
         ModuleKind::FxExciter => matches!(n.as_str(), "exciter" | "aural" | "shimmer" | "fx"),
+        ModuleKind::FxMultitap => matches!(n.as_str(), "multitap" | "pingpong" | "fx"),
+        ModuleKind::FxRevDelay => matches!(n.as_str(), "revdelay" | "reverse" | "rev" | "fx"),
+        ModuleKind::FxTapeStop => matches!(n.as_str(), "tapestop" | "halt" | "stop" | "fx"),
+        ModuleKind::FxStutter => matches!(n.as_str(), "stutter" | "repeater" | "glitch" | "fx"),
         ModuleKind::FxRingMod => {
             matches!(
                 n.as_str(),

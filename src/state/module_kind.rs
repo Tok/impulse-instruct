@@ -42,6 +42,10 @@ pub enum ModuleKind {
     FxTilt,
     FxTransient,
     FxExciter,
+    FxMultitap,
+    FxRevDelay,
+    FxTapeStop,
+    FxStutter,
     FxRingMod,
     FxWaveshaper,
     FxBitcrush,
@@ -140,6 +144,10 @@ impl ModuleKind {
             Self::FxTilt => "TILT EQ",
             Self::FxTransient => "TRANSIENT",
             Self::FxExciter => "EXCITER",
+            Self::FxMultitap => "MULTITAP",
+            Self::FxRevDelay => "REV DELAY",
+            Self::FxTapeStop => "TAPE STOP",
+            Self::FxStutter => "STUTTER",
             Self::FxRingMod => "RING MOD",
             Self::FxWaveshaper => "WAVESHAPER",
             Self::FxBitcrush => "BITCRUSH",
@@ -262,12 +270,17 @@ impl ModuleKind {
             Self::FxLimiter => (2, 2),
             Self::FxFilter => (2, 2),
             Self::FxComb => (2, 2),
+            // 4 knobs each — 2 rows of 2.
+            Self::FxMultitap => (2, 2),
+            Self::FxRevDelay => (2, 2),
+            Self::FxStutter => (2, 2),
             Self::FxReverb
             | Self::FxChorus
             | Self::FxPhaser
             | Self::FxTilt
             | Self::FxTransient
             | Self::FxExciter
+            | Self::FxTapeStop
             | Self::FxRingMod
             | Self::FxWaveshaper
             | Self::FxBitcrush
@@ -308,6 +321,10 @@ impl ModuleKind {
             | Self::FxTilt
             | Self::FxTransient
             | Self::FxExciter
+            | Self::FxMultitap
+            | Self::FxRevDelay
+            | Self::FxTapeStop
+            | Self::FxStutter
             | Self::FxRingMod
             | Self::FxWaveshaper
             | Self::FxBitcrush
@@ -366,6 +383,10 @@ impl ModuleKind {
                 | Self::FxTilt
                 | Self::FxTransient
                 | Self::FxExciter
+                | Self::FxMultitap
+                | Self::FxRevDelay
+                | Self::FxTapeStop
+                | Self::FxStutter
                 | Self::FxRingMod
                 | Self::FxWaveshaper
                 | Self::FxBitcrush
@@ -398,6 +419,10 @@ impl ModuleKind {
                 | Self::FxTilt
                 | Self::FxTransient
                 | Self::FxExciter
+                | Self::FxMultitap
+                | Self::FxRevDelay
+                | Self::FxTapeStop
+                | Self::FxStutter
                 | Self::FxRingMod
                 | Self::FxWaveshaper
                 | Self::FxBitcrush
@@ -427,6 +452,10 @@ impl ModuleKind {
                 | Self::FxTilt
                 | Self::FxTransient
                 | Self::FxExciter
+                | Self::FxMultitap
+                | Self::FxRevDelay
+                | Self::FxTapeStop
+                | Self::FxStutter
                 | Self::FxRingMod
                 | Self::FxWaveshaper
                 | Self::FxBitcrush

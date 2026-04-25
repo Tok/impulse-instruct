@@ -261,6 +261,7 @@ impl LaneKind {
                 .into(),
             LaneKind::Fx => "Write ONLY the `fx` object — reverb / delay / distortion / \
                 chorus / phaser / flanger / filter / comb / tilt / transient / exciter / limiter / \
+                multitap / revdelay / tapestop / stutter / \
                 ring_mod / bitcrush / master_pitch. Defaults for a subtle jam:\n\
                 reverb_mix 0.10-0.25, reverb_size 0.4-0.6\n\
                 delay_mix 0.06-0.18, delay_feedback 0.3-0.5\n\
@@ -687,6 +688,18 @@ pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
                         "exciter_amount":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "exciter_freq":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "exciter_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "multitap_time":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "multitap_spread":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "multitap_feedback":{ "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "multitap_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "revdelay_time":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "revdelay_feedback":{ "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "revdelay_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "tapestop_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "tapestop_time":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "stutter_rate":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "stutter_slice":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "stutter_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "ring_mod_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "ring_mod_freq":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "bitcrush_bits":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },

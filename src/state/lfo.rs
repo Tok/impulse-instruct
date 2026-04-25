@@ -141,6 +141,21 @@ pub enum LfoTarget {
     ExciterAmount,
     ExciterFreq,
     ExciterMix,
+    // FX: Multitap delay
+    MultitapTime,
+    MultitapSpread,
+    MultitapFeedback,
+    MultitapMix,
+    // FX: Reverse delay
+    RevDelayTime,
+    RevDelayFeedback,
+    RevDelayMix,
+    // FX: Tape stop
+    TapeStopMix,
+    // FX: Stutter
+    StutterRate,
+    StutterSlice,
+    StutterMix,
     // FX: Waveshaper (pre-FX soft clipper)
     WaveshaperDrive,
     WaveshaperMix,

@@ -135,6 +135,30 @@ pub(super) fn apply_fx_update(
     u!(s.fx.exciter_amount, "exciter_amount", "fx.exciter_amount");
     u!(s.fx.exciter_freq, "exciter_freq", "fx.exciter_freq");
     u!(s.fx.exciter_mix, "exciter_mix", "fx.exciter_mix");
+    u!(s.fx.multitap_time, "multitap_time", "fx.multitap_time");
+    u!(
+        s.fx.multitap_spread,
+        "multitap_spread",
+        "fx.multitap_spread"
+    );
+    u!(
+        s.fx.multitap_feedback,
+        "multitap_feedback",
+        "fx.multitap_feedback"
+    );
+    u!(s.fx.multitap_mix, "multitap_mix", "fx.multitap_mix");
+    u!(s.fx.revdelay_time, "revdelay_time", "fx.revdelay_time");
+    u!(
+        s.fx.revdelay_feedback,
+        "revdelay_feedback",
+        "fx.revdelay_feedback"
+    );
+    u!(s.fx.revdelay_mix, "revdelay_mix", "fx.revdelay_mix");
+    u!(s.fx.tapestop_mix, "tapestop_mix", "fx.tapestop_mix");
+    u!(s.fx.tapestop_time, "tapestop_time", "fx.tapestop_time");
+    u!(s.fx.stutter_rate, "stutter_rate", "fx.stutter_rate");
+    u!(s.fx.stutter_slice, "stutter_slice", "fx.stutter_slice");
+    u!(s.fx.stutter_mix, "stutter_mix", "fx.stutter_mix");
     u!(
         s.fx.waveshaper_drive,
         "waveshaper_drive",
@@ -357,6 +381,15 @@ pub(super) fn apply_fx_update(
             1.0,
         ),
         ("exciter_xy", "exciter_amount", "exciter_freq", 0.0, 1.0),
+        ("multitap_xy", "multitap_time", "multitap_spread", 0.0, 1.0),
+        (
+            "revdelay_xy",
+            "revdelay_time",
+            "revdelay_feedback",
+            0.0,
+            1.0,
+        ),
+        ("stutter_xy", "stutter_rate", "stutter_slice", 0.0, 1.0),
         ("ring_mod_xy", "ring_mod_freq", "ring_mod_mix", 0.0, 1.0),
         (
             "waveshaper_xy",
@@ -459,6 +492,18 @@ fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32
         "exciter_amount" => &mut fx.exciter_amount,
         "exciter_freq" => &mut fx.exciter_freq,
         "exciter_mix" => &mut fx.exciter_mix,
+        "multitap_time" => &mut fx.multitap_time,
+        "multitap_spread" => &mut fx.multitap_spread,
+        "multitap_feedback" => &mut fx.multitap_feedback,
+        "multitap_mix" => &mut fx.multitap_mix,
+        "revdelay_time" => &mut fx.revdelay_time,
+        "revdelay_feedback" => &mut fx.revdelay_feedback,
+        "revdelay_mix" => &mut fx.revdelay_mix,
+        "tapestop_mix" => &mut fx.tapestop_mix,
+        "tapestop_time" => &mut fx.tapestop_time,
+        "stutter_rate" => &mut fx.stutter_rate,
+        "stutter_slice" => &mut fx.stutter_slice,
+        "stutter_mix" => &mut fx.stutter_mix,
         "ring_mod_freq" => &mut fx.ring_mod_freq,
         "ring_mod_mix" => &mut fx.ring_mod_mix,
         "waveshaper_drive" => &mut fx.waveshaper_drive,
