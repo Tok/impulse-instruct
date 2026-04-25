@@ -166,6 +166,46 @@ fn extract_llm_actions_send_hint_requires_both_fields() {
 }
 
 #[test]
+fn extract_llm_actions_broadcast_hint_requires_scope_and_hint() {
+    // scope + hint both present → one BroadcastHint action.
+    let mut obj: serde_json::Map<String, serde_json::Value> = serde_json::from_str(
+        r#"{"settings": {"broadcast_hint": {"scope": "bass", "hint": "half-time"}}}"#,
+    )
+    .unwrap();
+    let actions = extract_llm_actions(&mut obj);
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, LlmAction::BroadcastHint { scope, hint }
+            if scope == "bass" && hint == "half-time")),
+        "broadcast_hint with scope+hint must produce a BroadcastHint action"
+    );
+
+    // Missing scope → no BroadcastHint.
+    let mut obj2: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_str(r#"{"settings": {"broadcast_hint": {"hint": "go quiet"}}}"#).unwrap();
+    assert!(
+        !extract_llm_actions(&mut obj2)
+            .iter()
+            .any(|a| matches!(a, LlmAction::BroadcastHint { .. })),
+        "broadcast_hint without scope must be rejected"
+    );
+
+    // Empty scope string → no BroadcastHint (broadcast-to-all is
+    // admin-only and shouldn't be reachable from LLM JSON).
+    let mut obj3: serde_json::Map<String, serde_json::Value> = serde_json::from_str(
+        r#"{"settings": {"broadcast_hint": {"scope": "", "hint": "go quiet"}}}"#,
+    )
+    .unwrap();
+    assert!(
+        !extract_llm_actions(&mut obj3)
+            .iter()
+            .any(|a| matches!(a, LlmAction::BroadcastHint { .. })),
+        "broadcast_hint with empty scope must be rejected"
+    );
+}
+
+#[test]
 fn extract_llm_actions_dismiss_true_emits_action() {
     let mut obj: serde_json::Map<String, serde_json::Value> =
         serde_json::from_str(r#"{"settings": {"dismiss": true}}"#).unwrap();

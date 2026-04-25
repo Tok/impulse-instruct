@@ -762,6 +762,27 @@ pub struct LlmAgentState {
     /// when idle.  Transient — not serialised.
     #[serde(skip)]
     pub pipeline_progress: Option<PipelineProgress>,
+    /// Cumulative prompt + completion tokens consumed by this agent
+    /// across the session.  Surfaced on the agent card so the user can
+    /// see which agents dominate VRAM / throughput.  Transient — not
+    /// serialised; resets each launch.
+    #[serde(skip)]
+    pub total_prompt_tokens: u64,
+    #[serde(skip)]
+    pub total_completion_tokens: u64,
+    /// Number of inference cycles this agent has *completed* (regardless
+    /// of success).  Lets the UI show a per-cycle average without
+    /// needing to keep a separate sliding window.  `jam_cycle_count`
+    /// only ticks on jam cycles, so a dedicated counter is needed for
+    /// the budget readout.  Transient.
+    #[serde(skip)]
+    pub completed_cycles: u32,
+    /// Sleep mode: when true the agent is parked and won't be picked
+    /// for inference (the round-robin / jam scheduler skips sleeping
+    /// agents).  Persisted so a session reload preserves which
+    /// specialists are dormant.  Toggled from the agent card.
+    #[serde(default)]
+    pub sleeping: bool,
 }
 
 fn default_agent_seed() -> i64 {
@@ -809,6 +830,10 @@ impl LlmAgentState {
             seed: -1,
             seed_locked: false,
             pipeline_progress: None,
+            total_prompt_tokens: 0,
+            total_completion_tokens: 0,
+            completed_cycles: 0,
+            sleeping: false,
         }
     }
 
@@ -843,6 +868,10 @@ impl LlmAgentState {
             seed: llm.seed,
             seed_locked: false,
             pipeline_progress: None,
+            total_prompt_tokens: 0,
+            total_completion_tokens: 0,
+            completed_cycles: 0,
+            sleeping: false,
         }
     }
 }

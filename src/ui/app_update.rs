@@ -106,10 +106,17 @@ impl eframe::App for ImpulseApp {
                 if cooldown_left.is_zero() {
                     let next = {
                         let s = self.state.read();
+                        // Sleeping agents are skipped — they save VRAM
+                        // by parking until explicitly woken.  Disabled
+                        // rack modules have always been excluded; sleep
+                        // is the in-app analogue.
                         let enabled: Vec<u32> = s
                             .llm_agents
                             .iter()
-                            .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                            .filter(|a| {
+                                !a.sleeping
+                                    && s.rack.modules.iter().any(|m| m.id == a.id && m.enabled)
+                            })
                             .map(|a| a.id)
                             .collect();
                         if enabled.is_empty() {

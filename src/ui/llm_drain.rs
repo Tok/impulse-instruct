@@ -358,6 +358,34 @@ impl ImpulseApp {
                             }
                         }
                     }
+                    LlmAction::BroadcastHint { scope, hint } => {
+                        let mut s = self.state.write();
+                        let scope_lower = scope.to_ascii_lowercase();
+                        let mut count = 0usize;
+                        for agent in s.llm_agents.iter_mut() {
+                            // Match if agent's scope contains the
+                            // requested label (case-insensitive) OR
+                            // the agent's persona name matches when
+                            // their scope is empty (= "all").
+                            let scope_match = agent
+                                .scope
+                                .iter()
+                                .any(|sc| sc.eq_ignore_ascii_case(&scope_lower));
+                            let persona_match = agent.scope.is_empty()
+                                && agent.persona_name.eq_ignore_ascii_case(&scope_lower);
+                            if scope_match || persona_match {
+                                agent.pending_hints.push(hint.clone());
+                                if agent.pending_hints.len() > 5 {
+                                    let drop_n = agent.pending_hints.len() - 5;
+                                    agent.pending_hints.drain(..drop_n);
+                                }
+                                count += 1;
+                            }
+                        }
+                        log::info!(
+                            "[broadcast_hint] scope={scope:?} reached {count} agent(s): {hint:?}"
+                        );
+                    }
                 }
             }
             // Push updated params after LLM changed state; record the pre-update

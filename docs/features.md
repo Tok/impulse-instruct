@@ -4,6 +4,37 @@ A detailed log of what's built.
 
 ---
 
+### Cross-agent broadcast hints + per-agent budget + sleep mode
+
+Three agent-tooling improvements bundled together because they all
+touch `LlmAgentState`:
+
+- **`broadcast_hint` action**: extends the existing single-target
+  `send_hint` with a scope-fan-out variant.  LLM emits
+  `broadcast_hint: { "scope": "bass", "hint": "half-time for 8 bars" }`
+  and every agent whose `scope` contains the label (case-
+  insensitive) — or whose persona name matches the scope when the
+  agent is global — gets the hint queued.  Empty scope is rejected
+  to keep "broadcast to everyone" admin-only.
+- **Per-agent token-budget tracking**: new `total_prompt_tokens` /
+  `total_completion_tokens` / `completed_cycles` (transient) on
+  `LlmAgentState`.  LLM worker bumps these each cycle via
+  `saturating_add`.  Agent card surfaces a `tok N+M=T (avg X/cycle)`
+  line so the user can see which agents dominate throughput.
+- **Sleep mode**: new `sleeping: bool` field (persisted) — the jam-
+  scheduler's heartbeat picker skips sleeping agents, alongside
+  the existing rack-disabled gate.  Toggle from the agent card
+  (💤 / wake button); persists across sessions so a parked
+  specialist stays parked.
+
+- 10 new tests over budget + sleep: defaults, serde round-trip
+  (sleeping persists, token counters skip), saturating
+  arithmetic over many cycles + u64::MAX clamp, the round-robin
+  filter (awake-picked / sleeping-skipped / all-sleeping-empty /
+  disabled-skipped-even-when-awake).  1 new test for the
+  json_repair extractor (broadcast_hint requires both scope and
+  hint, rejects empty scope).  Full suite at 1616 passing.
+
 ### Pattern snapshot slots A/B/C/D + grouped shortcut overlay
 
 - **Snapshot slots**: Shift+1..=4 instantly load pattern bank slots

@@ -815,6 +815,17 @@ pub fn run_llm_loop(
                         a.tokens_per_sec = output.tokens_per_sec;
                         a.last_response = output.text.clone();
                         a.jam_cycle_count = a.jam_cycle_count.saturating_add(1);
+                        // Per-agent token-budget bookkeeping.  Lets the
+                        // UI show running totals + per-cycle averages
+                        // so the user can see which agents dominate
+                        // VRAM / throughput.
+                        a.total_prompt_tokens = a
+                            .total_prompt_tokens
+                            .saturating_add(output.prompt_tokens as u64);
+                        a.total_completion_tokens = a
+                            .total_completion_tokens
+                            .saturating_add(output.completion_tokens as u64);
+                        a.completed_cycles = a.completed_cycles.saturating_add(1);
                         // Persist a memory snippet from this response
                         if let Some(ref update) = output.param_update
                             && let Some(comment) = update.get("_comment").and_then(|v| v.as_str())

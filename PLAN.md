@@ -44,24 +44,11 @@ they ship and are reflected in `features.md`.
 
 ## Agent tooling - gradual control & expressiveness
 
-- [ ] **Cross-agent broadcast hints** - `send_hint` already exists for
-  single-target agent-to-agent messaging; add a broadcast variant that
-  fans a hint out to every agent matching a scope string (`"bass"` ->
-  every enabled bass agent).  Useful for "everyone go half-time for
-  the next 8 bars" one-shots.
 - [ ] **Persona library** - save / load named agent configurations
   (persona + instructions + prompt override + conv mode + temp).
   Ships with a handful of curated personas; user can stamp their own.
   Loaded from `~/.impulse_instruct/personas/*.json` so they survive
   session reloads.
-- [ ] **Per-agent token-budget tracking** - carry prompt / completion
-  tokens per cycle on `LlmAgentState` and surface the running total +
-  per-cycle average on the agent card.  Lets the user see which
-  agents are dominating VRAM / throughput.
-- [ ] **Agent sleep mode** - an explicit "sleeping" state that unloads
-  the agent's server process (or demotes it to a shared pool slot)
-  until heat rises or the round-robin reaches it.  Saves VRAM for
-  specialists that only need to fire occasionally.
 
 ## Refactoring
 

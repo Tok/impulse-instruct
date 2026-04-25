@@ -69,6 +69,16 @@ pub enum LlmAction {
         to: String,
         hint: String,
     },
+    /// Fan a hint to every agent whose `scope` contains the given
+    /// label (e.g. `"bass"` reaches every bass-scoped agent).  Used
+    /// for "everyone go half-time for the next 8 bars" one-shots
+    /// where a single SendHint per agent would burn many slots.
+    /// Empty `scope` means "every enabled agent" (admin-only — the
+    /// schema doesn't expose that path to the LLM).
+    BroadcastHint {
+        scope: String,
+        hint: String,
+    },
 }
 
 /// Output emitted by the LLM thread back to the UI / HTTP layer.

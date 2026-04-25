@@ -582,12 +582,66 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
     if instr_resp.changed() {
         app.state.write().llm_agents[idx].user_instructions = user_instructions;
     }
-    ui.label(
-        egui::RichText::new(format!("{:.1} t/s  #{}", tps, cycles))
-            .color(theme::ASH)
+    let (total_in, total_out, completed_n, sleeping) = {
+        let s = app.state.read();
+        let a = &s.llm_agents[idx];
+        (
+            a.total_prompt_tokens,
+            a.total_completion_tokens,
+            a.completed_cycles,
+            a.sleeping,
+        )
+    };
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(format!("{:.1} t/s  #{}", tps, cycles))
+                .color(theme::ASH)
+                .monospace()
+                .size(7.5),
+        );
+        // Per-agent token budget — running total + per-cycle average.
+        let avg = if completed_n > 0 {
+            (total_in + total_out) / completed_n as u64
+        } else {
+            0
+        };
+        ui.label(
+            egui::RichText::new(format!(
+                "tok {}+{}={} (avg {}/cycle)",
+                total_in,
+                total_out,
+                total_in + total_out,
+                avg
+            ))
+            .color(theme::IRON)
             .monospace()
             .size(7.5),
-    );
+        )
+        .on_hover_text(
+            "Cumulative prompt + completion tokens this session.\n\
+             avg = total / completed cycles.  Lets you see which\n\
+             agents dominate VRAM / throughput.",
+        );
+        // Sleep mode toggle — when on, the round-robin scheduler
+        // skips this agent.
+        let mut sleep = sleeping;
+        let resp = ui.small_button(
+            egui::RichText::new(if sleep { "💤" } else { "wake" })
+                .monospace()
+                .size(7.5)
+                .color(if sleep { theme::SMOKE } else { theme::ASH }),
+        );
+        if resp.clicked() {
+            sleep = !sleep;
+            app.state.write().llm_agents[idx].sleeping = sleep;
+            app.session_dirty = true;
+        }
+        resp.on_hover_text(if sleeping {
+            "Agent is sleeping — not picked for inference.  Click to wake."
+        } else {
+            "Click to put this agent to sleep — it'll skip its turn until woken."
+        });
+    });
     // ── System prompt override ──────────────────────────────────────────
     let has_override = !prompt_override.is_empty();
     let ovr_header = if has_override {
