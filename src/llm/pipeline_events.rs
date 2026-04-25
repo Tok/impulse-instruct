@@ -142,6 +142,20 @@ pub fn handle_pipeline_event(
                 crate::llm::lane_eval::evaluate_lane(&s, lane)
             };
             crate::llm::lane_eval::record_lane_score(&mut state.write().llm, lane, score);
+            // Lane-score auto-tuner: append to the long-term per-
+            // (style, lane) running average so future jam-cycle
+            // dynamism can bias toward historically high-scoring
+            // lanes.  Skip when no style is active (we'd be
+            // accumulating into a nameless bucket that never gets
+            // read back).
+            {
+                let mut s = state.write();
+                if let Some(style) = s.llm.active_style.clone() {
+                    let key = crate::state::lane_avg_key(&style, lane.label());
+                    let entry = s.llm.lane_avg_per_style.entry(key).or_default();
+                    entry.update(score);
+                }
+            }
             // Lane fade-in: dip the voice's volume and ramp back up over
             // ~1 bar so the new pattern swells in instead of snapping on.
             // No-op for kits/fx/settings/mod (no single-channel volume)

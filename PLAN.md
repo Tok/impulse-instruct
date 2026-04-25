@@ -18,18 +18,6 @@ they ship and are reflected in `features.md`.
   accuracy and music theory.  Gemma 4 26B-A4B is now downloadable
   (three quants); needs a head-to-head vs. E4B on the style + bass +
   theory suites.
-- [ ] **Lane-score auto-tuner** - observe lane-score trends per style +
-  persona combination, then nudge the planner's heuristic weighting
-  toward the lanes that score higher.  Keeps the planner learning
-  without retraining the model.
-- [ ] **Per-lane few-shot example bank** - an editable JSON file of
-  `{ prompt, output }` pairs per LaneKind that the pipeline injects
-  into the relevant lane's prompt as in-context examples.  Lets the
-  user steer a lane's style without touching the system prompt.
-- [ ] **Agent personality evolution** - let `style_observations`
-  trickle into the agent's system prompt over time (cap at N
-  observations) so long-running agents develop a "feel" for what the
-  user likes without needing explicit instruction edits.
 
 ## Integration
 

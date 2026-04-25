@@ -48,7 +48,7 @@ mod slug {
 
 #[cfg(test)]
 mod round_trip {
-    use crate::state::{AgentRole, AppState, ConversationMode, LlmAgentState, PersonaPreset};
+    use crate::state::{AgentRole, ConversationMode, LlmAgentState, PersonaPreset};
 
     fn agent_with_personality() -> LlmAgentState {
         let mut a = LlmAgentState::new_default(7);

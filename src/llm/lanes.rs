@@ -373,13 +373,20 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
         String::new()
     };
 
+    // Optional in-context few-shot examples loaded from
+    // `examples/<lane_slug>.json` — silently absent when the file
+    // doesn't exist.  Lets users steer a lane's style without
+    // touching the system prompt.
+    let examples = crate::llm::few_shot::load_examples_for_lane(lane);
+    let examples_block = crate::llm::few_shot::render_examples_section(&examples);
+
     format!(
         "You are the {lane_label} writer inside Impulse Instruct. Output ONLY valid JSON \
          matching the schema. No prose.\n\
          \n\
          STATE: {state_header}\n\
          LOCKED (never overwrite): {locked_str}\n\
-         {style_hint}{coverage}{harmony_block}{bass_context}\n\
+         {style_hint}{coverage}{harmony_block}{bass_context}{examples_block}\n\
          TASK: {task}\n\
          \n\
          The style above is USER-FIXED — if the user prompt says \"pick a style\" or \
@@ -396,6 +403,7 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
         coverage = coverage,
         harmony_block = harmony_block,
         bass_context = bass_context,
+        examples_block = examples_block,
         task = lane.task_description(),
     )
 }

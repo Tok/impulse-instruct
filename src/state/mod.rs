@@ -540,6 +540,15 @@ pub struct LlmState {
     /// not serialised; rebuilt as the pipeline runs.
     #[serde(skip)]
     pub recent_lane_applies: VecDeque<LaneApplyRecord>,
+    /// Lane-score auto-tuner: long-term running average per
+    /// `(style, lane_label)` key.  Each successful pipeline lane
+    /// apply pushes its evaluated score onto the matching running
+    /// average; the jam scheduler's `effective_dynamism` reads it
+    /// to bias the picker toward lanes that have historically
+    /// scored well in the active style.  Transient (not serialised)
+    /// — rebuilt over a session as cycles run.
+    #[serde(skip)]
+    pub lane_avg_per_style: HashMap<String, LaneAverage>,
     /// Short-lived feedback lines surfaced from the apply layer when the
     /// model produced something weak (e.g. a ramp whose target matches
     /// the current value, a ramp with an imperceptible delta, …).
@@ -569,6 +578,37 @@ pub struct LaneScore {
     pub last_changed_cycle: u32,
     /// Total successful applies of this lane this session.
     pub change_count: u32,
+}
+
+/// Long-term per-(style, lane) running average score — the lane-score
+/// auto-tuner reads this to bias jam-cycle dynamism toward lanes that
+/// have historically scored well in the active style.  Distinct from
+/// `LaneScore` (which is the most recent per-lane score and drives
+/// short-term recency).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LaneAverage {
+    pub sum: f32,
+    pub n: u32,
+}
+
+impl LaneAverage {
+    pub fn mean(&self) -> Option<f32> {
+        if self.n == 0 {
+            None
+        } else {
+            Some(self.sum / self.n as f32)
+        }
+    }
+    pub fn update(&mut self, score: f32) {
+        self.sum += score.clamp(0.0, 1.0);
+        self.n = self.n.saturating_add(1);
+    }
+}
+
+/// Compose the `(style, lane)` map key the auto-tuner uses.  Pure
+/// helper so callers can read the same key in tests / UI.
+pub fn lane_avg_key(style: &str, lane_label: &str) -> String {
+    format!("{}/{}", style, lane_label)
 }
 
 /// Streaming progress for the lane pipeline — populated by the LLM thread's
@@ -662,6 +702,7 @@ impl Default for LlmState {
             lane_scores: HashMap::new(),
             retry_queue: VecDeque::new(),
             recent_lane_applies: VecDeque::new(),
+            lane_avg_per_style: HashMap::new(),
             recent_feedback: VecDeque::new(),
         }
     }

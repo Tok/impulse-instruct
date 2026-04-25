@@ -67,6 +67,39 @@ pub fn effective_dynamism(lane: LaneKind, style: Option<&Style>) -> f32 {
     baseline_dynamism(lane)
 }
 
+/// Lane-score auto-tuner bias factor.  Multiplies `effective_dynamism`
+/// when a long-term running average exists for this (style, lane)
+/// pair.  Centred at 1.0 (neutral); a 1.0 average yields ~1.30
+/// (boost), a 0.0 average yields ~0.70 (reduce).  Bounded so a poor
+/// early run can't permanently disable a lane.  Returns 1.0 when no
+/// running average exists yet.
+///
+/// Pure helper so the bias formula can be unit-tested independent of
+/// the larger weight pipeline.
+pub fn auto_tuner_bias(avg: Option<f32>, n: u32) -> f32 {
+    // Need a few samples before we trust the average; the smoothed
+    // weight ramps from 0 (no trust) to 1 (full trust) over ~5
+    // observations so a single fluke score barely shifts the bias.
+    let trust = (n as f32 / 5.0).clamp(0.0, 1.0);
+    let raw = avg.unwrap_or(0.5);
+    let bias = 1.0 + (raw - 0.5) * 0.6 * trust;
+    bias.clamp(0.7, 1.3)
+}
+
+/// Look up the auto-tuner bias for a lane under the active style.
+/// Returns `(bias, sample_count)` so callers can both apply the bias
+/// and surface the trust level (e.g. in a debug overlay).
+pub fn lane_auto_tuner_bias(state: &AppState, lane: LaneKind) -> (f32, u32) {
+    let Some(style_id) = state.llm.active_style.as_deref() else {
+        return (1.0, 0);
+    };
+    let key = crate::state::lane_avg_key(style_id, lane.label());
+    let Some(avg) = state.llm.lane_avg_per_style.get(&key) else {
+        return (1.0, 0);
+    };
+    (auto_tuner_bias(avg.mean(), avg.n), avg.n)
+}
+
 /// Backwards-compat alias — callers that don't know about styles get the
 /// baseline.  Kept so existing tests and any downstream code keep working.
 pub fn lane_dynamism(lane: LaneKind) -> f32 {
@@ -142,7 +175,8 @@ pub fn pick_jam_lane(
         .iter()
         .map(|&lane| {
             let score = state.llm.lane_scores.get(lane.label());
-            compute_weight(lane, score, cycle, heat, style, rng)
+            let (bias, _n) = lane_auto_tuner_bias(state, lane);
+            compute_weight(lane, score, cycle, heat, style, rng) * bias
         })
         .collect();
     let total: f32 = weights.iter().sum();

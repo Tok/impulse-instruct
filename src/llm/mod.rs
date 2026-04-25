@@ -3,6 +3,7 @@
 // Loads a GGUF model and runs continuous inference to control synth params.
 // Communicates with UI via crossbeam channels.
 
+pub mod few_shot;
 pub mod instructions;
 pub mod json_repair;
 pub mod lane_eval;

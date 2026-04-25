@@ -4,6 +4,44 @@ A detailed log of what's built.
 
 ---
 
+### Lane-score auto-tuner + per-lane few-shot examples + style obs
+
+Three intelligence improvements bundled because they all loop the
+LLM back on its own past output:
+
+- **Lane-score auto-tuner**: long-term per-`(style, lane)` running
+  average score on `LlmState.lane_avg_per_style`.  After each
+  successful pipeline lane apply the score from `lane_eval` is
+  pushed to the matching average.  The jam scheduler's
+  `pick_jam_lane` multiplies its weight by `auto_tuner_bias(avg, n)`,
+  which is centred at 1.0 and bounded to `[0.7, 1.3]` so a poor
+  early run can't permanently disable a lane.  Trust ramps over
+  ~5 observations; lanes with no history use the unmodified
+  baseline / style dynamism.
+- **Per-lane few-shot examples**: drop a JSON array of
+  `{prompt, output}` pairs at `examples/<lane_slug>.json` and the
+  pipeline injects up to 5 of them into that lane's system prompt
+  as concrete reference outputs.  Slug map: `settings`,
+  `bass1..4`, `kit_a`, `kit_b`, `amen`, `hoover`, `an1x`, `fx`,
+  `modulation`, `rack`.  Missing / malformed files are silently
+  skipped — best-effort enrichment, never a hard dependency.
+  Lets the user steer a lane's style without touching the system
+  prompt at all.
+- **Agent personality evolution** (already shipped, now noted):
+  `style_observations` accumulate per agent (capped at
+  `STYLE_OBS_MAX = 10`) and inject into `build_system_prompt_full`
+  under "Learned user preferences", so long-running agents
+  develop a feel for what the user likes.
+
+- 25 new tests: 6 over the running average (default empty / single
+  score / arithmetic mean / clamp on out-of-range), 7 over the
+  bias formula (neutral cases / boost / reduce / dampened-trust /
+  bounded-output sweep), 5 integration over the active-style
+  lookup (no style / no history / boost / cross-style isolation /
+  serde safety), 10 over few-shot (slug map per LaneKind / loader
+  missing-file / well-formed / malformed-no-panic / render
+  empty / contents / 5-cap).  Full suite at 1657 tests passing.
+
 ### Persona library — save / load named agent configurations
 
 - Captures the user-curated subset of an agent (persona name,
