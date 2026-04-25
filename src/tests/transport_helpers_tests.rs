@@ -94,6 +94,63 @@ mod midi_clock_interval {
 }
 
 #[cfg(test)]
+mod clock_interval_validation {
+    use crate::midi::{clock_interval_to_bpm, is_valid_clock_interval};
+
+    #[test]
+    fn valid_window_admits_typical_bpm_range() {
+        // 120 BPM at 24 PPQN → 60/(120*24) ≈ 0.0208s — inside.
+        assert!(is_valid_clock_interval(0.0208));
+        // 60 BPM → 0.0417s — inside.
+        assert!(is_valid_clock_interval(0.0417));
+        // 200 BPM → 0.0125s — inside.
+        assert!(is_valid_clock_interval(0.0125));
+    }
+
+    #[test]
+    fn rejects_doubled_pulse_window() {
+        // < 10 ms = > 300 BPM — almost always a doubled pulse.
+        assert!(!is_valid_clock_interval(0.0));
+        assert!(!is_valid_clock_interval(0.005));
+        assert!(!is_valid_clock_interval(0.01)); // exactly at boundary
+    }
+
+    #[test]
+    fn rejects_dropped_pulse_window() {
+        // > 300 ms ≈ < 8 BPM — usually a dropped pulse or pause.
+        assert!(!is_valid_clock_interval(0.30)); // exactly at boundary
+        assert!(!is_valid_clock_interval(0.5));
+        assert!(!is_valid_clock_interval(2.0));
+    }
+
+    #[test]
+    fn interval_to_bpm_round_trips_at_120() {
+        // 120 BPM → 0.0208s avg → 120 BPM back.
+        let avg = 60.0 / (120.0 * crate::midi::MIDI_CLOCK_PPQN);
+        let bpm = clock_interval_to_bpm(avg);
+        assert!((bpm - 120.0).abs() < 1e-3, "got {bpm}");
+    }
+
+    #[test]
+    fn interval_to_bpm_zero_input_returns_zero() {
+        // Empty averager / divide-by-zero guard.
+        assert!((clock_interval_to_bpm(0.0)).abs() < 1e-6);
+        assert!((clock_interval_to_bpm(-1.0)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn interval_to_bpm_inverse_of_tick_interval() {
+        // Round-trip: a 142 BPM source clock fed back through both
+        // helpers comes out at 142 BPM.  Locks the inverse so a future
+        // PPQN tweak surfaces as a single broken test.
+        let bpm_in = 142.0_f32;
+        let avg_secs = 60.0 / (bpm_in as f64 * crate::midi::MIDI_CLOCK_PPQN);
+        let bpm_out = clock_interval_to_bpm(avg_secs);
+        assert!((bpm_out - bpm_in).abs() < 1e-3, "got {bpm_out}");
+    }
+}
+
+#[cfg(test)]
 mod is_gate_off {
     use crate::sequencer::TriggerEvent;
     use crate::state::DrumVoice;

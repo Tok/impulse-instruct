@@ -100,17 +100,18 @@ impl MidiClockTracker {
         let now = std::time::Instant::now();
         if let Some(last) = self.last {
             let secs = now.duration_since(last).as_secs_f64();
-            // 10ms = 300 BPM, 300ms ≈ 8 BPM — ignore outliers outside this range.
-            if secs > 0.01 && secs < 0.30 {
+            // Outliers (doubled / dropped pulse) get discarded by the
+            // pure helper — see midi::is_valid_clock_interval.
+            if crate::midi::is_valid_clock_interval(secs) {
                 self.intervals[self.head] = secs;
                 self.head = (self.head + 1) % 8;
                 if self.count < 8 {
                     self.count += 1;
                 }
                 let avg = self.intervals[..self.count].iter().sum::<f64>() / self.count as f64;
-                let bpm = 60.0 / (avg * crate::midi::MIDI_CLOCK_PPQN);
+                let bpm = crate::midi::clock_interval_to_bpm(avg);
                 self.last = Some(now);
-                return Some(bpm as f32);
+                return Some(bpm);
             }
         }
         self.last = Some(now);

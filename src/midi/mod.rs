@@ -30,6 +30,30 @@ pub fn midi_clock_tick_interval_samples(bpm: f32, sample_rate: f32) -> f64 {
     (sample_rate as f64 * 60.0) / (bpm * MIDI_CLOCK_PPQN)
 }
 
+/// True when an inter-pulse interval (seconds between two clock
+/// pulses) is plausible enough to feed into the BPM averager.
+/// Caps at 10 ms = 300 BPM (the upper bound of the BPM slider) and
+/// 300 ms ≈ 7.5 BPM (slower than any plausible source clock).
+/// Outside the window we discard the sample as a glitch — a short
+/// interval is usually a doubled-up pulse, a long one usually a
+/// dropped pulse or a paused source.
+#[inline]
+pub fn is_valid_clock_interval(secs: f64) -> bool {
+    secs > 0.01 && secs < 0.30
+}
+
+/// Convert an averaged inter-pulse interval (seconds) into BPM.
+/// 24 PPQN: BPM = 60 / (avg × 24).  Returns 0.0 for non-positive
+/// inputs so a buggy averager (empty window, divide-by-zero) can't
+/// poison the BPM display.
+#[inline]
+pub fn clock_interval_to_bpm(avg_secs: f64) -> f32 {
+    if avg_secs <= 0.0 {
+        return 0.0;
+    }
+    (60.0 / (avg_secs * MIDI_CLOCK_PPQN)) as f32
+}
+
 // ─── MIDI events we emit to the UI thread ─────────────────────────────────────
 
 #[derive(Clone, Debug)]
