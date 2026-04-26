@@ -34,6 +34,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         SampleInstrument => &[Selector, Selector, Selector],
         An1xVoice => &[Fixed(An1xPan), Selector, Selector],
         NoiseVoice => &[Fixed(NoisePan), Selector],
+        // Theremin: only the selectors — every meaningful target
+        // (X / Y / portamento / brightness) is a continuous knob the
+        // user reaches via mod-routes rather than a fixed jack.
+        Theremin => &[Selector, Selector, Selector],
         // ── Voices without a single pan (multi-voice kits / pan-less) ─────
         DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
             &[Selector, Selector, Selector]

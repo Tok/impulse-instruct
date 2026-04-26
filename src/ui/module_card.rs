@@ -46,6 +46,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::DrumKit909
         | ModuleKind::AmenSampler
         | ModuleKind::NoiseVoice
+        | ModuleKind::Theremin
         | ModuleKind::GranularTexture
         | ModuleKind::GabberKick => 24,
         ModuleKind::An1xVoice => 28,

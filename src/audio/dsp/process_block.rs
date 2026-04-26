@@ -152,6 +152,7 @@ impl DspState {
         let sends_an1x = snap_sends(ModuleKind::An1xVoice);
         let sends_amen = snap_sends(ModuleKind::AmenSampler);
         let sends_noise = snap_sends(ModuleKind::NoiseVoice);
+        let sends_theremin = snap_sends(ModuleKind::Theremin);
         let sends_granular = snap_sends(ModuleKind::GranularTexture);
         let sends_tts = snap_sends(ModuleKind::NeuTts);
         let have_voice_routes = !self.fx_plan.voice_routes.is_empty();
@@ -266,6 +267,7 @@ impl DspState {
             let rim = self.rim909.process(0.7, 0.3, 0.15, 0.75, sr);
             let gk = self.gabber_kick.process(&p, sr);
             let noise_out = self.noise_voice.process(sr, &p);
+            let theremin_out = self.theremin.process(sr, &p);
             let hoover_out = if p.hoover_enabled {
                 self.hoover.process(sr, &p)
             } else {
@@ -338,6 +340,7 @@ impl DspState {
             let bus_an1x = an1x_out;
             let bus_amen = amen_out * dv[13];
             let bus_noise = noise_out;
+            let bus_theremin = theremin_out;
             let bus_granular = granular_out;
 
             // Sidechain compression: kick ducks bass/pad/hoover/granular
@@ -370,6 +373,7 @@ impl DspState {
                 + bus_an1x
                 + bus_amen
                 + bus_noise
+                + bus_theremin
                 + bus_granular)
                 * 0.60;
             self.reverb_gate_env = gated_reverb_envelope_step(
@@ -442,6 +446,7 @@ impl DspState {
                 let routed_an1x = route_or_dry!(bus_an1x, sends_an1x);
                 let routed_amen = route_or_dry!(bus_amen, sends_amen);
                 let routed_noise = route_or_dry!(bus_noise, sends_noise);
+                let routed_theremin = route_or_dry!(bus_theremin, sends_theremin);
                 let routed_granular = route_or_dry!(bus_granular, sends_granular);
                 let routed_pluck = route_or_dry!(bus_pluck, sends_pluck);
                 let routed_wavetable = route_or_dry!(bus_wavetable, sends_wavetable);
@@ -456,6 +461,7 @@ impl DspState {
                     + routed_an1x
                     + routed_amen
                     + routed_noise
+                    + routed_theremin
                     + routed_granular)
                     * 0.60;
                 // Global chain after per-voice mixing
@@ -532,7 +538,8 @@ impl DspState {
                 + wavetable_out * p.wavetable_pan * 0.5
                 + sample_out * p.sample_pan * 0.5
                 + an1x_out * p.pan_an1x * 0.5
-                + noise_out * p.pan_noise * 0.5;
+                + noise_out * p.pan_noise * 0.5
+                + theremin_out * p.theremin_pan * 0.5;
             // Decay the Pan FxStep side-contribution when the step
             // hasn't run this sample, so switching it off stops the
             // auto-pan cleanly instead of latching the last side value.

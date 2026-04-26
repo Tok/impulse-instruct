@@ -26,6 +26,10 @@ pub enum ModuleKind {
     An1xVoice,
     AmenSampler,
     NoiseVoice,
+    /// Theremin — XY-pad-driven continuous-pitch oscillator with
+    /// portamento glide.  Absurd-queue voice; no sequencer hookup
+    /// in V1, the user "plays" it by dragging the pad on its panel.
+    Theremin,
     GranularTexture,
     /// Dedicated hardcore-style kick voice — distinct from the 808/909 kicks.
     GabberKick,
@@ -160,6 +164,7 @@ impl ModuleKind {
             Self::An1xVoice => "AN1X",
             Self::AmenSampler => "AMEN",
             Self::NoiseVoice => "NOISE",
+            Self::Theremin => "THEREMIN",
             Self::GranularTexture => "GRANULAR",
             Self::GabberKick => "GABBER KICK",
             Self::NeuTts => "TTS VOICE",
@@ -254,6 +259,10 @@ impl ModuleKind {
             Self::An1xVoice => (6, 6),
             Self::AmenSampler => (3, 3),
             Self::NoiseVoice => (2, 1),
+            // Theremin: 3 cols wide so the XY pad has room to be
+            // square-ish; 3 rows tall — pad takes most of it,
+            // bottom row hosts the four small knobs.
+            Self::Theremin => (3, 3),
             Self::GranularTexture => (3, 2),
             Self::GabberKick => (3, 2),
             Self::LlmAgent => (3, 2),
@@ -361,6 +370,7 @@ impl ModuleKind {
             | Self::An1xVoice
             | Self::AmenSampler
             | Self::NoiseVoice
+            | Self::Theremin
             | Self::GranularTexture
             | Self::NeuTts
             | Self::GabberKick => Zone::Voice,
@@ -430,6 +440,7 @@ impl ModuleKind {
                 | Self::GranularTexture
                 | Self::GabberKick
                 | Self::NoiseVoice
+                | Self::Theremin
                 | Self::An1xVoice
                 | Self::NeuTts
                 | Self::FxReverb

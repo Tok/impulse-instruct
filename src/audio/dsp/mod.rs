@@ -24,6 +24,7 @@ mod process_block;
 mod rev_tap;
 pub mod sample_instrument;
 pub mod samplers;
+pub mod theremin;
 mod trigger_handler;
 pub mod voices;
 pub mod wavetable;
@@ -49,6 +50,7 @@ use pluck::PluckVoice;
 pub use rev_tap::{FxDirection, FxRevQuant};
 use sample_instrument::{SampleInstrumentVoice, SfzRegionRuntime};
 use samplers::*;
+use theremin::ThereminVoice;
 use voices::*;
 use wavetable::WavetableVoice;
 
@@ -126,6 +128,7 @@ pub struct DspState {
     ring_mod_phase: f32,
     eq: EqBands,
     noise_voice: NoiseVoice,
+    theremin: ThereminVoice,
     granular: GranularVoice,
     hoover: HooverVoice,
     pluck: PluckVoice,
@@ -269,6 +272,7 @@ impl DspState {
             bitcrush_held: 0.0,
             bitcrush_counter: 0,
             noise_voice: NoiseVoice::new(0x4015_EB3D),
+            theremin: ThereminVoice::new(),
             granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
             pluck: PluckVoice::new(),

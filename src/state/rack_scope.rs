@@ -46,6 +46,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::An1xVoice => Some("an1x".to_string()),
         ModuleKind::AmenSampler => Some("amen".to_string()),
         ModuleKind::NoiseVoice => Some("noise".to_string()),
+        ModuleKind::Theremin => Some("theremin".to_string()),
         ModuleKind::GranularTexture => Some("granular".to_string()),
         ModuleKind::GabberKick => Some("gabber_kick".to_string()),
         ModuleKind::StepSequencer => Some("sequencer".to_string()),
@@ -101,6 +102,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "an1xvoice" | "an1x" | "an-1x" | "pad" | "synth" => Some(An1xVoice),
         "amensampler" | "amen" | "sampler" | "break" => Some(AmenSampler),
         "noisevoice" | "noise" => Some(NoiseVoice),
+        "theremin" => Some(Theremin),
         "granulartexture" | "granular" | "grain" | "texture" => Some(GranularTexture),
         "gabberkick" | "gabber" | "hardcorekick" | "rotterdam" => Some(GabberKick),
         "fxreverb" | "reverb" | "verb" => Some(FxReverb),
@@ -249,6 +251,7 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::An1xVoice => matches!(n.as_str(), "an1x" | "an-1x" | "pad" | "synth"),
         ModuleKind::AmenSampler => matches!(n.as_str(), "amen" | "sampler" | "break"),
         ModuleKind::NoiseVoice => matches!(n.as_str(), "noise"),
+        ModuleKind::Theremin => matches!(n.as_str(), "theremin"),
         ModuleKind::GranularTexture => matches!(n.as_str(), "granular" | "grain" | "texture"),
         ModuleKind::GabberKick => {
             matches!(

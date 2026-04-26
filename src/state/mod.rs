@@ -32,6 +32,9 @@ pub use sfz::{SfzFilType, SfzLoopMode, SfzRegion, parse_sfz};
 pub mod noise;
 pub use noise::NoiseVoiceState;
 
+pub mod theremin;
+pub use theremin::ThereminState;
+
 pub mod granular;
 pub use granular::GranularState;
 
@@ -234,6 +237,8 @@ pub struct AppState {
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
     #[serde(default)]
+    pub theremin: ThereminState,
+    #[serde(default)]
     pub granular: GranularState,
     #[serde(default)]
     pub hoover: HooverState,
@@ -378,6 +383,7 @@ impl Default for AppState {
             lfo: Default::default(),
             free_eg: Default::default(),
             noise_voice: Default::default(),
+            theremin: Default::default(),
             granular: Default::default(),
             hoover: Default::default(),
             pluck: Default::default(),

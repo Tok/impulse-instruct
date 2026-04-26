@@ -4,6 +4,47 @@ A detailed log of what's built.
 
 ---
 
+### Theremin voice (absurd queue #2)
+
+XY-pad-driven continuous-pitch oscillator with portamento glide.
+Drag the pad: X is log-mapped to pitch (50–2000 Hz, ~5 octaves —
+matches a real Theremin's antenna range), Y is the gain follower
+(bottom = silent, top = loud).  Portamento smoothing on the
+pitch target gives the defining glissando gesture; gain has its
+own short fixed-tau smoother so quick volume articulations stay
+crisp regardless of the portamento setting.
+
+- New `state::theremin::ThereminState` (enabled / x / y /
+  portamento / brightness / volume / pan), wired into
+  `AppState` with `#[serde(default)]` so older sessions pick it
+  up.
+- `audio::dsp::theremin::ThereminVoice` — single sine + 3rd /
+  5th odd harmonics scaled by the brightness knob (the "talking"
+  overtones that approximate a real Theremin's heterodyne
+  squeal at high volumes).  Pure additive — no allocations in
+  process.  Auto-clamped target gain + smoothed pitch for
+  click-free pad drags.
+- `ModuleKind::Theremin` joins the voice palette with full
+  metadata (label `THEREMIN`, grid 3×3, `Zone::Voice`,
+  `has_audio_output()` true).
+- `wire_default_cables` extended with an "audio-only voices"
+  list — Theremin has no CV-in jack (it's pad-played, not
+  sequencer-played), so it skips the seq → CV cable but still
+  gets a master-audio cable so the card isn't silent the moment
+  it's added.
+- UI panel: ON/OFF toggle, big XY pad (square, dominates the
+  card), and a glass row of PORTA / BRIGHT / VOL / PAN knobs.
+  Pad-drag writes through to state and pushes audio params
+  immediately.
+- Excluded from the `random_layout` pool (same reasoning as
+  `SampleInstrument` and `NeuTts` — a pad-played voice with no
+  hand on the pad is silent, so it doesn't make sense as a
+  random pick).
+- 4 new tests cover: silent when disabled, silent at y=0,
+  pitch convergence with short portamento, audible output with
+  reasonable params + bounded amplitude.  Total: **1899 tests
+  passing**.
+
 ### Eurorack patch generator (absurd queue #1)
 
 Creative-seed tool — wipe the rack, drop in a random selection of

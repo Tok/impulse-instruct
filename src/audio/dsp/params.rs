@@ -642,6 +642,14 @@ pub struct AudioParams {
     pub noise_filter_lfo_depth: f32,
     pub noise_sh_rate: f32,
     pub noise_sh_depth: f32,
+    // Theremin — XY-pad-driven sine voice with portamento.
+    pub theremin_enabled: bool,
+    pub theremin_x: f32,
+    pub theremin_y: f32,
+    pub theremin_portamento: f32,
+    pub theremin_brightness: f32,
+    pub theremin_volume: f32,
+    pub theremin_pan: f32,
     // Granular texture
     pub granular_enabled: bool,
     pub granular_volume: f32,

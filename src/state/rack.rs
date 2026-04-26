@@ -278,6 +278,7 @@ impl RackState {
                 | ModuleKind::GranularTexture
                 | ModuleKind::GabberKick
                 | ModuleKind::NoiseVoice
+                | ModuleKind::Theremin
                 | ModuleKind::An1xVoice
                 | ModuleKind::NeuTts
                 | ModuleKind::FxReverb
@@ -475,6 +476,9 @@ impl RackState {
                 ModuleKind::An1xVoice => 15,
                 ModuleKind::AmenSampler => 16,
                 ModuleKind::NoiseVoice => 17,
+                // Theremin sits next to the noise voice — both are
+                // "weird sustained drones" tonally.
+                ModuleKind::Theremin => 17,
                 ModuleKind::GranularTexture => 18,
                 ModuleKind::NeuTts => 19,
                 ModuleKind::FxWaveshaper => 20,

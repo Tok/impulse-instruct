@@ -40,6 +40,7 @@ pub(super) mod sequencer_preecho;
 pub(super) mod sequencer_sample_lane;
 pub mod spectrum;
 pub mod stereo_meter;
+pub mod theremin;
 pub mod timeline;
 pub mod tts;
 pub mod viz;
@@ -63,6 +64,7 @@ pub use scope_module::draw_scope_module;
 pub use sequencer::draw_sequencer;
 pub use spectrum::draw_spectrum;
 pub use stereo_meter::draw_stereo_meter;
+pub use theremin::draw_theremin;
 pub use timeline::draw_timeline;
 pub use tts::draw_tts;
 pub use viz::{

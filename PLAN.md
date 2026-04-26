@@ -152,9 +152,7 @@ User-prioritised order; each is its own module, shippable
 independently.  Anything left at "unscheduled" goes in last.
 
 1. [x] ~~**Eurorack patch generator**~~ — shipped (see features.md).
-2. [ ] **Theremin** — XY pad → pitch (one axis) + volume (other).
-   Heterodyning oscillator pair so the squeal character lands;
-   could also be MIDI / mouse drivable.
+2. [x] ~~**Theremin**~~ — shipped (see features.md).
 3. [ ] **Mellotron voice** — sampler with per-note tape-loop model:
    small tape-flutter LFO per slot, slight pitch wobble, brief
    spin-up transient.  Uses the SampleInstrument scaffolding.

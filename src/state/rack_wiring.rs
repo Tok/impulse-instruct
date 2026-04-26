@@ -92,6 +92,22 @@ impl RackState {
                 self.connect(a, b);
             }
         }
+        // Audio-only voices — they make sound but don't take a
+        // sequencer-CV trigger (the user plays them directly via a
+        // panel widget like the Theremin's XY pad).  Wire their
+        // audio output to master so the card isn't silent the
+        // moment it's added; skip the seq → CV cable since there's
+        // no CV-in jack to land on.
+        let audio_only_voices: Vec<u32> = [ModuleKind::Theremin]
+            .iter()
+            .filter_map(|&k| find(&self.modules, k))
+            .collect();
+        if let Some(mid) = master_id {
+            for vid in &audio_only_voices {
+                let (a, b) = audio_cable(*vid, mid);
+                self.connect(a, b);
+            }
+        }
         // TTS → Reverb (TTS gets ambience).  Reverb output is wired to
         // master below so this stays in the audio path.
         if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {
