@@ -34,7 +34,8 @@ pub(super) fn try_draw_fx_lfo_content(
         ModuleKind::FxTremolo
         | ModuleKind::FxVibrato
         | ModuleKind::FxDeEsser
-        | ModuleKind::FxResBank => {}
+        | ModuleKind::FxResBank
+        | ModuleKind::FxTapeEcho => {}
         _ => return None,
     }
 
@@ -242,6 +243,53 @@ pub(super) fn try_draw_fx_lfo_content(
                 st.fx.resbank_chord = c;
                 st.fx.resbank_resonance = q;
                 st.fx.resbank_mix = m;
+            }
+        }
+        ModuleKind::FxTapeEcho => {
+            // TIME / FEEDBACK / AGE / MIX — the AGE knob folds
+            // wow / flutter / saturation / HF rolloff together so
+            // the user dials character with one gesture.  Distinct
+            // surface from FxDelay's separate-knobs layout.
+            let (mut t, mut fb, mut a, mut m) = {
+                let st = app.state.read();
+                (
+                    st.fx.tape_echo_time,
+                    st.fx.tape_echo_feedback,
+                    st.fx.tape_echo_age,
+                    st.fx.tape_echo_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("TIME", &mut t, pm("fx.tape_echo_time")),
+                ("FEEDBACK", &mut fb, pm("fx.tape_echo_feedback")),
+                ("AGE", &mut a, pm("fx.tape_echo_age")),
+                ("MIX", &mut m, pm("fx.tape_echo_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("tape_echo_xy_{module_id}"),
+                    ["TIME", "FEEDBACK", "AGE"],
+                    &mut pad_pair,
+                    (&mut t, &mut fb, &mut a),
+                    [
+                        user_owned("fx.tape_echo_time"),
+                        user_owned("fx.tape_echo_feedback"),
+                        user_owned("fx.tape_echo_age"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || t != app.state.read().fx.tape_echo_time {
+                let mut st = app.state.write();
+                st.fx.tape_echo_time = t;
+                st.fx.tape_echo_feedback = fb;
+                st.fx.tape_echo_age = a;
+                st.fx.tape_echo_mix = m;
             }
         }
         _ => unreachable!("guarded by the early return above"),

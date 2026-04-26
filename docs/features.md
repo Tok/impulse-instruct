@@ -4,6 +4,54 @@ A detailed log of what's built.
 
 ---
 
+### Tape Echo FX (`FxTapeEcho`)
+
+Dub-style delay with wow / flutter / saturation baked into
+the feedback path.  Distinct from `FxDelay` (which can do
+tape character but spreads it across five separate knobs),
+`FxTapeSat` (no delay), and `FxMultitap` (rhythmic taps).
+Single AGE knob folds wow + flutter + saturation + HF rolloff
+together so users dial "more worn-out tape" with one gesture.
+
+**DSP shape.**  160 000-sample heap-allocated delay buffer
+(1.7 s at 96 kHz).  Two LFOs modulate the read tap (~0.5 Hz
+wow + ~6 Hz flutter), depth scaling with AGE.  Linear-interp
+fractional read.  Feedback path runs through a one-pole LPF
+(cutoff sweeps with AGE — pristine at 0, ~1 kHz at 1) then a
+tanh saturation (drive ramps 1× to 3.5× with AGE).
+
+**Knobs.**
+- `tape_echo_time` 0..1 → 25..1500 ms log-mapped (slap-back
+  to dub-rhythm).  Free-running, not BPM-synced.
+- `tape_echo_feedback` 0..1 → 0..0.95.  Caps sub-unity even
+  at full knob to avoid runaway when AGE saturation is also
+  engaged.  Default 0.4 (~3 audible repeats).
+- `tape_echo_age` 0..1.  Single character knob — folds the
+  four character parameters (wow / flutter / sat drive / HF
+  rolloff) into one gesture.  Default 0.5.
+- `tape_echo_mix` 0..1 with cheap-bypass fast path.
+
+**Wiring.**  Standard FX add ritual — `FxStep::TapeEcho`
+(idx 39, `FX_STEP_COUNT` bumped to 40),
+`ModuleKind::FxTapeEcho` ("TAPE ECHO" label, 2×1 grid,
+sort-group 11 next to FxDelay / FxMultitap / FxRevDelay).
+Aliases tapeecho / tape_echo / fxtapeecho / dubecho /
+spaceecho / echotape.  4 × Selector modulation jacks — LFO
+on time gives a "warbling-pitch" patch when paired with low
+feedback.
+
+**Tests.**  +4 DSP (mix=0 bypass, audible repeats from
+impulse, output bounded under max-feedback × max-age, age=0
+delivers a clean digital echo near unity), +6 state-side
+(defaults are dub slap-back at 250 ms / fb 0.4 / age 0.5,
+llm-apply all 4 knobs, lock honoured, FxStep mapping, label,
+alias parsing).  Suite **2077 → 2087**.
+
+Files: new `src/audio/dsp/fx_tape_echo.rs`, new
+`src/tests/fx_tape_echo_tests.rs`.
+
+---
+
 ### Resonator bank FX (`FxResBank`)
 
 Six tuned BPF biquads in parallel turn any input into a chord

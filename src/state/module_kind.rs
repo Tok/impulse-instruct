@@ -163,6 +163,14 @@ pub enum ModuleKind {
     /// preset knob, with pitch governed by the root knob rather
     /// than tracking the input.
     FxResBank,
+    /// Tape Echo — dub-style delay with wow / flutter / saturation
+    /// baked into the feedback path.  Distinct from `FxDelay`
+    /// (clean digital with character knobs that have to be dialed
+    /// in separately), `FxTapeSat` (no delay), and `FxMultitap`
+    /// (rhythmic taps).  One AGE knob folds wow + flutter + sat
+    /// HF rolloff together so users dial "more worn-out tape" with
+    /// one gesture.
+    FxTapeEcho,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -285,6 +293,7 @@ impl ModuleKind {
             Self::FxIsoEq => "ISO EQ",
             Self::FxDeEsser => "DE-ESSER",
             Self::FxResBank => "RES BANK",
+            Self::FxTapeEcho => "TAPE ECHO",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -466,7 +475,8 @@ impl ModuleKind {
             | Self::FxVibrato
             | Self::FxIsoEq
             | Self::FxDeEsser
-            | Self::FxResBank => (2, 1),
+            | Self::FxResBank
+            | Self::FxTapeEcho => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -540,6 +550,7 @@ impl ModuleKind {
             | Self::FxIsoEq
             | Self::FxDeEsser
             | Self::FxResBank
+            | Self::FxTapeEcho
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -622,6 +633,7 @@ impl ModuleKind {
                 | Self::FxIsoEq
                 | Self::FxDeEsser
                 | Self::FxResBank
+                | Self::FxTapeEcho
         )
     }
 
@@ -679,6 +691,7 @@ impl ModuleKind {
                 | Self::FxIsoEq
                 | Self::FxDeEsser
                 | Self::FxResBank
+                | Self::FxTapeEcho
         )
     }
 

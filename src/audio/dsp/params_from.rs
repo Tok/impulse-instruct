@@ -206,6 +206,10 @@ impl AudioParams {
             resbank_chord: s.fx.resbank_chord.clamp(0.0, 1.0),
             resbank_resonance: s.fx.resbank_resonance.clamp(0.0, 1.0),
             resbank_mix: s.fx.resbank_mix.clamp(0.0, 1.0),
+            tape_echo_time: s.fx.tape_echo_time.clamp(0.0, 1.0),
+            tape_echo_feedback: s.fx.tape_echo_feedback.clamp(0.0, 1.0),
+            tape_echo_age: s.fx.tape_echo_age.clamp(0.0, 1.0),
+            tape_echo_mix: s.fx.tape_echo_mix.clamp(0.0, 1.0),
             param_eq_ms_mode: s.fx.param_eq_ms_mode,
             conv_reverb_mix: s.fx.conv_reverb_mix.clamp(0.0, 1.0),
             // Cabinet mode caps the IR length at 10 % of the loaded

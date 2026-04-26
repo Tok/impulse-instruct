@@ -54,6 +54,7 @@ mod fx_step_idx_tests {
             FxStep::IsoEq,
             FxStep::DeEsser,
             FxStep::ResBank,
+            FxStep::TapeEcho,
         ];
         assert_eq!(variants.len(), FX_STEP_COUNT);
         let mut seen = [false; FX_STEP_COUNT];

@@ -90,6 +90,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // all selectors so the user can sequence root pitch via
         // LFO for slow chord-progression patches.
         FxResBank => &[Selector, Selector, Selector, Selector],
+        // Tape echo: 4 knobs (time / feedback / age / mix); all
+        // selectors — LFO on time gives a "warbling pitch" patch
+        // when paired with low feedback.
+        FxTapeEcho => &[Selector, Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],

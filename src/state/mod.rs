@@ -65,6 +65,7 @@ pub mod sequencer_state;
 pub use sequencer_state::{SequencerState, Step, TB303Step};
 
 pub mod fx;
+mod fx_defaults;
 pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
 
 pub mod chain_advance;

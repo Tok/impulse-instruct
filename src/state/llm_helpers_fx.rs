@@ -289,6 +289,14 @@ pub(super) fn apply_fx_update(
         "fx.resbank_resonance"
     );
     u!(s.fx.resbank_mix, "resbank_mix", "fx.resbank_mix");
+    u!(s.fx.tape_echo_time, "tape_echo_time", "fx.tape_echo_time");
+    u!(
+        s.fx.tape_echo_feedback,
+        "tape_echo_feedback",
+        "fx.tape_echo_feedback"
+    );
+    u!(s.fx.tape_echo_age, "tape_echo_age", "fx.tape_echo_age");
+    u!(s.fx.tape_echo_mix, "tape_echo_mix", "fx.tape_echo_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {

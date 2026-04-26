@@ -39,6 +39,7 @@ mod fx_resbank_tests;
 mod fx_sidechain_tests;
 mod fx_step_idx_tests;
 mod fx_stereo_tests;
+mod fx_tape_echo_tests;
 mod fx_tremolo_tests;
 mod fx_vibrato_tests;
 mod helpers_tests;

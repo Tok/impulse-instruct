@@ -103,9 +103,6 @@ new gap turns up.
   `FxMultitap` (rhythmic taps) and `FxFreeze` (held buffer).
 - [ ] **Spectral gate** — per-bin gate on STFT magnitude (not a
   global threshold).  Pairs with `FxFreeze`'s spectral path.
-- [ ] **Tape echo** — dedicated, with wow / flutter + saturation
-  inside the feedback loop.  Distinct from `FxTapeSat` (no
-  delay) and `FxDelay` (no character).
 - [ ] **Shimmer mode flag on `FxConvReverb`** (already deferred
   above — repeated here so the FX wishlist scans complete).
 

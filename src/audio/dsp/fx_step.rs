@@ -359,6 +359,14 @@ impl DspState {
                 p.resbank_mix,
                 sr,
             ),
+            FxStep::TapeEcho => self.tape_echo.process(
+                sig,
+                p.tape_echo_time,
+                p.tape_echo_feedback,
+                p.tape_echo_age,
+                p.tape_echo_mix,
+                sr,
+            ),
         }
     }
 

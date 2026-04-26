@@ -19,6 +19,7 @@ pub mod fx_math;
 pub mod fx_resbank;
 pub mod fx_sidechain;
 mod fx_step;
+pub mod fx_tape_echo;
 pub mod fx_tremolo;
 pub mod fx_vibrato;
 pub mod fx_vinyl;
@@ -64,6 +65,7 @@ use fx_deesser::DeEsserFx;
 use fx_iso_eq::IsoEqFx;
 use fx_resbank::ResBankFx;
 use fx_sidechain::{Gate, Vocoder};
+use fx_tape_echo::TapeEchoFx;
 use fx_tremolo::TremoloFx;
 use fx_vibrato::VibratoFx;
 use fx_vinyl::VinylFx;
@@ -154,6 +156,7 @@ pub struct DspState {
     iso_eq: IsoEqFx,
     deesser: DeEsserFx,
     resbank: ResBankFx,
+    tape_echo: TapeEchoFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -312,6 +315,7 @@ impl DspState {
             iso_eq: IsoEqFx::new(),
             deesser: DeEsserFx::new(),
             resbank: ResBankFx::new(),
+            tape_echo: TapeEchoFx::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

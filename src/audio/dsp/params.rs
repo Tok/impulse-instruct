@@ -683,6 +683,11 @@ pub struct AudioParams {
     pub resbank_chord: f32,
     pub resbank_resonance: f32,
     pub resbank_mix: f32,
+    // Tape echo — dub-style delay with wow/flutter/sat in the feedback loop.
+    pub tape_echo_time: f32,
+    pub tape_echo_feedback: f32,
+    pub tape_echo_age: f32,
+    pub tape_echo_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,

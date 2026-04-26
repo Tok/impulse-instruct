@@ -309,6 +309,7 @@ impl RackState {
                 | ModuleKind::FxIsoEq
                 | ModuleKind::FxDeEsser
                 | ModuleKind::FxResBank
+                | ModuleKind::FxTapeEcho
         );
         if !has_audio_out {
             return true;
@@ -596,6 +597,10 @@ impl RackState {
                 // same family of pitched-resonance FX, just with
                 // six tuned bands instead of one.
                 ModuleKind::FxResBank => 9,
+                // Tape echo lives next to the stock delay /
+                // multitap / revdelay cluster — same delay-line
+                // family, distinct character.
+                ModuleKind::FxTapeEcho => 11,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

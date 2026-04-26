@@ -54,6 +54,7 @@ const ALL_FX_STEPS: &[FxStep] = &[
     FxStep::IsoEq,
     FxStep::DeEsser,
     FxStep::ResBank,
+    FxStep::TapeEcho,
 ];
 
 #[test]

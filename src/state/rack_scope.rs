@@ -90,7 +90,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxVibrato
         | ModuleKind::FxIsoEq
         | ModuleKind::FxDeEsser
-        | ModuleKind::FxResBank => Some("fx".to_string()),
+        | ModuleKind::FxResBank
+        | ModuleKind::FxTapeEcho => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         _ => None,
     }
@@ -166,6 +167,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxdeesser" | "deesser" | "deess" | "sibilance" | "sibilant" => Some(FxDeEsser),
         "fxresbank" | "resbank" | "resonatorbank" | "resonators" | "chordres"
         | "chordresonator" => Some(FxResBank),
+        "fxtapeecho" | "tapeecho" | "dubecho" | "spaceecho" | "echotape" => Some(FxTapeEcho),
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
@@ -269,6 +271,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxResBank => matches!(
             n.as_str(),
             "resbank" | "res_bank" | "resonatorbank" | "resonator_bank" | "chordres" | "fx"
+        ),
+        ModuleKind::FxTapeEcho => matches!(
+            n.as_str(),
+            "tapeecho" | "tape_echo" | "tape echo" | "dubecho" | "spaceecho" | "fx"
         ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),
