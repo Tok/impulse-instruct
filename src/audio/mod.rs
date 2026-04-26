@@ -6,6 +6,7 @@ pub mod analysis;
 pub mod audio_load;
 pub mod dsp;
 pub mod onset;
+pub mod sf2_loader;
 pub mod sfz_loader;
 pub mod spectrum;
 

@@ -92,10 +92,10 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .add_sized([60.0, 20.0], egui::Button::new("LOAD"))
             .clicked()
             && let Some(p) = crate::ui::header_menu::pick_file_via_portal(
-                "Audio/SFZ",
+                "Audio/SFZ/SF2",
                 &[
                     "wav", "WAV", "sfz", "SFZ", "flac", "FLAC", "aif", "AIF", "aiff", "AIFF",
-                    "aifc", "AIFC",
+                    "aifc", "AIFC", "sf2", "SF2",
                 ],
             )
         {
@@ -517,19 +517,31 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 /// `LoadSampleInstrument` command).  Centralised so the LOAD button
 /// and the API-poll path can share it.
 fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
-    let is_sfz = std::path::Path::new(path)
+    let ext = std::path::Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("sfz"))
-        .unwrap_or(false);
-    if is_sfz {
-        if let Some(regions) = crate::audio::sfz_loader::load_sfz_file(path) {
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    let is_sfz = ext == "sfz";
+    let is_sf2 = ext == "sf2";
+    if is_sfz || is_sf2 {
+        // Both `.sfz` and `.sf2` end up as a `Vec<SfzRegionRuntime>` —
+        // the SF2 parser maps SoundFont preset/instrument/sample
+        // chains onto SfzRegion entries so the SampleInstrument
+        // trigger path stays uniform across formats.  V1 SF2 loads
+        // the first preset only; future V2 adds a preset picker.
+        let loaded = if is_sfz {
+            crate::audio::sfz_loader::load_sfz_file(path)
+        } else {
+            crate::audio::sf2_loader::load_sf2_file(path)
+        };
+        if let Some(regions) = loaded {
             // Stash a UI-side copy for the zone-map visualizer before
             // the Vec is moved into the audio command — the audio
             // thread owns the runtime list, but the UI needs to read
             // the metadata for paint.
             app.sample_sfz_regions = regions.clone();
-            // Fresh SFZ — drop any stale region selection so the
+            // Fresh SFZ / SF2 — drop any stale region selection so the
             // inspector doesn't index the previous bank's regions.
             app.sample_selected_region = None;
             let _ = app
