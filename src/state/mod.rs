@@ -52,6 +52,9 @@ pub use chiptune::{
     CHIPTUNE_FILTER_MODES, CHIPTUNE_OSCS, CHIPTUNE_WAVEFORMS, ChiptuneState, SidOsc,
 };
 
+pub mod vocal;
+pub use vocal::{VOCAL_VOWEL_PRESETS, VocalState};
+
 pub mod granular;
 pub use granular::GranularState;
 
@@ -269,6 +272,8 @@ pub struct AppState {
     #[serde(default)]
     pub chiptune: ChiptuneState,
     #[serde(default)]
+    pub vocal: VocalState,
+    #[serde(default)]
     pub granular: GranularState,
     #[serde(default)]
     pub hoover: HooverState,
@@ -427,6 +432,7 @@ impl Default for AppState {
             additive: Default::default(),
             modal: Default::default(),
             chiptune: Default::default(),
+            vocal: Default::default(),
             granular: Default::default(),
             hoover: Default::default(),
             pluck: Default::default(),

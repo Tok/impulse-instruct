@@ -56,6 +56,9 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // Chiptune: 3 oscs × 6 fields each + filter + flags →
         // selectors throughout.
         ChiptuneVoice => &[Selector, Selector, Selector],
+        // Vocal: vowel + morph + brightness + shift + ADSR —
+        // selectors so the user picks which to drive.
+        VocalVoice => &[Selector, Selector, Selector],
         // ── Voices without a single pan (multi-voice kits / pan-less) ─────
         DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
             &[Selector, Selector, Selector]

@@ -94,6 +94,14 @@ fn default_chiptune_steps() -> usize {
     32
 }
 
+fn default_vocal_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_vocal_steps() -> usize {
+    32
+}
+
 // ─── Step types ──────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
@@ -235,6 +243,8 @@ pub struct SequencerState {
     pub modal_pattern: Vec<TB303Step>,
     #[serde(default = "default_chiptune_pattern")]
     pub chiptune_pattern: Vec<TB303Step>,
+    #[serde(default = "default_vocal_pattern")]
+    pub vocal_pattern: Vec<TB303Step>,
     /// Tonic note (0=C … 11=B). Used for scale highlighting and LLM music theory.
     pub root_note: u8,
     /// Active scale / mode for this pattern.
@@ -262,6 +272,8 @@ pub struct SequencerState {
     pub modal_steps: usize,
     #[serde(default = "default_chiptune_steps")]
     pub chiptune_steps: usize,
+    #[serde(default = "default_vocal_steps")]
+    pub vocal_steps: usize,
     /// Per-voice bass patterns for multi-voice support. Voice 0 mirrors `bass_pattern`.
     #[serde(default = "default_bass_patterns")]
     pub bass_patterns: Vec<Vec<TB303Step>>,
@@ -346,6 +358,7 @@ impl Default for SequencerState {
             additive_pattern: vec![TB303Step::default(); MAX_STEPS],
             modal_pattern: vec![TB303Step::default(); MAX_STEPS],
             chiptune_pattern: vec![TB303Step::default(); MAX_STEPS],
+            vocal_pattern: vec![TB303Step::default(); MAX_STEPS],
             root_note: 9, // A
             scale: Scale::NaturalMinor,
             scale_snap: false,
@@ -360,6 +373,7 @@ impl Default for SequencerState {
             additive_steps: 32,
             modal_steps: 32,
             chiptune_steps: 32,
+            vocal_steps: 32,
             muted_drums: std::collections::HashSet::new(),
             soloed_drums: std::collections::HashSet::new(),
             midi_clock_sync: false,

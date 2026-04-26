@@ -52,6 +52,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::AdditiveVoice => Some("additive".to_string()),
         ModuleKind::ModalVoice => Some("modal".to_string()),
         ModuleKind::ChiptuneVoice => Some("chiptune".to_string()),
+        ModuleKind::VocalVoice => Some("vocal".to_string()),
         ModuleKind::GranularTexture => Some("granular".to_string()),
         ModuleKind::GabberKick => Some("gabber_kick".to_string()),
         ModuleKind::StepSequencer => Some("sequencer".to_string()),
@@ -120,6 +121,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "chiptunevoice" | "chiptune" | "sid" | "c64" | "8bit" | "8-bit" | "tracker" => {
             Some(ChiptuneVoice)
         }
+        "vocalvoice" | "vocal" | "vowel" | "formant" | "choir" => Some(VocalVoice),
         "granulartexture" | "granular" | "grain" | "texture" => Some(GranularTexture),
         "gabberkick" | "gabber" | "hardcorekick" | "rotterdam" => Some(GabberKick),
         "fxreverb" | "reverb" | "verb" => Some(FxReverb),
@@ -291,6 +293,7 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::ChiptuneVoice => {
             matches!(n.as_str(), "chiptune" | "sid" | "c64" | "8bit" | "tracker")
         }
+        ModuleKind::VocalVoice => matches!(n.as_str(), "vocal" | "vowel" | "formant" | "choir"),
         ModuleKind::GranularTexture => matches!(n.as_str(), "granular" | "grain" | "texture"),
         ModuleKind::GabberKick => {
             matches!(

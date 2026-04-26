@@ -394,3 +394,75 @@ pub(super) fn apply_chiptune_update(
         }
     }
 }
+
+/// Apply Vocal formant-synth voice fields from an LLM JSON
+/// update object.  Voice + envelope + vowel-side knobs +
+/// sequencer pattern.  `vowel` clamps defensively to the
+/// preset range; `formant_shift` and `morph` clamp to [0, 1].
+pub(super) fn apply_vocal_update(
+    s: &mut AppState,
+    v: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("vocal.enabled")
+        && let Some(b) = v.get("enabled").and_then(|x| x.as_bool())
+    {
+        s.vocal.enabled = b;
+    }
+    s.vocal.volume = unlocked_f32_range(
+        s.vocal.volume,
+        v,
+        "volume",
+        "vocal.volume",
+        locked,
+        0.0,
+        1.5,
+    );
+    if !locked.contains("vocal.pan")
+        && let Some(p) = v.get("pan").and_then(|x| x.as_f64())
+    {
+        s.vocal.pan = (p as f32).clamp(-1.0, 1.0);
+    }
+    if !locked.contains("vocal.vowel")
+        && let Some(n) = v.get("vowel").and_then(|x| x.as_u64())
+    {
+        s.vocal.vowel = (n as u8).min(crate::state::VOCAL_VOWEL_PRESETS - 1);
+    }
+    s.vocal.morph = unlocked_f32(s.vocal.morph, v, "morph", "vocal.morph", locked);
+    s.vocal.brightness = unlocked_f32(
+        s.vocal.brightness,
+        v,
+        "brightness",
+        "vocal.brightness",
+        locked,
+    );
+    s.vocal.formant_shift = unlocked_f32(
+        s.vocal.formant_shift,
+        v,
+        "formant_shift",
+        "vocal.formant_shift",
+        locked,
+    );
+    s.vocal.attack = unlocked_f32(s.vocal.attack, v, "attack", "vocal.attack", locked);
+    s.vocal.decay = unlocked_f32(s.vocal.decay, v, "decay", "vocal.decay", locked);
+    s.vocal.sustain = unlocked_f32(s.vocal.sustain, v, "sustain", "vocal.sustain", locked);
+    s.vocal.release = unlocked_f32(s.vocal.release, v, "release", "vocal.release", locked);
+    if !locked.contains("sequencer.vocal_steps")
+        && let Some(arr) = v.get("vocal_steps").and_then(|x| x.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(b) = val.as_bool() {
+                s.sequencer.vocal_pattern[i].active = b;
+            }
+        }
+    }
+    if !locked.contains("sequencer.vocal_notes")
+        && let Some(arr) = v.get("vocal_notes").and_then(|x| x.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.vocal_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}

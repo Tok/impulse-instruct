@@ -10,6 +10,7 @@ use super::llm_helpers::{
 use super::llm_helpers_fx::apply_fx_update;
 use super::llm_helpers_voices_v2::{
     apply_additive_update, apply_chiptune_update, apply_fm_ops_update, apply_modal_update,
+    apply_vocal_update,
 };
 use super::transitions::{set_drum_step_probability, set_drum_step_ratchet, set_drum_voice_steps};
 use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS};
@@ -708,6 +709,12 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         && let Some(c) = update.get("chiptune").and_then(|v| v.as_object())
     {
         apply_chiptune_update(&mut s, c, locked);
+    }
+
+    if in_scope("vocal")
+        && let Some(v) = update.get("vocal").and_then(|x| x.as_object())
+    {
+        apply_vocal_update(&mut s, v, locked);
     }
 
     if in_scope("an1x")

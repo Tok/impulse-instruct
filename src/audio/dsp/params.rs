@@ -734,6 +734,19 @@ pub struct AudioParams {
     pub chiptune_filter_mix: f32,
     pub chiptune_ring_mod: bool,
     pub chiptune_sync: bool,
+    // Vocal formant synth — saw source through 3 parallel
+    // formant biquads.
+    pub vocal_enabled: bool,
+    pub vocal_volume: f32,
+    pub vocal_pan: f32,
+    pub vocal_vowel: u8,
+    pub vocal_morph: f32,
+    pub vocal_brightness: f32,
+    pub vocal_formant_shift: f32,
+    pub vocal_attack: f32,
+    pub vocal_decay: f32,
+    pub vocal_sustain: f32,
+    pub vocal_release: f32,
     // Granular texture
     pub granular_enabled: bool,
     pub granular_volume: f32,
@@ -770,6 +783,7 @@ pub struct AudioParams {
     pub rack_additive: bool,
     pub rack_modal: bool,
     pub rack_chiptune: bool,
+    pub rack_vocal: bool,
     // ADSR envelope
     pub sample_attack: f32,
     pub sample_decay: f32,

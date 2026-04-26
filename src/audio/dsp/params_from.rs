@@ -404,6 +404,17 @@ impl AudioParams {
             chiptune_filter_mix: s.chiptune.filter_mix.clamp(0.0, 1.0),
             chiptune_ring_mod: s.chiptune.ring_mod,
             chiptune_sync: s.chiptune.sync,
+            vocal_enabled: s.vocal.enabled,
+            vocal_volume: s.vocal.volume.clamp(0.0, 1.5),
+            vocal_pan: s.vocal.pan.clamp(-1.0, 1.0),
+            vocal_vowel: s.vocal.vowel.min(crate::state::VOCAL_VOWEL_PRESETS - 1),
+            vocal_morph: s.vocal.morph.clamp(0.0, 1.0),
+            vocal_brightness: s.vocal.brightness.clamp(0.0, 1.0),
+            vocal_formant_shift: s.vocal.formant_shift.clamp(0.0, 1.0),
+            vocal_attack: s.vocal.attack.clamp(0.0, 1.0),
+            vocal_decay: s.vocal.decay.clamp(0.0, 1.0),
+            vocal_sustain: s.vocal.sustain.clamp(0.0, 1.0),
+            vocal_release: s.vocal.release.clamp(0.0, 1.0),
             granular_enabled: s.granular.enabled,
             granular_volume: s.granular.volume,
             granular_density: s.granular.density,
@@ -464,6 +475,11 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::ChiptuneVoice && m.enabled),
+            rack_vocal: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::VocalVoice && m.enabled),
             sample_attack: s.sample_instrument.attack.clamp(0.0, 1.0),
             sample_decay: s.sample_instrument.decay.clamp(0.0, 1.0),
             sample_sustain: s.sample_instrument.sustain.clamp(0.0, 1.0),

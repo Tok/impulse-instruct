@@ -52,6 +52,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::AdditiveVoice
         | ModuleKind::ModalVoice
         | ModuleKind::ChiptuneVoice
+        | ModuleKind::VocalVoice
         | ModuleKind::GranularTexture
         | ModuleKind::GabberKick => 24,
         ModuleKind::An1xVoice => 28,

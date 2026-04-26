@@ -4,6 +4,81 @@ A detailed log of what's built.
 
 ---
 
+### Vocal formant synth voice
+
+Last entry on the Voices wishlist — closes the "sing a vowel
+without loading a phoneme model" gap that `NeuTts` deliberately
+sidesteps.  Pure DSP: a sawtooth source through three parallel
+RBJ-cookbook bandpass biquads tuned to the F1 / F2 / F3
+formants of the played vowel.  The vowel character comes
+entirely from the resonance pattern — no language, no model.
+
+**DSP shape.**  Saw oscillator (broad harmonic content for
+the formants to carve) → 1-pole brightness LP (low = hummed
+vowel character, high = sung) → three formant biquads in
+parallel summed at 1/3 weight.  Per-formant Q = 8 / 10 / 12
+(higher Q on F3 keeps the upper resonance from washing into
+F2).  Coefficients refresh lazily — only when vowel / morph /
+formant_shift / sample-rate change, never per-sample.  Voice
+ADSR matches the FM-ops / SAMPLER+ shape for consistent feel.
+
+**Vowel table.**  Five presets — A / E / I / O / U — at
+Peterson & Barney 1952 male averages, the canonical vowel-
+formant reference.  The `morph` knob blends linearly from the
+selected preset toward `(vowel + 1) % 5` so the user can hold
+a vowel or sweep between adjacent ones; `formant_shift` then
+applies a uniform multiplier across F1 / F2 / F3 (range
+0.66×..1.51× — male → female / child / monster) so the
+vocal-tract size moves without changing the played pitch.
+
+**State.**  `VocalState` with enabled / volume / pan / vowel
+(u8 0..=4) / morph / brightness / formant_shift + ADSR.
+`VOCAL_VOWEL_PRESETS = 5` constant lives next to the table to
+keep the apply-clamp and the DSP in sync.
+
+**Sequencer integration.**  Full lane mirroring the other
+melodic voices — `vocal_pattern`, `vocal_steps`,
+`VocalTrigger` / `VocalGateOff` events, `gate_counter_vocal`,
+`rack_vocal` derived flag.
+
+**LLM apply + schema.**  `apply_vocal_update` (in
+`llm_helpers_voices_v2`) clamps `vowel` to the preset range
+defensively so a stale LLM number can't index past the
+table; honours per-field locks.  Schema entry sits next to
+the chiptune one with `vowel` declared as a 0..4 integer
+plus `morph` / `brightness` / `formant_shift` / ADSR /
+`vocal_steps` / `vocal_notes`.
+
+**Alias hygiene.**  `voice` was deliberately NOT added as a
+parse alias — it collides with the `NeuTts` voice (which
+already owns that word) and would have rendered the
+`parse_module_kind` arm unreachable.  Aliases are
+`vocal` / `vocalvoice` / `vowel` / `formant` / `choir`.
+
+**UI.**  5×3 panel.  Header row: ON/OFF + VOLUME + PAN +
+VOWEL cycle button (A → E → I → O → U).  Glass-grouped
+control row: MORPH + BRIGHT + SHIFT + ADSR.
+
+**Tests.**  13 new — DSP-side: silence-before-trigger /
+when-disabled, audible-after-trigger, every-vowel-preset-
+produces-output (catches a regression where a future preset
+with too-high F3 hits the Nyquist clamp and silences the
+band), output-bounded-under-full-drive, release-eventually-
+silences.  State-side: defaults are A / male-average,
+apply-knobs, vowel preset clamp, locked-formant_shift, lane
+plumbing, label, alias parsing (with `voice` deliberately
+excluded), zone + audio-output.  Full suite **2011 → 2024**.
+
+Files: new `src/state/vocal.rs`, `src/audio/dsp/vocal.rs`,
+`src/ui/panels/vocal.rs`, `src/tests/vocal_tests.rs`.
+~22 files touched — voice-add ritual unchanged from the
+Modal / Additive / Chiptune ships.
+
+This entry closes out the Voices wishlist; remaining wishlist
+sections in PLAN.md are FX / visualizations / modulation.
+
+---
+
 ### Chiptune (SID-flavoured) voice
 
 3-oscillator chiptune voice modelled on the Commodore 64's

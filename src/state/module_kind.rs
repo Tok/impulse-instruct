@@ -55,6 +55,11 @@ pub enum ModuleKind {
     /// shared pulse-width + resonant filter, ring-mod and
     /// hard-sync.  Sequencer-driven.
     ChiptuneVoice,
+    /// Vocal formant synth — saw source through 3 parallel
+    /// resonant bandpass filters tuned to vowel-formant
+    /// frequencies.  Sings A / E / I / O / U without a phoneme
+    /// model.  Sequencer-driven; distinct from `NeuTts`.
+    VocalVoice,
     GranularTexture,
     /// Dedicated hardcore-style kick voice — distinct from the 808/909 kicks.
     GabberKick,
@@ -204,6 +209,7 @@ impl ModuleKind {
             Self::AdditiveVoice => "ADDITIVE",
             Self::ModalVoice => "MODAL",
             Self::ChiptuneVoice => "CHIPTUNE",
+            Self::VocalVoice => "VOCAL",
             Self::GranularTexture => "GRANULAR",
             Self::GabberKick => "GABBER KICK",
             Self::NeuTts => "TTS VOICE",
@@ -329,6 +335,10 @@ impl ModuleKind {
             // gives each oscillator's WAVE+LEVEL+ADSR (6 knobs)
             // breathing room.
             Self::ChiptuneVoice => (6, 5),
+            // Vocal voice — single-row voice (only 7 controls);
+            // header row + ADSR + vowel cycle + brightness +
+            // shift fits 5 cols × 3 rows comfortably.
+            Self::VocalVoice => (5, 3),
             Self::GranularTexture => (3, 2),
             Self::GabberKick => (3, 2),
             Self::LlmAgent => (3, 2),
@@ -445,6 +455,7 @@ impl ModuleKind {
             | Self::AdditiveVoice
             | Self::ModalVoice
             | Self::ChiptuneVoice
+            | Self::VocalVoice
             | Self::GranularTexture
             | Self::NeuTts
             | Self::GabberKick => Zone::Voice,
@@ -522,6 +533,7 @@ impl ModuleKind {
                 | Self::AdditiveVoice
                 | Self::ModalVoice
                 | Self::ChiptuneVoice
+                | Self::VocalVoice
                 | Self::An1xVoice
                 | Self::NeuTts
                 | Self::FxReverb

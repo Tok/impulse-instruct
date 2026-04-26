@@ -248,6 +248,21 @@ impl DspState {
                     self.chiptune.gate_off();
                 }
             }
+            VocalTrigger {
+                note,
+                accent,
+                slide: _,
+            } => {
+                if self.params.rack_vocal {
+                    let freq = super::midi_to_hz_tuned(*note, self.params.tuning);
+                    self.vocal.trigger(freq, *accent);
+                }
+            }
+            VocalGateOff => {
+                if self.params.rack_vocal {
+                    self.vocal.gate_off();
+                }
+            }
         }
     }
 }

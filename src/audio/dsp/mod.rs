@@ -34,6 +34,7 @@ pub mod sample_instrument;
 pub mod samplers;
 pub mod theremin;
 mod trigger_handler;
+pub mod vocal;
 pub mod voices;
 pub mod wavetable;
 use additive::AdditiveVoice;
@@ -50,6 +51,7 @@ use fx_extras::*;
 use fx_freq_shift::FreqShift;
 use fx_glitch::*;
 use modal::ModalVoice;
+use vocal::VocalVoice;
 // fx_math symbols (free_eg_value_at, lfo_value_at, sidechain_duck,
 // sidechain_envelope_step, gated_reverb_envelope_step) are only used
 // inside the extracted `process_block.rs`; pulled in there directly.
@@ -152,6 +154,7 @@ pub struct DspState {
     additive: AdditiveVoice,
     modal: ModalVoice,
     chiptune: ChiptuneVoice,
+    vocal: VocalVoice,
     granular: GranularVoice,
     hoover: HooverVoice,
     pluck: PluckVoice,
@@ -303,6 +306,7 @@ impl DspState {
             additive: AdditiveVoice::new(),
             modal: ModalVoice::new(),
             chiptune: ChiptuneVoice::new(),
+            vocal: VocalVoice::new(),
             granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
             pluck: PluckVoice::new(),

@@ -313,6 +313,26 @@ pub fn param_json_schema() -> serde_json::Value {
                 },
                 "additionalProperties": false
             },
+            "vocal": {
+                "type": "object",
+                "description": "Vocal formant synth — saw source through 3 parallel resonant bandpass filters tuned to vowel formants.  Sings A / E / I / O / U without a phoneme model.  LLM triggers: 'add a choir', 'vowel pad', 'sung lead', 'female vowels' (set `formant_shift` ~0.7), 'monster voice' (set `formant_shift` ~0.2 + low pitch).  Distinct from `neutts` which loads a neural model — vocal is pure DSP, plays melodies as vowels but doesn't pronounce words.",
+                "properties": {
+                    "enabled":       { "type": "boolean" },
+                    "volume":        { "type": "number", "minimum": 0.0, "maximum": 1.5 },
+                    "pan":           { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+                    "vowel":         { "type": "integer", "minimum": 0, "maximum": 4, "description": "0=A (father), 1=E (bee), 2=I (sit), 3=O (bought), 4=U (boot).  Standard Peterson & Barney male-average formants." },
+                    "morph":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Morph 0..1 from `vowel` to (vowel+1) mod 5 — smooth interpolation between adjacent presets so the user can hold a vowel or sweep between." },
+                    "brightness":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Source-side spectral tilt: 0 = darker (hummed-vowel feel), 1 = bright (sung-vowel feel with strong upper harmonics for the formants)." },
+                    "formant_shift": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Uniform formant scale: 0.5 = male-average, 0 ≈ -50% (deeper / ogre-like), 1 ≈ +50% (higher / child-like).  Played pitch unchanged; only formants move so apparent vocal-tract size changes." },
+                    "attack":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "decay":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "sustain":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "release":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "vocal_steps":   bool_array,
+                    "vocal_notes":   { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per vocal step" }
+                },
+                "additionalProperties": false
+            },
             "chiptune": {
                 "type": "object",
                 "description": "SID-flavoured (Commodore 64) chiptune voice.  3 oscillators (saw / triangle / pulse / noise) + per-osc ADSR + shared resonant filter (LP/BP/HP) + ring-mod and hard-sync flags.  LLM triggers: 'add a SID lead', 'C64 chiptune', '8-bit synth', 'tracker bass', 'sync sweep'.  For SID-classic leads use a saw on osc 1 + a slightly-detuned (or pulse-mode + PWM) osc 2; engage `sync` for the sync-sweep timbre, `ring_mod` for clangy bell timbres.  The 16-step triangle staircase is the SID's actual triangle behaviour — that grit is intentional.",

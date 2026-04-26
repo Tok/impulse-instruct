@@ -49,6 +49,7 @@ pub mod theremin;
 pub mod timeline;
 pub mod tts;
 pub mod viz;
+pub mod vocal;
 pub mod wavetable;
 
 pub use additive::draw_additive;
@@ -81,4 +82,5 @@ pub use viz::{
     draw_chord_display, draw_lfo_scope, draw_loudness_meter, draw_phase_wheel, draw_pitch_tracker,
     draw_spectrogram, draw_vectorscope,
 };
+pub use vocal::draw_vocal;
 pub use wavetable::draw_wavetable;

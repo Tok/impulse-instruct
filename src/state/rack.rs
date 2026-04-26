@@ -284,6 +284,7 @@ impl RackState {
                 | ModuleKind::AdditiveVoice
                 | ModuleKind::ModalVoice
                 | ModuleKind::ChiptuneVoice
+                | ModuleKind::VocalVoice
                 | ModuleKind::An1xVoice
                 | ModuleKind::NeuTts
                 | ModuleKind::FxReverb
@@ -504,6 +505,10 @@ impl RackState {
                 // Chiptune — synthesised voice cluster with the
                 // rest of the spectrum-shaping bank.
                 ModuleKind::ChiptuneVoice => 13,
+                // Vocal — synthesised voice cluster (formant
+                // bank, distinct from NeuTts which lives further
+                // along with the sample-style voices).
+                ModuleKind::VocalVoice => 13,
                 ModuleKind::GranularTexture => 18,
                 ModuleKind::NeuTts => 19,
                 ModuleKind::FxWaveshaper => 20,

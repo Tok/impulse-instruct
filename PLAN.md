@@ -91,11 +91,8 @@ features.md.  No remaining items in this section.)
 
 ## Voices — wishlist
 
-Modules that would plug a real gap in the current voice palette.
-
-- [ ] **Vocal formant synth** — formant filter bank around an
-  oscillator.  Distinct from `NeuTts` — sings vowels without
-  needing a phoneme model.
+All previously-listed voice gaps have shipped; re-open here if a
+new gap turns up.
 
 ## FX — wishlist
 
