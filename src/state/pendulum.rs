@@ -47,9 +47,9 @@ impl Default for PendulumState {
     fn default() -> Self {
         Self {
             enabled: false,
-            base_pitch: 0.4,  // ~110 Hz with the 30–800 Hz log map
-            detune_hz: 0.05,  // ~3 Hz — a slow audible beat by default
-            mix: 0.5,         // equal — deepest beat amplitude
+            base_pitch: 0.4, // ~110 Hz with the 30–800 Hz log map
+            detune_hz: 0.05, // ~3 Hz — a slow audible beat by default
+            mix: 0.5,        // equal — deepest beat amplitude
             volume: 0.6,
             pan: 0.0,
         }

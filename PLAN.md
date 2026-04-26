@@ -158,9 +158,9 @@ independently.  Anything left at "unscheduled" goes in last.
 4. [x] ~~**AI patch morph**~~ — V1 shipped (see features.md);
    API + scheduler done, dedicated UI dialog deferred.
 5. [x] ~~**Pendulum**~~ — shipped (see features.md).
-6. [ ] **Vinyl / cassette simulator** (FX) — surface noise +
-   start / stop transient + RIAA EQ shape.  Distinct from
-   `FxTapeStop` (just the brake).
+6. [x] ~~**Vinyl / cassette simulator**~~ — V1 shipped (see
+   features.md).  Start/stop transient deferred — `FxTapeStop`
+   covers that family.
 7. [ ] **Bird-songs voice** — small CC0 corpus, granularised and
    pitch-mappable.  Pairs with `samples/textures/`.
 8. [ ] **MIDI granuliser** — input a MIDI clip, scatter the

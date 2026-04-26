@@ -49,6 +49,9 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         GabberKick => &[Selector, Selector, Selector],
         // ── Sequencer — BPM, swing, and a spare selector ──────────────────
         StepSequencer => &[Selector, Selector, Selector],
+        // Vinyl: 3 knobs, all selectors so the user routes LFOs
+        // to noise / wear / mix from the back panel.
+        FxVinyl => &[Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],

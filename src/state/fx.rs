@@ -402,6 +402,17 @@ pub struct FxState {
     /// Wet/dry 0..1 (0 = bypass).
     #[serde(default)]
     pub freq_shift_mix: f32,
+    // ── Vinyl / cassette simulator ───────────────────────────────────────
+    /// Surface-noise amplitude 0..1 (0 = silent, 1 ≈ -20 dBFS).
+    #[serde(default)]
+    pub vinyl_noise: f32,
+    /// Wear / dullness 0..1.  Drives the high-shelf cutoff sweep —
+    /// 0 = bright (transparent), 1 = dull (HF rolled off + cut).
+    #[serde(default)]
+    pub vinyl_wear: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).
+    #[serde(default)]
+    pub vinyl_mix: f32,
     // ── Convolution Reverb ───────────────────────────────────────────────
     /// Wet/dry mix (0 = dry, 1 = 100 % wet).
     #[serde(default)]
@@ -738,6 +749,9 @@ impl Default for FxState {
             freq_shift_amount: default_freq_shift_amount(),
             freq_shift_feedback: 0.0,
             freq_shift_mix: 0.0,
+            vinyl_noise: 0.5,
+            vinyl_wear: 0.3,
+            vinyl_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

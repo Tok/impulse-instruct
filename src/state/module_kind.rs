@@ -96,6 +96,10 @@ pub enum ModuleKind {
     /// from the original sidechain batch — the Hilbert design is
     /// subtle enough to deserve its own slot.
     FxFreqShift,
+    /// Vinyl / cassette simulator — surface noise + dull EQ shape.
+    /// Steady-state analog-tape character; distinct from
+    /// `FxTapeStop` (which models the brake transient).
+    FxVinyl,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -206,6 +210,7 @@ impl ModuleKind {
             Self::FxParamEq => "PARAM EQ",
             Self::FxPitchShift => "PITCH",
             Self::FxFreqShift => "FREQSHIFT",
+            Self::FxVinyl => "VINYL",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -353,7 +358,8 @@ impl ModuleKind {
             | Self::FxDrive
             | Self::FxAutotune
             | Self::FxPan
-            | Self::FxWiden => (2, 1),
+            | Self::FxWiden
+            | Self::FxVinyl => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -416,6 +422,7 @@ impl ModuleKind {
             | Self::FxParamEq
             | Self::FxPitchShift
             | Self::FxFreqShift
+            | Self::FxVinyl
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -486,6 +493,7 @@ impl ModuleKind {
                 | Self::FxParamEq
                 | Self::FxPitchShift
                 | Self::FxFreqShift
+                | Self::FxVinyl
         )
     }
 
@@ -536,6 +544,7 @@ impl ModuleKind {
                 | Self::FxConvReverb
                 | Self::FxPitchShift
                 | Self::FxFreqShift
+                | Self::FxVinyl
         )
     }
 
@@ -575,6 +584,7 @@ impl ModuleKind {
                 | Self::FxParamEq
                 | Self::FxPitchShift
                 | Self::FxFreqShift
+                | Self::FxVinyl
                 | Self::LfoModule
                 | Self::LlmAgent
         )

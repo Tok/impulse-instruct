@@ -314,6 +314,9 @@ impl DspState {
                 p.freq_shift_mix,
                 sr,
             ),
+            FxStep::Vinyl => self
+                .vinyl
+                .process(sig, p.vinyl_noise, p.vinyl_wear, p.vinyl_mix),
         }
     }
 

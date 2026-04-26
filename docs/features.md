@@ -4,6 +4,54 @@ A detailed log of what's built.
 
 ---
 
+### Vinyl / cassette FX (absurd queue #6)
+
+Steady-state analog-tape character — surface noise + dull EQ
+shape — as a chain FX module.  Distinct from `FxTapeStop` (which
+covers the brake transient); this one focuses on the
+*continuous* spectral signature of analog playback.
+
+DSP (`audio::dsp::fx_vinyl::VinylFx`):
+* **Surface noise** — band-limited white noise from a per-FX LCG
+  (no `rand` crate dep, no allocations).  Knob 0..1 → 0 to ≈
+  -20 dBFS noise floor.
+* **EQ shape** — fixed low-shelf boost (~+3 dB at 220 Hz) for
+  warmth, plus a wear-driven high-shelf cut.  Wear knob 0..1
+  sweeps the cutoff from 6 kHz / 0 dB (transparent) down to
+  1 kHz / -10 dB (heavily dulled).  Coefficients only recompute
+  when the knob actually moves — single Biquad refresh, not
+  per-sample.
+* **Mix** wet/dry blend.  At 0.0 the path is bypassed (early
+  return — no Biquad work).
+
+Plumbing:
+* `ModuleKind::FxVinyl` joins the FX palette with full metadata
+  (label `VINYL`, grid 2×1, FxMod zone, supports XY pad,
+  `allows_multiple` true).
+* New `FxStep::Vinyl` (idx 32) — `FX_STEP_COUNT` bumped 32 → 33.
+  The `kind_to_fx_step` map gets a Vinyl arm so cables route
+  through the standard `apply_fx_chain` path.
+* `FxState.vinyl_noise / vinyl_wear / vinyl_mix` (defaults
+  0.5 / 0.3 / 0.0 — bypass-on-load), `#[serde(default)]`.
+* `AudioParams.vinyl_*` plumbed via `params_from`.
+* UI: shipped through the existing `rack_content_fx_extras` Tier-1
+  helper — NOISE / WEAR / MIX knobs in the standard glass row,
+  XY-pad expansion supported.
+* Added to the `random_layout` FX pool — Vinyl always makes
+  sense as a random pick (steady-state character, no setup
+  needed).
+
+4 new DSP tests cover bypass-when-mix-zero, noise-floor-on-
+silent-input, near-unity-passthrough at zero noise/wear, and
+output stays bounded under full noise + wear + signal.  Two
+existing test lists (`fx_step_idx_tests` + `coverage_tests`'s
+exhaustive enum walk) updated for the new variant.  **1917
+tests passing**; clippy clean.
+
+Start / stop transient deferred — `FxTapeStop` already covers
+the brake effect; building it again here would be redundant.
+Vinyl focuses on the steady-state character.
+
 ### Pendulum voice (absurd queue #5)
 
 Two near-tuned sine oscillators that beat acoustically.  As

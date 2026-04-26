@@ -57,7 +57,9 @@ impl ImpulseApp {
         // Send via the shared helper — same path the LLM strip and
         // /api/prompt use, so the morph nudge benefits from
         // identical apply_llm_update + locked_params handling.
-        self.send_llm_infer(prompt, /* one_shot = */ true, /* agent_id = */ None);
+        self.send_llm_infer(
+            prompt, /* one_shot = */ true, /* agent_id = */ None,
+        );
     }
 }
 

@@ -48,7 +48,8 @@ pub(super) fn try_draw_fx_extras_content(
         | ModuleKind::FxGate
         | ModuleKind::FxVocoder
         | ModuleKind::FxWiden
-        | ModuleKind::FxFreqShift => {}
+        | ModuleKind::FxFreqShift
+        | ModuleKind::FxVinyl => {}
         _ => return None,
     }
 
@@ -611,6 +612,44 @@ pub(super) fn try_draw_fx_extras_content(
                 st.fx.freq_shift_amount = a;
                 st.fx.freq_shift_feedback = f;
                 st.fx.freq_shift_mix = m;
+            }
+        }
+        ModuleKind::FxVinyl => {
+            // NOISE / WEAR / MIX — same 3-knob shape as FreqShift,
+            // routed through `hk!` for the standard glass-row look.
+            let (mut n, mut w, mut m) = {
+                let st = app.state.read();
+                (st.fx.vinyl_noise, st.fx.vinyl_wear, st.fx.vinyl_mix)
+            };
+            hk!(
+                ui,
+                ("NOISE", &mut n, pm("fx.vinyl_noise")),
+                ("WEAR", &mut w, pm("fx.vinyl_wear"))
+            );
+            hk!(ui, ("MIX", &mut m, pm("fx.vinyl_mix")));
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("vinyl_xy_{module_id}"),
+                    ["NOISE", "WEAR", "MIX"],
+                    &mut pad_pair,
+                    (&mut n, &mut w, &mut m),
+                    [
+                        user_owned("fx.vinyl_noise"),
+                        user_owned("fx.vinyl_wear"),
+                        user_owned("fx.vinyl_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || n != app.state.read().fx.vinyl_noise {
+                let mut st = app.state.write();
+                st.fx.vinyl_noise = n;
+                st.fx.vinyl_wear = w;
+                st.fx.vinyl_mix = m;
             }
         }
         ModuleKind::FxWiden => {

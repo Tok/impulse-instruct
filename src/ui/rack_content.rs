@@ -288,7 +288,8 @@ pub(super) fn draw_fx_content(
         | ModuleKind::FxGate
         | ModuleKind::FxVocoder
         | ModuleKind::FxWiden
-        | ModuleKind::FxFreqShift => {
+        | ModuleKind::FxFreqShift
+        | ModuleKind::FxVinyl => {
             // All seven Tier-1 FX cards live in
             // `rack_content_fx_extras.rs` to keep this file under the
             // 1000-line cap.  The helper returns the new pad_pair value.

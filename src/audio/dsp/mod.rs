@@ -11,6 +11,7 @@ pub mod fx_freq_shift;
 pub mod fx_math;
 pub mod fx_sidechain;
 mod fx_step;
+pub mod fx_vinyl;
 pub mod gabber_kick;
 pub mod granular_voice;
 pub mod mod_apply;
@@ -18,11 +19,11 @@ pub mod ms_master;
 pub mod param_eq;
 mod params;
 mod params_from;
+pub mod pendulum;
 pub mod pitch_shift;
 pub mod pluck;
 mod process_block;
 mod rev_tap;
-pub mod pendulum;
 pub mod sample_instrument;
 pub mod samplers;
 pub mod theremin;
@@ -41,15 +42,16 @@ use fx_freq_shift::FreqShift;
 // sidechain_envelope_step, gated_reverb_envelope_step) are only used
 // inside the extracted `process_block.rs`; pulled in there directly.
 use fx_sidechain::{Gate, Vocoder};
+use fx_vinyl::VinylFx;
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 use ms_master::MsMaster;
 use param_eq::ParamEq;
 pub use params::{AudioParams, MAX_MOD_ROUTES, compile_mod_routes, lfo_target_to_u8};
+use pendulum::PendulumVoice;
 use pitch_shift::PitchShift;
 use pluck::PluckVoice;
 pub use rev_tap::{FxDirection, FxRevQuant};
-use pendulum::PendulumVoice;
 use sample_instrument::{SampleInstrumentVoice, SfzRegionRuntime};
 use samplers::*;
 use theremin::ThereminVoice;
@@ -121,6 +123,7 @@ pub struct DspState {
     gate: Gate,
     vocoder: Vocoder,
     freq_shift: FreqShift,
+    vinyl: VinylFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -267,6 +270,7 @@ impl DspState {
             gate: Gate::new(),
             vocoder: Vocoder::new(sample_rate),
             freq_shift: FreqShift::new(),
+            vinyl: VinylFx::new(sample_rate),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

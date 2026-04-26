@@ -539,6 +539,10 @@ impl RackState {
                 ModuleKind::FxPitchShift => 39,
                 // FreqShift sits next to PitchShift — both pitch-domain.
                 ModuleKind::FxFreqShift => 39,
+                // Vinyl groups with the saturation / colour cluster
+                // (TapeSat / Drive) — same family of analog-character
+                // colour effects.
+                ModuleKind::FxVinyl => 29,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

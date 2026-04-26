@@ -141,7 +141,10 @@ mod tests {
         for _ in 0..1024 {
             peak = peak.max(v.process(48_000.0, &p).abs());
         }
-        assert!(peak <= 0.6, "no-detune peak should stay near 0.5 (got {peak})");
+        assert!(
+            peak <= 0.6,
+            "no-detune peak should stay near 0.5 (got {peak})"
+        );
     }
 
     #[test]

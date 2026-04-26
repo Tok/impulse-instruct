@@ -42,6 +42,7 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxConvReverb => Some(FxStep::ConvReverb),
         ModuleKind::FxParamEq => Some(FxStep::ParamEq),
         ModuleKind::FxPitchShift => Some(FxStep::PitchShift),
+        ModuleKind::FxVinyl => Some(FxStep::Vinyl),
         _ => None,
     }
 }

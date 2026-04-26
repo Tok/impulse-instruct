@@ -650,6 +650,10 @@ pub struct AudioParams {
     pub theremin_brightness: f32,
     pub theremin_volume: f32,
     pub theremin_pan: f32,
+    // Vinyl / cassette FX — surface noise + dull EQ shape.
+    pub vinyl_noise: f32,
+    pub vinyl_wear: f32,
+    pub vinyl_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,
