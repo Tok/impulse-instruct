@@ -283,6 +283,11 @@ const GEN_ATTACK_VOL_ENV: u16 = 34;
 const GEN_DECAY_VOL_ENV: u16 = 36;
 const GEN_SUSTAIN_VOL_ENV: u16 = 37;
 const GEN_RELEASE_VOL_ENV: u16 = 38;
+// Filter generators.  initialFilterFc is in absolute cents
+// (hz = 8.176 × 2^(cents/1200)); initialFilterQ is in centibels of
+// resonance peak gain (Q_linear = 10^(cB / 200)).
+const GEN_INITIAL_FILTER_FC: u16 = 8;
+const GEN_INITIAL_FILTER_Q: u16 = 9;
 
 /// Generator accumulator — collects every relevant generator value as
 /// we walk a zone, then `materialise` builds the final SfzRegion at
@@ -309,6 +314,14 @@ struct Generators {
     decay_vol_env_tc: Option<i16>,
     sustain_vol_env_cb: Option<i16>,
     release_vol_env_tc: Option<i16>,
+    /// Filter cutoff in absolute cents.  `None` = generator absent;
+    /// the spec default 13500 (~20 kHz) reads as "filter off" so we
+    /// still surface it but build_region collapses high-cutoff
+    /// regions back to "no filter" for the SfzRegion contract.
+    initial_filter_fc_cents: Option<i16>,
+    /// Filter resonance peak gain in centibels of attenuation
+    /// (Q_linear = 10^(cB / 200)).  `None` = generator absent.
+    initial_filter_q_cb: Option<i16>,
 }
 
 impl Default for Generators {
@@ -327,6 +340,8 @@ impl Default for Generators {
             decay_vol_env_tc: None,
             sustain_vol_env_cb: None,
             release_vol_env_tc: None,
+            initial_filter_fc_cents: None,
+            initial_filter_q_cb: None,
         }
     }
 }
@@ -389,6 +404,16 @@ impl Generators {
             GEN_RELEASE_VOL_ENV => {
                 if let Ok(b) = amount.try_into() {
                     self.release_vol_env_tc = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_INITIAL_FILTER_FC => {
+                if let Ok(b) = amount.try_into() {
+                    self.initial_filter_fc_cents = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_INITIAL_FILTER_Q => {
+                if let Ok(b) = amount.try_into() {
+                    self.initial_filter_q_cb = Some(i16::from_le_bytes(b));
                 }
             }
             _ => {}
@@ -555,6 +580,29 @@ fn build_region(
         Some(cb) if cb != 0 => (10.0_f32.powf(-(cb as f32) / 200.0) * 100.0).clamp(0.0, 100.0),
         _ => 100.0, // generator absent or 0 cB → full sustain
     };
+    // Filter generators — `initialFilterFc` in absolute cents,
+    // `initialFilterQ` in centibels of resonance peak gain.  SF2
+    // spec default is 13500 cents (~20 kHz, "filter off") and
+    // 0 cB (Q = 1.0); we collapse those back to "no filter" so
+    // the SfzRegion contract matches what an SFZ author would
+    // write when they don't want a filter at all.
+    let (cutoff_hz, resonance_db, fil_type) = match gens.initial_filter_fc_cents {
+        Some(cents) if cents < 13500 => {
+            // 8.176 Hz × 2^(cents / 1200) — same formula `state::sfz`
+            // would use if SFZ ever supported absolute-cents cutoff.
+            let hz = 8.176_f32 * 2.0_f32.powf(cents as f32 / 1200.0);
+            // Resonance: SF2 cB → linear Q → dB ≈ cB / 10.
+            // SfzRegion stores resonance_db, the DSP override path
+            // converts dB → 0..1 knob, so just pass the dB value.
+            let resonance_db = (gens.initial_filter_q_cb.unwrap_or(0) as f32) / 10.0;
+            (
+                hz.clamp(20.0, 20_000.0),
+                resonance_db.clamp(0.0, 40.0),
+                Some(crate::state::sfz::SfzFilType::Lpf2p),
+            )
+        }
+        _ => (0.0, 0.0, None),
+    };
 
     // Build the SfzRegion.  Loop fields are passed through so a
     // future loop-aware DSP path can use them; the current
@@ -581,6 +629,9 @@ fn build_region(
         ampeg_decay_s: decay_s,
         ampeg_sustain_pct: sustain_pct,
         ampeg_release_s: release_s,
+        cutoff_hz,
+        resonance_db,
+        fil_type,
         ..SfzRegion::default()
     };
     // Defensive clamps on the key range — degenerate SF2s sometimes
@@ -905,5 +956,16 @@ mod tests {
         assert_eq!(g.decay_vol_env_tc, Some(-2400));
         assert_eq!(g.sustain_vol_env_cb, Some(200));
         assert_eq!(g.release_vol_env_tc, Some(0));
+    }
+
+    #[test]
+    fn generators_absorb_filter() {
+        let mut g = Generators::default();
+        // Cutoff 1 kHz: cents = 1200 × log2(1000 / 8.176) ≈ 8302.
+        g.absorb(GEN_INITIAL_FILTER_FC, &8302_i16.to_le_bytes());
+        // Q 12 dB peak = 120 cB.
+        g.absorb(GEN_INITIAL_FILTER_Q, &120_i16.to_le_bytes());
+        assert_eq!(g.initial_filter_fc_cents, Some(8302));
+        assert_eq!(g.initial_filter_q_cb, Some(120));
     }
 }

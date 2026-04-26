@@ -53,6 +53,42 @@ struct TriggerShape {
     /// Single-WAV mode passes `None` so live knob edits keep
     /// applying mid-note.
     region_adsr: Option<(f32, f32, f32, f32)>,
+    /// When `Some`, the slot routes through its per-voice SVF with
+    /// the region-supplied `(cutoff_knob, resonance_knob, mode)`
+    /// instead of the global `sample_filter_*` knobs — and forces
+    /// `mix = 1` so an explicit SFZ / SF2 filter applies regardless
+    /// of the user's global filter-mix setting.  All values are
+    /// pre-converted to the SVF's 0..1 knob range at trigger time.
+    region_filter: Option<(f32, f32, u8)>,
+}
+
+/// Convert a cutoff frequency in Hz into the 0..1 knob value the
+/// `Svf` expects — same `20 × 900^knob` log mapping the SVF uses
+/// internally, inverted.  Clamped so a hot knob can't scrub past
+/// the SVF's audible range.
+fn hz_to_svf_knob(hz: f32) -> f32 {
+    let h = hz.clamp(20.0, 20_000.0);
+    (h / 20.0).log(900.0).clamp(0.0, 1.0)
+}
+
+/// Convert a resonance in dB into the 0..1 knob value the `Svf`
+/// expects (Q ≈ 0.5..20 mapped linear to 0..1).  Q_linear =
+/// 10^(dB / 20); knob = (Q − 0.5) / 19.5.
+fn db_to_svf_resonance_knob(db: f32) -> f32 {
+    let q_linear = 10.0_f32.powf(db.clamp(0.0, 40.0) / 20.0);
+    ((q_linear - 0.5) / 19.5).clamp(0.0, 1.0)
+}
+
+/// Map an `SfzFilType` to the `Svf::process` mode byte (LP=0, BP=1,
+/// HP=2 — same ordering as the SVF API + the existing global
+/// `sample_filter_mode`).
+fn sfz_fil_type_to_svf_mode(t: crate::state::sfz::SfzFilType) -> u8 {
+    use crate::state::sfz::SfzFilType;
+    match t {
+        SfzFilType::Lpf2p => 0,
+        SfzFilType::Bpf2p => 1,
+        SfzFilType::Hpf2p => 2,
+    }
 }
 
 /// ADSR stages tracked per-trigger.
@@ -84,6 +120,11 @@ struct SampleInstrumentSlot {
     /// /`_release` knobs (which the single-WAV path uses, keeping
     /// live knob edits responsive).  Tuple matches `TriggerShape`.
     region_adsr: Option<(f32, f32, f32, f32)>,
+    /// Per-slot filter override.  Same idiom as `region_adsr` —
+    /// `Some` forces the SVF to apply with the region's settings
+    /// regardless of the global filter-mix knob; `None` defers to
+    /// the global `sample_filter_*` params.
+    region_filter: Option<(f32, f32, u8)>,
     /// Monotonic counter set at trigger time — lowest = oldest slot.
     age: u64,
     /// Per-slot SVF state for the per-voice filter.  Each slot keeps
@@ -131,6 +172,7 @@ impl SampleInstrumentSlot {
             accent: 0.0,
             region_gain: 1.0,
             region_adsr: None,
+            region_filter: None,
             age: 0,
             filter: Svf::new(),
             formant: FormantShifter::new(),
@@ -358,12 +400,26 @@ impl SampleInstrumentVoice {
                 } else {
                     None
                 };
+                // Per-region filter override.  Build a pre-converted
+                // (cutoff_knob, resonance_knob, mode) triple when the
+                // region declares an SFZ / SF2 filter; the slot DSP
+                // forces mix=1 in that branch so the filter applies
+                // even when the user's global mix is at 0.
+                let region_filter = match (&r.region.fil_type, r.region.cutoff_hz) {
+                    (Some(t), hz) if hz > 20.0 => Some((
+                        hz_to_svf_knob(hz),
+                        db_to_svf_resonance_knob(r.region.resonance_db),
+                        sfz_fil_type_to_svf_mode(*t),
+                    )),
+                    _ => None,
+                };
                 pending[count] = Some(TriggerShape {
                     samples: r.samples.clone(),
                     root_freq: midi_to_hz_tuned(r.region.pitch_keycenter, tuning).max(20.0),
                     freq: (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0),
                     region_gain: 10.0_f32.powf(v / 20.0) * cf_gain,
                     region_adsr,
+                    region_filter,
                 });
                 count += 1;
             }
@@ -382,6 +438,7 @@ impl SampleInstrumentVoice {
                 // turning the attack knob mid-note is audible
                 // immediately.  No region overrides apply here.
                 region_adsr: None,
+                region_filter: None,
             };
             self.fire_slot(&shape, accent);
         }
@@ -399,6 +456,7 @@ impl SampleInstrumentVoice {
         slot.freq = shape.freq;
         slot.region_gain = shape.region_gain;
         slot.region_adsr = shape.region_adsr;
+        slot.region_filter = shape.region_filter;
         slot.pos = 0.0;
         slot.adsr_stage = AdsrStage::Attack;
         slot.adsr_value = 0.0;
@@ -621,11 +679,21 @@ impl SampleInstrumentVoice {
             voiced
         };
         let dry = voiced * slot.adsr_value * accent_gain * slot.region_gain;
-        // Per-voice SVF — applied before the global volume.  At
-        // `filter_mix == 0` the SVF returns the dry input as-is and
-        // the integrator state stays at rest, so the cost of a
-        // bypassed filter is one cheap branch per slot.
-        if p.sample_filter_mix > 0.001 {
+        // Per-voice SVF — applied before the global volume.  Three
+        // shapes:
+        //   * Region filter override (`Some`): force-apply the SVF
+        //     with the region's cutoff / resonance / mode at mix=1.
+        //     SF2 / SFZ regions that explicitly declare a filter
+        //     should always shape the sound regardless of the
+        //     user's global mix knob.
+        //   * Global filter active (`p.sample_filter_mix > 0`):
+        //     V1.1 behaviour — knob-driven shared filter.
+        //   * Otherwise: bypass.  Integrator state stays at rest
+        //     so the cost of a bypassed filter is one branch.
+        if let Some((cutoff, resonance, mode)) = slot.region_filter {
+            slot.filter
+                .process(dry, cutoff, resonance, 0.0, mode, 1.0, sr)
+        } else if p.sample_filter_mix > 0.001 {
             slot.filter.process(
                 dry,
                 p.sample_filter_cutoff,
