@@ -67,6 +67,7 @@ const FX_POOL: &[ModuleKind] = &[
     ModuleKind::FxPan,
     ModuleKind::FxWiden,
     ModuleKind::FxVinyl,
+    ModuleKind::FxDjFilter,
 ];
 
 /// Result of `random_layout` — a recipe the caller applies to its

@@ -317,6 +317,13 @@ impl DspState {
             FxStep::Vinyl => self
                 .vinyl
                 .process(sig, p.vinyl_noise, p.vinyl_wear, p.vinyl_mix),
+            FxStep::DjFilter => self.dj_filter.process(
+                sig,
+                p.dj_filter_morph,
+                p.dj_filter_resonance,
+                p.dj_filter_mix,
+                sr,
+            ),
         }
     }
 

@@ -85,6 +85,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxPitchShift
         | ModuleKind::FxFreqShift
         | ModuleKind::FxVinyl
+        | ModuleKind::FxDjFilter
         | ModuleKind::SpectrumAnalyzer
         | ModuleKind::StereoMeter
         | ModuleKind::ActivityTimeline

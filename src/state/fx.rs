@@ -413,6 +413,20 @@ pub struct FxState {
     /// Wet/dry mix 0..1 (0 = bypass).
     #[serde(default)]
     pub vinyl_mix: f32,
+    // ── DJ Filter ────────────────────────────────────────────────────────
+    /// Single-knob morph 0..1 — 0 = LP heavy (cutoff low), 0.5 = BP
+    /// at mid with the resonance peak, 1 = HP heavy (cutoff high).
+    /// Default 0.5 so a freshly inserted module sits at the
+    /// resonance-peak crossover, not on a hard LP / HP edge.
+    #[serde(default = "default_dj_filter_morph")]
+    pub dj_filter_morph: f32,
+    /// Resonance 0..1 → Q.  At morph 0.5 the BP component dominates,
+    /// so resonance reads as the classic "peak at the crossover".
+    #[serde(default = "default_dj_filter_resonance")]
+    pub dj_filter_resonance: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).
+    #[serde(default)]
+    pub dj_filter_mix: f32,
     // ── Convolution Reverb ───────────────────────────────────────────────
     /// Wet/dry mix (0 = dry, 1 = 100 % wet).
     #[serde(default)]
@@ -634,6 +648,14 @@ fn default_freq_shift_amount() -> f32 {
     0.5 // 0 Hz centre — engaging the FX with default knobs is no-op.
 }
 
+fn default_dj_filter_morph() -> f32 {
+    0.5 // BP at the crossover — neutral position before the user sweeps.
+}
+
+fn default_dj_filter_resonance() -> f32 {
+    0.4 // Audible peak at the BP crossover without screaming.
+}
+
 impl Default for FxState {
     fn default() -> Self {
         Self {
@@ -752,6 +774,9 @@ impl Default for FxState {
             vinyl_noise: 0.5,
             vinyl_wear: 0.3,
             vinyl_mix: 0.0,
+            dj_filter_morph: default_dj_filter_morph(),
+            dj_filter_resonance: default_dj_filter_resonance(),
+            dj_filter_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

@@ -41,19 +41,26 @@ pub(super) fn draw_pitch_shift(
             s.fx.pitch_shift_fbk,
         )
     };
-    widgets::centered_row(ui, |ui| {
-        if widgets::param_control(ui, "SHIFT", &mut semi, pm("fx.pitch_shift_semi"), ctrl).0 {
-            changed = true;
-        }
-        if widgets::param_control(ui, "MIX", &mut mix, pm("fx.pitch_shift_mix"), ctrl).0 {
-            changed = true;
-        }
-        if widgets::param_control(ui, "FBK", &mut fbk, pm("fx.pitch_shift_fbk"), ctrl).0 {
-            changed = true;
-        }
+    // Glass pane around SHIFT / MIX / FEEDBACK so the primary trio
+    // reads as a unit; FEEDBACK + FINE both promoted to φ-bigger
+    // knobs because they're the cards' character controls.
+    let big = ctrl.phi_bigger();
+    let avail = ui.available_width();
+    widgets::glass_group_fill(ui, avail, avail, |ui| {
+        widgets::centered_row(ui, |ui| {
+            if widgets::param_control(ui, "SHIFT", &mut semi, pm("fx.pitch_shift_semi"), ctrl).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "MIX", &mut mix, pm("fx.pitch_shift_mix"), ctrl).0 {
+                changed = true;
+            }
+            if widgets::param_control(ui, "FEEDBACK", &mut fbk, pm("fx.pitch_shift_fbk"), big).0 {
+                changed = true;
+            }
+        });
     });
     widgets::centered_row(ui, |ui| {
-        if widgets::param_control(ui, "FINE", &mut fine, pm("fx.pitch_shift_fine"), ctrl).0 {
+        if widgets::param_control(ui, "FINE", &mut fine, pm("fx.pitch_shift_fine"), big).0 {
             changed = true;
         }
     });

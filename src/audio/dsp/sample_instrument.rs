@@ -583,9 +583,9 @@ impl SampleInstrumentVoice {
         out * p.sample_volume.clamp(0.0, 1.5)
     }
 
-    /// Number of currently-active slots (envelope past Off).  Used by
-    /// tests to assert polyphony.
-    #[cfg(test)]
+    /// Number of currently-active slots (envelope past Off).  Read once
+    /// per audio callback and surfaced to the UI poly-meter; tests also
+    /// use it to assert the stealing path.
     pub fn active_voice_count(&self) -> usize {
         self.slots.iter().filter(|s| s.is_active()).count()
     }

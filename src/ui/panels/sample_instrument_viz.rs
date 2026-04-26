@@ -18,6 +18,12 @@ use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use crate::audio::dsp::sample_instrument::SfzRegionRuntime;
 use crate::ui::theme;
 
+/// Poly-meter dot count — must match `SampleInstrumentVoice::POLY_VOICES`.
+/// Hard-coded here (not pulled from the test-only constant) so the UI
+/// crate doesn't widen its public surface for a paint-only number.
+/// Kept in sync via `poly_dots_matches_voice_pool` in the test module.
+pub(crate) const POLY_DOTS: u8 = 8;
+
 /// Build (min, max) thumbnail pairs for a sample buffer.  Bins the
 /// buffer into `cols` columns; each column's pair is the min/max of
 /// the samples in that bin.  Cheap to call once on load and stash the
@@ -49,6 +55,35 @@ pub(crate) fn build_thumbnail(samples: &[f32], cols: usize) -> Vec<(f32, f32)> {
         out.push((mn, mx));
     }
     out
+}
+
+/// Paint a horizontal row of `POLY_DOTS` dots — bright for active
+/// slots (left-aligned: dot 0..active_count are lit), dim for free.
+/// Surfaces the SampleInstrument poly pool occupancy so the user can
+/// see voice-stealing pressure before they hit it.  Compact (fits
+/// next to the LOAD/filename row); read-only by design.
+pub(crate) fn draw_poly_meter(ui: &mut Ui, active: u8) {
+    let n = POLY_DOTS as f32;
+    let dot_r = 2.5_f32;
+    let gap = 3.0_f32;
+    let width = n * dot_r * 2.0 + (n - 1.0) * gap + 4.0;
+    let height = dot_r * 2.0 + 2.0;
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(width, height), Sense::hover());
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    let painter = ui.painter_at(rect);
+    let active = active.min(POLY_DOTS);
+    for i in 0..POLY_DOTS {
+        let cx = rect.min.x + 2.0 + dot_r + i as f32 * (dot_r * 2.0 + gap);
+        let cy = rect.center().y;
+        let lit = i < active;
+        // Lit dots use FOG (primary text); idle dots use IRON
+        // (inactive widget) — both grayscale, palette-compliant.
+        let fill = if lit { theme::FOG } else { theme::IRON };
+        painter.circle_filled(Pos2::new(cx, cy), dot_r, fill);
+    }
+    resp.on_hover_text(format!("Polyphony: {} / {}", active, POLY_DOTS));
 }
 
 /// Paint a waveform thumbnail into `rect`.  `loop_start_frac` and

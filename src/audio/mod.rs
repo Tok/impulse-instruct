@@ -13,6 +13,7 @@ use cpal::{Device, SampleFormat, Stream, StreamConfig};
 use parking_lot::Mutex;
 use rtrb::{Consumer, Producer};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::sequencer::{ClockState, TriggerEvent, advance_clock};
 use crate::state::{AppState, FxPlan, compile_fx_plan};
@@ -124,6 +125,11 @@ pub struct AudioEngine {
     /// Rolling ~15s tap of master output mono for the granular panel's
     /// CAPTURE button.  Drained by the UI only while a capture is active.
     pub granular_capture_rx: Consumer<f32>,
+    /// Live polyphony readout for the SampleInstrument voice — count of
+    /// active slots (0..=POLY_VOICES) updated once per audio callback.
+    /// `Arc<AtomicU8>` instead of an rtrb byte stream because the UI
+    /// only ever cares about the latest value, not the history.
+    pub sample_instrument_poly: Arc<AtomicU8>,
     /// Negotiated sample rate (Hz).
     pub sample_rate: u32,
     /// Audio callback block size (frames).
@@ -220,6 +226,15 @@ impl AudioEngine {
 
         // Ring buffer: audio thread → UI DSP load meter (one f32 per callback)
         let (mut dsp_load_tx, dsp_load_rx) = rtrb::RingBuffer::<f32>::new(256);
+
+        // Atomic readout: SampleInstrument active-voice count.  Audio
+        // thread writes once per callback; UI reads when painting the
+        // poly meter.  Single byte covers POLY_VOICES = 8 with room to
+        // spare and keeps the wire footprint at one Relaxed store + one
+        // Relaxed load — cheaper than an rtrb byte stream the UI would
+        // have to drain to find the latest value.
+        let sample_instrument_poly = Arc::new(AtomicU8::new(0));
+        let sample_instrument_poly_audio = Arc::clone(&sample_instrument_poly);
 
         // Audio-thread-local DSP state — DSP always runs at SAMPLE_RATE, not
         // the device rate.  The callback resamples to the device rate at the
@@ -535,6 +550,8 @@ impl AudioEngine {
                     if budget_us > 0.0 {
                         dsp_load_tx.push((dsp_us / budget_us).min(2.0)).ok();
                     }
+                    sample_instrument_poly_audio
+                        .store(dsp.sample_instrument_active(), Ordering::Relaxed);
                     if monitor_vol != 1.0 {
                         for s in engine_slice.iter_mut() {
                             *s *= monitor_vol;
@@ -634,6 +651,7 @@ impl AudioEngine {
             midi_clock_rx,
             dsp_load_rx,
             stereo_rx,
+            sample_instrument_poly,
             sample_rate: config.sample_rate.0,
             block_size: 0, // determined at runtime in callback
             _stream: stream,

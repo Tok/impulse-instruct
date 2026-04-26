@@ -23,6 +23,7 @@ pub mod rack_cables;
 pub mod rack_canvas;
 mod rack_canvas_menus;
 pub(crate) mod rack_content;
+pub(crate) mod rack_content_conv_reverb;
 pub(crate) mod rack_content_drag;
 pub(crate) mod rack_content_fx_extras;
 pub(crate) mod rack_content_pad;
@@ -256,6 +257,10 @@ pub struct ImpulseApp {
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
+    /// Live SampleInstrument polyphony readout (0..=POLY_VOICES).
+    /// Updated once per audio callback by the engine; the panel reads
+    /// it on paint to drive the dot meter.
+    pub(crate) sample_instrument_poly: Arc<std::sync::atomic::AtomicU8>,
     pub(crate) amen_ui: panels::amen_viz::AmenUiState,
     /// Most recently loaded IR path for the convolution reverb.  The
     /// main update tick watches `fx.conv_reverb_ir_path` and reloads when
@@ -416,6 +421,7 @@ pub struct AudioChannels {
     pub stereo_rx: rtrb::Consumer<f32>,
     pub granular_capture_rx: rtrb::Consumer<f32>,
     pub tts_tx: crate::audio::TtsSink,
+    pub sample_instrument_poly: Arc<std::sync::atomic::AtomicU8>,
 }
 
 impl ImpulseApp {
@@ -501,6 +507,7 @@ impl ImpulseApp {
             capture_rx: audio.capture_rx,
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
+            sample_instrument_poly: audio.sample_instrument_poly,
             amen_ui: Default::default(),
             last_conv_reverb_ir_path: String::new(),
             last_wavetable_path: String::new(),

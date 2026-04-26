@@ -247,6 +247,17 @@ pub(super) fn apply_fx_update(
         "fx.freq_shift_feedback"
     );
     u!(s.fx.freq_shift_mix, "freq_shift_mix", "fx.freq_shift_mix");
+    u!(
+        s.fx.dj_filter_morph,
+        "dj_filter_morph",
+        "fx.dj_filter_morph"
+    );
+    u!(
+        s.fx.dj_filter_resonance,
+        "dj_filter_resonance",
+        "fx.dj_filter_resonance"
+    );
+    u!(s.fx.dj_filter_mix, "dj_filter_mix", "fx.dj_filter_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {

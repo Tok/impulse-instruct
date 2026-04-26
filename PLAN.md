@@ -8,19 +8,10 @@ This file lists **future work only** — completed items get moved into
 
 ## Next session — kickoff items
 
-Three picks queued for the next session (two small, one bigger).
-All three are unblocked, well-scoped, and live in their own
-sections below — pick whichever fits your appetite first.
+One pick queued for the next session (the big one — polyphony
+meter and DJ filter from this queue both shipped, see
+features.md).
 
-- [ ] **Polyphony usage meter** (visualisation wishlist) — tiny
-  win, ~1 file.  `SampleInstrument` ships with `POLY_VOICES = 8`
-  slots and zero live readout; a small dot / bar meter on the
-  panel surfaces the steal-vs-free path so users can dial
-  density before they hit voice-stealing.
-- [ ] **DJ filter** (FX wishlist) — single-morph LP↔HP through
-  BP with a resonance peak at the crossover.  Live-friendly
-  one-knob FX; smaller than a multiband comp, immediately
-  useful for performance.
 - [ ] **FM operator synth** (voices wishlist) — biggest visible
   new feature.  4-op DX7-flavoured voice plugs the gap between
   the existing AN1X (subtractive) and SAMPLER+ (samples) for
@@ -133,9 +124,6 @@ Modules that would plug a real gap in the current voice palette.
   layer from any input.  Karplus-on-input character.
 - [ ] **Grain delay** — granular feedback path; distinct from
   `FxMultitap` (rhythmic taps) and `FxFreeze` (held buffer).
-- [ ] **DJ filter** — single morph LP↔HP through BP with the
-  classic resonance peak at the crossover.  Live-friendly single
-  knob.
 - [ ] **3-band ISO / kill EQ** — DJ-style hard-kill bands (low /
   mid / high).  Cheap but invaluable for live cuts.
 - [ ] **Spectral gate** — per-bin gate on STFT magnitude (not a
@@ -151,10 +139,6 @@ Modules that would plug a real gap in the current voice palette.
 
 ## Visualizations — wishlist
 
-- [ ] **Polyphony usage meter** — `SampleInstrument` ships with
-  `POLY_VOICES = 8` slots and no live readout of how many are
-  active; a small bar / dot meter on the panel would surface the
-  steal vs free path.  Tiny win, immediately useful.
 - [ ] **Pattern density heatmap** — 16 steps × N bars grid,
   brightness = note density per voice.  Quick "where are the
   busy parts" read across a long song.

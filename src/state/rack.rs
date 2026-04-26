@@ -543,6 +543,11 @@ impl RackState {
                 // (TapeSat / Drive) — same family of analog-character
                 // colour effects.
                 ModuleKind::FxVinyl => 29,
+                // DJ filter sits next to the static Filter — both
+                // are LP/HP/BP shaping FX, just with different
+                // control surfaces (DJ filter is one-knob morph,
+                // FxFilter has cutoff + mode + drive).
+                ModuleKind::FxDjFilter => 19,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

@@ -44,13 +44,14 @@ pub enum FxStep {
     Widen,
     FreqShift,
     Vinyl,
+    DjFilter,
 }
 
 /// Total FxStep variants — sized to pack dense per-FX audio-thread
 /// caches (e.g. previous-sample outputs for feedback routes) without
 /// allocating a HashMap every block.  Bump this when adding a new
 /// `FxStep` variant so its `idx()` value has a slot in the cache.
-pub const FX_STEP_COUNT: usize = 33;
+pub const FX_STEP_COUNT: usize = 34;
 
 impl FxStep {
     /// Dense 0..`FX_STEP_COUNT` index — stable; keep in lock-step with
@@ -91,6 +92,7 @@ impl FxStep {
             FxStep::Widen => 30,
             FxStep::FreqShift => 31,
             FxStep::Vinyl => 32,
+            FxStep::DjFilter => 33,
         }
     }
 }

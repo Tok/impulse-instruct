@@ -48,6 +48,7 @@ const ALL_FX_STEPS: &[FxStep] = &[
     FxStep::Widen,
     FxStep::FreqShift,
     FxStep::Vinyl,
+    FxStep::DjFilter,
 ];
 
 #[test]

@@ -49,7 +49,8 @@ pub(super) fn try_draw_fx_extras_content(
         | ModuleKind::FxVocoder
         | ModuleKind::FxWiden
         | ModuleKind::FxFreqShift
-        | ModuleKind::FxVinyl => {}
+        | ModuleKind::FxVinyl
+        | ModuleKind::FxDjFilter => {}
         _ => return None,
     }
 
@@ -123,16 +124,57 @@ pub(super) fn try_draw_fx_extras_content(
                     s.fx.limiter_lookahead,
                 )
             };
-            hk!(
-                ui,
-                ("THRESH", &mut th, pm("fx.limiter_threshold")),
-                ("CEIL", &mut ce, pm("fx.limiter_ceiling"))
-            );
-            hk!(
-                ui,
-                ("REL", &mut rl, pm("fx.limiter_release")),
-                ("LOOK", &mut la, pm("fx.limiter_lookahead"))
-            );
+            // Glass-grouped 4-knob bank.  THRESHOLD + CEILING are
+            // the primary controls (φ-bigger); RELEASE + LOOKAHEAD
+            // sit at the default (medium) size — they were
+            // φ-smaller in V1 but read too cramped, so user
+            // feedback bumped them back up.
+            let big = ctrl.phi_bigger();
+            let avail = ui.available_width();
+            widgets::glass_group_fill(ui, avail, avail, |ui| {
+                widgets::centered_row(ui, |ui| {
+                    if widgets::param_control(
+                        ui,
+                        "THRESHOLD",
+                        &mut th,
+                        pm("fx.limiter_threshold"),
+                        big,
+                    )
+                    .0
+                    {
+                        changed = true;
+                    }
+                    if widgets::param_control(ui, "CEILING", &mut ce, pm("fx.limiter_ceiling"), big)
+                        .0
+                    {
+                        changed = true;
+                    }
+                });
+                widgets::centered_row(ui, |ui| {
+                    if widgets::param_control(
+                        ui,
+                        "RELEASE",
+                        &mut rl,
+                        pm("fx.limiter_release"),
+                        ctrl,
+                    )
+                    .0
+                    {
+                        changed = true;
+                    }
+                    if widgets::param_control(
+                        ui,
+                        "LOOKAHEAD",
+                        &mut la,
+                        pm("fx.limiter_lookahead"),
+                        ctrl,
+                    )
+                    .0
+                    {
+                        changed = true;
+                    }
+                });
+            });
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
                 let (vc, _) = render_three_pad(
@@ -390,16 +432,28 @@ pub(super) fn try_draw_fx_extras_content(
                     s.fx.multitap_mix,
                 )
             };
-            hk!(
-                ui,
-                ("TIME", &mut t, pm("fx.multitap_time")),
-                ("SPREAD", &mut sp, pm("fx.multitap_spread"))
-            );
-            hk!(
-                ui,
-                ("FBK", &mut fb, pm("fx.multitap_feedback")),
-                ("MIX", &mut m, pm("fx.multitap_mix"))
-            );
+            // All knobs φ-bigger per user feedback — Multitap is a
+            // performance / dub FX where every parameter is in
+            // active play, so they share the same visual weight.
+            let big = ctrl.phi_bigger();
+            widgets::centered_row(ui, |ui| {
+                if widgets::param_control(ui, "TIME", &mut t, pm("fx.multitap_time"), big).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "SPREAD", &mut sp, pm("fx.multitap_spread"), big).0 {
+                    changed = true;
+                }
+            });
+            widgets::centered_row(ui, |ui| {
+                if widgets::param_control(ui, "FEEDBACK", &mut fb, pm("fx.multitap_feedback"), big)
+                    .0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "MIX", &mut m, pm("fx.multitap_mix"), big).0 {
+                    changed = true;
+                }
+            });
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
                 let (vc, _) = render_three_pad(
@@ -435,11 +489,21 @@ pub(super) fn try_draw_fx_extras_content(
                     s.fx.revdelay_mix,
                 )
             };
-            hk!(
-                ui,
-                ("TIME", &mut t, pm("fx.revdelay_time")),
-                ("FBK", &mut fb, pm("fx.revdelay_feedback"))
-            );
+            // TIME + FEEDBACK are the character controls — the
+            // delay's whole identity comes from how those two
+            // interact, so both go φ-bigger.  MIX stays at the
+            // default size as the wet/dry trim.
+            let big = ctrl.phi_bigger();
+            widgets::centered_row(ui, |ui| {
+                if widgets::param_control(ui, "TIME", &mut t, pm("fx.revdelay_time"), big).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "FEEDBACK", &mut fb, pm("fx.revdelay_feedback"), big)
+                    .0
+                {
+                    changed = true;
+                }
+            });
             hk!(ui, ("MIX", &mut m, pm("fx.revdelay_mix")));
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
@@ -487,12 +551,22 @@ pub(super) fn try_draw_fx_extras_content(
                 let s = app.state.read();
                 (s.fx.stutter_rate, s.fx.stutter_slice, s.fx.stutter_mix)
             };
-            hk!(
-                ui,
-                ("RATE", &mut r, pm("fx.stutter_rate")),
-                ("SLICE", &mut sl, pm("fx.stutter_slice"))
-            );
-            hk!(ui, ("MIX", &mut m, pm("fx.stutter_mix")));
+            // All knobs φ-bigger — Stutter is hands-on performance
+            // chrome where every parameter is grabbed in the moment.
+            let big = ctrl.phi_bigger();
+            widgets::centered_row(ui, |ui| {
+                if widgets::param_control(ui, "RATE", &mut r, pm("fx.stutter_rate"), big).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "SLICE", &mut sl, pm("fx.stutter_slice"), big).0 {
+                    changed = true;
+                }
+            });
+            widgets::centered_row(ui, |ui| {
+                if widgets::param_control(ui, "MIX", &mut m, pm("fx.stutter_mix"), big).0 {
+                    changed = true;
+                }
+            });
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
                 let (vc, _) = render_three_pad(
@@ -583,12 +657,43 @@ pub(super) fn try_draw_fx_extras_content(
                     st.fx.freq_shift_mix,
                 )
             };
-            hk!(
-                ui,
-                ("SHIFT", &mut a, pm("fx.freq_shift_amount")),
-                ("FBK", &mut f, pm("fx.freq_shift_feedback"))
-            );
-            hk!(ui, ("MIX", &mut m, pm("fx.freq_shift_mix")));
+            // SHIFT + FEEDBACK glass-grouped, MIX at default
+            // (medium) size beside it — single row so the card fits
+            // 2×1.  MIX was φ-bigger in V1; user feedback dropped
+            // it to medium because the primary visual emphasis
+            // belongs to the SHIFT/FEEDBACK pair, not the wet/dry.
+            ui.horizontal(|ui| {
+                let avail = ui.available_width();
+                widgets::glass_group_fill(ui, avail * 0.7, avail * 0.7, |ui| {
+                    widgets::centered_row(ui, |ui| {
+                        if widgets::param_control(
+                            ui,
+                            "SHIFT",
+                            &mut a,
+                            pm("fx.freq_shift_amount"),
+                            ctrl,
+                        )
+                        .0
+                        {
+                            changed = true;
+                        }
+                        if widgets::param_control(
+                            ui,
+                            "FEEDBACK",
+                            &mut f,
+                            pm("fx.freq_shift_feedback"),
+                            ctrl,
+                        )
+                        .0
+                        {
+                            changed = true;
+                        }
+                    });
+                });
+                if widgets::param_control(ui, "MIX", &mut m, pm("fx.freq_shift_mix"), ctrl).0 {
+                    changed = true;
+                }
+            });
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
                 let (vc, _) = render_three_pad(
@@ -698,13 +803,12 @@ pub(super) fn try_draw_fx_extras_content(
                     s.fx.vocoder_mix,
                 )
             };
+            // All four controls in one row so the card fits 2×1 like
+            // the rest of the Tier-1 FX strip.
             hk!(
                 ui,
                 ("BANDS", &mut bd, pm("fx.vocoder_bands")),
-                ("CRR.MX", &mut cm, pm("fx.vocoder_carrier_mix"))
-            );
-            hk!(
-                ui,
+                ("CARRIER", &mut cm, pm("fx.vocoder_carrier_mix")),
                 ("SENSE", &mut sn, pm("fx.vocoder_sense")),
                 ("MIX", &mut m, pm("fx.vocoder_mix"))
             );
@@ -732,6 +836,80 @@ pub(super) fn try_draw_fx_extras_content(
                 s.fx.vocoder_carrier_mix = cm;
                 s.fx.vocoder_sense = sn;
                 s.fx.vocoder_mix = m;
+            }
+        }
+        ModuleKind::FxDjFilter => {
+            // Single-knob morph FX — MORPH is the entire identity
+            // of the card, so it's φ-bigger and glass-grouped on
+            // its own; RESONANCE + MIX support roles get default
+            // size beside it.  Bipolar feel comes from the morph
+            // sweep itself (LP at 0, BP at 0.5, HP at 1) — no
+            // detent label needed since the resonance peak
+            // crossing the centre is the audible signpost.
+            let (mut morph, mut res, mut mix) = {
+                let st = app.state.read();
+                (
+                    st.fx.dj_filter_morph,
+                    st.fx.dj_filter_resonance,
+                    st.fx.dj_filter_mix,
+                )
+            };
+            let big = ctrl.phi_bigger();
+            ui.horizontal(|ui| {
+                let avail = ui.available_width();
+                widgets::glass_group_fill(ui, avail * 0.5, avail * 0.5, |ui| {
+                    widgets::centered_row(ui, |ui| {
+                        if widgets::param_control(
+                            ui,
+                            "MORPH",
+                            &mut morph,
+                            pm("fx.dj_filter_morph"),
+                            big,
+                        )
+                        .0
+                        {
+                            changed = true;
+                        }
+                    });
+                });
+                if widgets::param_control(
+                    ui,
+                    "RESONANCE",
+                    &mut res,
+                    pm("fx.dj_filter_resonance"),
+                    ctrl,
+                )
+                .0
+                {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "MIX", &mut mix, pm("fx.dj_filter_mix"), ctrl).0 {
+                    changed = true;
+                }
+            });
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("dj_filter_xy_{module_id}"),
+                    ["MORPH", "RES", "MIX"],
+                    &mut pad_pair,
+                    (&mut morph, &mut res, &mut mix),
+                    [
+                        user_owned("fx.dj_filter_morph"),
+                        user_owned("fx.dj_filter_resonance"),
+                        user_owned("fx.dj_filter_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || morph != app.state.read().fx.dj_filter_morph {
+                let mut st = app.state.write();
+                st.fx.dj_filter_morph = morph;
+                st.fx.dj_filter_resonance = res;
+                st.fx.dj_filter_mix = mix;
             }
         }
         _ => unreachable!("guarded by the early return above"),

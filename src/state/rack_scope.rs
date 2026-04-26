@@ -79,7 +79,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxAutotune
         | ModuleKind::FxWiden
         | ModuleKind::FxFreqShift
-        | ModuleKind::FxVinyl => Some("fx".to_string()),
+        | ModuleKind::FxVinyl
+        | ModuleKind::FxDjFilter => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         _ => None,
     }
@@ -138,6 +139,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxwiden" | "widen" | "widener" | "stereowidth" | "haas" => Some(FxWiden),
         "fxfreqshift" | "freqshift" | "frequencyshifter" | "ssbshift" | "bode" => Some(FxFreqShift),
         "fxvinyl" | "vinyl" | "cassette" | "tapevinyl" => Some(FxVinyl),
+        "fxdjfilter" | "djfilter" | "dj" | "morphfilter" | "djkill" => Some(FxDjFilter),
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
@@ -218,6 +220,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             "freqshift" | "freq_shift" | "frequencyshifter" | "ssb" | "bode" | "fx"
         ),
         ModuleKind::FxVinyl => matches!(n.as_str(), "vinyl" | "cassette" | "tape" | "fx"),
+        ModuleKind::FxDjFilter => matches!(
+            n.as_str(),
+            "djfilter" | "dj_filter" | "dj filter" | "dj" | "morphfilter" | "fx"
+        ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),
             "convreverb" | "conv_reverb" | "conv reverb" | "convolution" | "ir" | "fx"

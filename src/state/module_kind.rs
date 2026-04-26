@@ -100,6 +100,11 @@ pub enum ModuleKind {
     /// Steady-state analog-tape character; distinct from
     /// `FxTapeStop` (which models the brake transient).
     FxVinyl,
+    /// DJ filter — single-knob LP↔BP↔HP morph with a resonance
+    /// peak at the crossover.  Live-friendly performance FX; smaller
+    /// surface than `FxFilter` (which has separate cutoff / mode
+    /// controls), and the cutoff sweep is baked into the morph.
+    FxDjFilter,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -211,6 +216,7 @@ impl ModuleKind {
             Self::FxPitchShift => "PITCH",
             Self::FxFreqShift => "FREQSHIFT",
             Self::FxVinyl => "VINYL",
+            Self::FxDjFilter => "DJ FILTER",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -314,9 +320,11 @@ impl ModuleKind {
             Self::LfoModule => (2, 2),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
-            // Convolution Reverb — 6 knobs + reverse toggle + IR picker row
-            // need three grid rows; the picker label eats horizontal space
-            // so 3 cols wide matches the content.
+            // Convolution Reverb — 6 knobs in a glass-grouped 2-row
+            // bank (3 + 3) and a button row beneath (REV / LOAD IR /
+            // clear / filename).  3 cols wide keeps the card the
+            // same footprint as the rest of the FX strip; 3 rows
+            // gives the prominent LOAD IR button breathing room.
             Self::FxConvReverb => (3, 3),
             // Param EQ — curve editor dominates the card; 4 cols gives
             // the 20 Hz–20 kHz axis room to breathe, 4 rows leaves room
@@ -325,9 +333,9 @@ impl ModuleKind {
             // PitchShift — SHIFT / MIX / FBK on row 1, FINE on row 2
             // so the semitone knob doesn't crowd the cents readout.
             Self::FxPitchShift => (2, 2),
-            // FreqShift — 3 knobs (shift, feedback, mix) so 2x2 fits
-            // them in a 2-row card matching the other Tier-1 FX.
-            Self::FxFreqShift => (2, 2),
+            // FreqShift — 3 knobs (SHIFT, FEEDBACK in a glass group +
+            // big MIX) all in one row, so 2×1 is enough.
+            Self::FxFreqShift => (2, 1),
             // Flanger — 4 knobs (rate / depth / feedback / mix) is one
             // more than the phaser bundle, so it gets a 2×2 footprint
             // like the delay rather than the 2×1 used by the smaller FX.
@@ -359,14 +367,14 @@ impl ModuleKind {
             | Self::FxAutotune
             | Self::FxPan
             | Self::FxWiden
-            | Self::FxVinyl => (2, 1),
+            | Self::FxVinyl
+            | Self::FxDjFilter => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
-            // Vocoder — bands selector + carrier-mix + sense + mix on
-            // top of the band visualiser; 3 cols × 2 rows is comfy
-            // without dominating the FX strip.
-            Self::FxVocoder => (3, 2),
+            // Vocoder — 4 knobs (BANDS / CARRIER / SENSE / MIX) all on
+            // one row; 2×1 matches the rest of the Tier-1 FX strip.
+            Self::FxVocoder => (2, 1),
         }
     }
 
@@ -423,6 +431,7 @@ impl ModuleKind {
             | Self::FxPitchShift
             | Self::FxFreqShift
             | Self::FxVinyl
+            | Self::FxDjFilter
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -494,6 +503,7 @@ impl ModuleKind {
                 | Self::FxPitchShift
                 | Self::FxFreqShift
                 | Self::FxVinyl
+                | Self::FxDjFilter
         )
     }
 
@@ -545,6 +555,7 @@ impl ModuleKind {
                 | Self::FxPitchShift
                 | Self::FxFreqShift
                 | Self::FxVinyl
+                | Self::FxDjFilter
         )
     }
 
@@ -585,6 +596,7 @@ impl ModuleKind {
                 | Self::FxPitchShift
                 | Self::FxFreqShift
                 | Self::FxVinyl
+                | Self::FxDjFilter
                 | Self::LfoModule
                 | Self::LlmAgent
         )

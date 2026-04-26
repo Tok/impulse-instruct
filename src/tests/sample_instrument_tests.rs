@@ -621,6 +621,27 @@ mod sample_instrument_poly_tests {
             "gate-off + release tail should silence every slot"
         );
     }
+
+    #[test]
+    fn fresh_voice_reports_zero_active_slots() {
+        // The poly meter's resting state — no triggers, no audio,
+        // count is 0.  Guards against a regression where a slot is
+        // marked Active during construction.
+        let v = SampleInstrumentVoice::new();
+        assert_eq!(v.active_voice_count(), 0);
+    }
+
+    #[test]
+    fn poly_dots_matches_voice_pool() {
+        // The UI poly-meter hard-codes `POLY_DOTS` instead of pulling
+        // the test-only `POLY_VOICES` constant; this test fails loudly
+        // if the two ever drift apart.
+        assert_eq!(
+            crate::ui::panels::sample_instrument_viz::POLY_DOTS as usize,
+            SampleInstrumentVoice::POLY_VOICES,
+            "POLY_DOTS in the viz module must mirror POLY_VOICES"
+        );
+    }
 }
 
 #[cfg(test)]

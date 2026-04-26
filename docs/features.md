@@ -4,6 +4,174 @@ A detailed log of what's built.
 
 ---
 
+### DJ filter (kickoff #2)
+
+Single-knob morph FX from the FX wishlist — sweep one
+control to crossfade LP → BP → HP with a resonance peak at
+the crossover.  Plugs the live-performance gap that
+`FxFilter` doesn't fill: the static SVF needs separate
+cutoff / mode / drive knobs and stays at one mode at a
+time, while the DJ filter is meant for one-handed sweeps
+where the cutoff and mode move together.
+
+**DSP shape.**  One state-variable filter integrator
+computes LP / BP / HP every sample; triangular crossfade
+weights pick a pure mode at each end and a smooth blend in
+between (`w_low = max(0, 1−2m)`, `w_band = 1 − |2m−1|`,
+`w_high = max(0, 2m−1)`).  Cutoff sweeps log-symmetrically
+80 Hz → 1 kHz → 8 kHz with morph so that morph=0 reads as
+"low cut heavy", morph=1 as "high cut heavy", and morph=0.5
+lands at the audibly-sensitive 1 kHz centre.  Resonance Q
+is φ-emphasised at the morph midpoint
+(`q = 0.5 + res * (4 + bp_emphasis * 12)`) so the peak is
+narrow at the crossover and wider at the LP/HP edges, which
+matches the audible "resonance peak emerging at the
+midpoint" the user asked for.  2× oversampled SVF for
+stability at the high-cutoff end.
+
+**State + LLM.**  3 fields on `FxState`
+(`dj_filter_morph`, `dj_filter_resonance`, `dj_filter_mix`).
+Defaults: morph 0.5 (centre crossover, neutral starting
+position), resonance 0.4 (audible peak without screaming),
+mix 0.0 (bypass on insert).  Wired through
+`apply_llm_update`, the JSON schema (`fx.dj_filter_*`),
+locked-param honouring, and the rack-scope name parser
+(aliases: `djfilter` / `dj_filter` / `dj filter` /
+`fxdjfilter` / `morphfilter`).
+
+**UI.**  2×1 card.  MORPH lives alone in a φ-bigger glass
+group (it's the entire identity of the FX); RESONANCE + MIX
+sit at default size beside it.  Three-knob XY pad available
+when expanded.  Added to the random-rack pool.
+
+**Tests.**  12 new — DSP-side: dry-when-mix-zero, morph=0
+LP behaviour, morph=1 HP behaviour, BP peak at 1 kHz at
+morph=0.5, BP narrows at high resonance, output bounded
+under stress.  State-side: defaults, apply_llm_update, lock
+honouring, kind→step mapping, label, alias parsing.  Full
+suite 1926 → 1938.
+
+Files: new `src/audio/dsp/fx_djfilter.rs` (DSP),
+`src/state/fx.rs` (3 fields + defaults), `src/state/fx_types.rs`
+(FxStep + FX_STEP_COUNT bump 33→34), `src/state/fx_plan.rs`
+(kind→step), `src/state/module_kind.rs` (variant + 6
+exhaustive matches), `src/state/modulation.rs` (mod_inputs),
+`src/state/rack.rs` (arrange order), `src/state/rack_random.rs`
+(pool), `src/state/rack_scope.rs` (label/parse/match),
+`src/state/llm_helpers_fx.rs` (apply), `src/llm/schema.rs`
+(JSON schema), `src/audio/dsp/mod.rs` + `fx_step.rs`
+(DspState wiring), `src/audio/dsp/params.rs` +
+`params_from.rs` (AudioParams), `src/ui/rack_content.rs` +
+`rack_content_fx_extras.rs` (dispatch + render),
+`src/ui/module_card.rs` (title_fill),
+`src/tests/coverage_tests.rs` + `fx_step_idx_tests.rs`
+(exhaustive walks), new `src/tests/fx_djfilter_tests.rs`.
+
+---
+
+### FX rack pass — empty cards fixed + layout cleanup
+
+User-driven cleanup of the FX strip after the absurd-queue
+ship.  Two distinct issues, plus a layout pass.
+
+**Dispatch bug — five cards rendered empty.**  Multitap,
+RevDelay, TapeStop, Stutter, and Freeze all have full
+renderers in `rack_content_fx_extras.rs` (rows of knobs +
+optional XY pad), but the *dispatch* arm in
+`rack_content.rs` listed only twelve of the seventeen FX
+kinds the extras helper accepts.  The missing five fell
+through to `_ => {}` and rendered nothing.  Fixed by
+extending the dispatch list and adding a comment that
+documents the lockstep requirement (the helper's accept
+list at the top of `try_draw_fx_extras_content` and the
+caller's dispatch arm must stay in sync).
+
+**Full preset — 6 LFO modules → 4.**  `wire_default_cables`
+only patches the first 4 LFOs into voice-modulation slots;
+preset shipped with two orphans hanging off the strip.
+`lfo_count: 6 → 4` in both `Full` and `Full + Viz` presets.
+
+**Layout pass.**  `grid_size` adjustments plus glass-pane
+grouping and a primary/secondary knob hierarchy.  Sized
+through two rounds of user feedback:
+
+- **CONV REV** — `(3, 3) → (4, 2) → (3, 3)`.  Six knobs
+  (MIX / SIZE / PREDELAY / DAMP / LOWCUT / WIDTH) in a
+  glass-grouped 2-row bank (3+3); IR picker on row 3 in
+  its own glass pane with LOAD IR promoted to a 96×24
+  primary button, REV toggle + × clear flanking it,
+  filename label trailing.  Spell-outs: PREDLY → PREDELAY,
+  LOCUT → LOWCUT.
+- **FREQ SHIFT** — `(2, 2) → (2, 1)`.  SHIFT + FEEDBACK
+  glass-grouped; MIX at default (medium) size beside it
+  — primary visual emphasis belongs to the SHIFT/FEEDBACK
+  pair, not the wet/dry.  FBK → FEEDBACK.
+- **PITCH SHIFT** — glass pane around row 1 (SHIFT / MIX
+  / FEEDBACK); FEEDBACK and FINE both promoted to
+  φ-bigger primary knobs because they're the card's
+  character controls.  FBK → FEEDBACK.
+- **LIMITER** — glass pane around all four knobs;
+  THRESHOLD + CEILING φ-bigger (audio-shaping primaries),
+  RELEASE + LOOKAHEAD at default (medium) size.
+  Spell-outs: THRESH → THRESHOLD, CEIL → CEILING,
+  REL → RELEASE, LOOK → LOOKAHEAD.
+- **MULTITAP** — all 4 knobs (TIME / SPREAD / FEEDBACK /
+  MIX) φ-bigger; performance/dub FX where every parameter
+  is in active play, all share the same visual weight.
+  FBK → FEEDBACK.
+- **REV DELAY** — TIME + FEEDBACK φ-bigger (the delay's
+  whole identity comes from how those interact); MIX at
+  default size as the wet/dry trim.  FBK → FEEDBACK.
+- **STUTTER** — all 3 knobs (RATE / SLICE / MIX) φ-bigger;
+  hands-on performance chrome.
+- **VOCODER** — `(3, 2) → (2, 1)`.  All four knobs (BANDS
+  / CARRIER / SENSE / MIX) in one row.  CRR.MX → CARRIER.
+
+Files touched: `state/module_kind.rs` (grid_size for
+ConvReverb / FreqShift / Vocoder), `state/rack_presets.rs`
+(LFO count), `ui/rack_content.rs` (dispatch fix +
+ConvReverb repack), `ui/rack_content_fx_extras.rs`
+(FreqShift / Limiter / Vocoder repack),
+`ui/rack_content_pitch_shift.rs` (PitchShift repack).
+1926 tests still passing.
+
+---
+
+### SampleInstrument polyphony meter
+
+Live readout of the SampleInstrument poly pool — eight small
+dots above the panel header, lit gray (`FOG`) when a slot is
+active and dim (`IRON`) when free.  Surfaces the
+voice-stealing path: users see how close they are to the cap
+before they hit it, so chord stabs / release tails can be
+dialled without surprise.
+
+The voice already tracked active-slot count (gated to
+`#[cfg(test)]` for the polyphony unit tests); the change
+exposes `SampleInstrumentVoice::active_voice_count()` as a
+plain method, adds `DspState::sample_instrument_active() ->
+u8` for the audio thread, and pushes the count once per
+callback into a shared `Arc<AtomicU8>`.  No locks, no rtrb
+drain — single Relaxed store / Relaxed load is cheaper than a
+ring buffer the UI would have to drain to find the latest
+value.
+
+The meter dot count is hard-coded at `POLY_DOTS = 8` in the
+viz module and asserted against `SampleInstrumentVoice::POLY_VOICES`
+by `poly_dots_matches_voice_pool` so the two stay in sync.
+Tests: 2 new (initial-state zero count + the dot/pool
+equivalence), full suite 1926.
+
+Files: `src/audio/dsp/sample_instrument.rs` (un-gate
+`active_voice_count`), `src/audio/dsp/mod.rs` (delegate
+method), `src/audio/mod.rs` (atomic + per-callback store),
+`src/main.rs` + `src/ui/mod.rs` (channel plumbing),
+`src/ui/panels/sample_instrument.rs` (right-aligned in the
+header row), `src/ui/panels/sample_instrument_viz.rs`
+(`draw_poly_meter`).
+
+---
+
 ### MIDI granuliser (absurd queue #8)
 
 Granular but for triggers — scatter an existing sequencer

@@ -654,6 +654,10 @@ pub struct AudioParams {
     pub vinyl_noise: f32,
     pub vinyl_wear: f32,
     pub vinyl_mix: f32,
+    // DJ filter — single-knob LP↔BP↔HP morph.
+    pub dj_filter_morph: f32,
+    pub dj_filter_resonance: f32,
+    pub dj_filter_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,

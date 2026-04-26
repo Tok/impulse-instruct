@@ -110,7 +110,7 @@ pub const RACK_PRESETS: &[RackPreset] = &[
             ModuleKind::FxPan,
             ModuleKind::FxWiden,
         ],
-        lfo_count: 6,
+        lfo_count: 4,
     },
     // Curated viz showcase — extends the "Full" gallery with one
     // representative module per analysis family.  Kept out of "Full"
@@ -183,7 +183,7 @@ pub const RACK_PRESETS: &[RackPreset] = &[
             // Bar / beat indicator — glanceable transport readout.
             ModuleKind::PhaseWheel,
         ],
-        lfo_count: 6,
+        lfo_count: 4,
     },
 ];
 

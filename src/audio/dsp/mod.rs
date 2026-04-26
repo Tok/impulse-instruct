@@ -6,6 +6,7 @@ pub mod conv_reverb;
 mod dsp_util;
 pub mod formant_shifter;
 pub mod fx;
+pub mod fx_djfilter;
 pub mod fx_extras;
 pub mod fx_freq_shift;
 pub mod fx_math;
@@ -36,6 +37,7 @@ use conv_reverb::ConvReverb;
 use dsp_util::*;
 pub use dsp_util::{TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_tuned};
 use fx::*;
+use fx_djfilter::DjFilter;
 use fx_extras::*;
 use fx_freq_shift::FreqShift;
 // fx_math symbols (free_eg_value_at, lfo_value_at, sidechain_duck,
@@ -124,6 +126,7 @@ pub struct DspState {
     vocoder: Vocoder,
     freq_shift: FreqShift,
     vinyl: VinylFx,
+    dj_filter: DjFilter,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -271,6 +274,7 @@ impl DspState {
             vocoder: Vocoder::new(sample_rate),
             freq_shift: FreqShift::new(),
             vinyl: VinylFx::new(sample_rate),
+            dj_filter: DjFilter::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),
@@ -363,6 +367,13 @@ impl DspState {
     /// Switch the SampleInstrument voice to SFZ multisample mode.
     pub fn load_sample_instrument_sfz(&mut self, regions: Vec<SfzRegionRuntime>) {
         self.sample_instrument.load_sfz(regions);
+    }
+
+    /// Live count of active voices in the SampleInstrument poly pool
+    /// (0..=POLY_VOICES).  Sampled once per audio callback and surfaced
+    /// to the UI poly-meter via an `AtomicU8`.
+    pub fn sample_instrument_active(&self) -> u8 {
+        self.sample_instrument.active_voice_count() as u8
     }
 
     /// Load a new impulse response into the convolution reverb.  Called

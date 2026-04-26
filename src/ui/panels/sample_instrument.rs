@@ -78,6 +78,15 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         if !path.is_empty() && app.last_sample_instrument_path != path {
             load_sample_instrument_path(app, &path);
         }
+
+        // Poly-meter — right-aligned so it sits flush at the panel
+        // edge regardless of how long the loaded filename is.
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let active = app
+                .sample_instrument_poly
+                .load(std::sync::atomic::Ordering::Relaxed);
+            crate::ui::panels::sample_instrument_viz::draw_poly_meter(ui, active);
+        });
     });
 
     ui.add_space(2.0);
@@ -93,10 +102,14 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
+            // ROOT NOTE is the single primary control of the group
+            // (it anchors every played pitch against the source
+            // recording's natural note) — promote it to φ-bigger.
+            let big = ctrl.phi_bigger();
             widgets::centered_row(ui, |ui| {
                 let raw = app.state.read().sample_instrument.root_note;
                 let mut v = raw as f32 / 127.0;
-                if widgets::param_control(ui, "NOTE", &mut v, ParamMode::Free, ctrl).0 {
+                if widgets::param_control(ui, "NOTE", &mut v, ParamMode::Free, big).0 {
                     let n = (v * 127.0).round().clamp(0.0, 127.0) as u8;
                     app.state.write().sample_instrument.root_note = n;
                     app.push_audio_params();
@@ -152,31 +165,39 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
+            // Two rows of two — A/D on top, S/R on bottom — so
+            // the labels can spell out fully (ATTACK / DECAY /
+            // SUSTAIN / RELEASE) instead of cryptic single
+            // letters.  Same group height as before because the
+            // previous one-row layout had `glass_group_height(ctrl, 60.0)`
+            // already sized for two knob rows.
             widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().sample_instrument.attack;
-                    if widgets::param_control(ui, "A", &mut v, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "ATTACK", &mut v, ParamMode::Free, ctrl).0 {
                         app.state.write().sample_instrument.attack = v;
                         app.push_audio_params();
                     }
                 }
                 {
                     let mut v = app.state.read().sample_instrument.decay;
-                    if widgets::param_control(ui, "D", &mut v, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "DECAY", &mut v, ParamMode::Free, ctrl).0 {
                         app.state.write().sample_instrument.decay = v;
                         app.push_audio_params();
                     }
                 }
+            });
+            widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().sample_instrument.sustain;
-                    if widgets::param_control(ui, "S", &mut v, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "SUSTAIN", &mut v, ParamMode::Free, ctrl).0 {
                         app.state.write().sample_instrument.sustain = v;
                         app.push_audio_params();
                     }
                 }
                 {
                     let mut v = app.state.read().sample_instrument.release;
-                    if widgets::param_control(ui, "R", &mut v, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "RELEASE", &mut v, ParamMode::Free, ctrl).0 {
                         app.state.write().sample_instrument.release = v;
                         app.push_audio_params();
                     }
@@ -191,10 +212,15 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     .monospace()
                     .size(9.5),
             );
+            // Row 1: START / END loop-window knobs.  Row 2: the
+            // LOOP / 1× toggle on its own line so the button
+            // doesn't compete with the knobs for the user's
+            // pointer when they're sweeping the window.  Labels
+            // spelled out (START vs the previous STR).
             widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().sample_instrument.loop_start;
-                    if widgets::param_control(ui, "STR", &mut v, ParamMode::Free, ctrl).0 {
+                    if widgets::param_control(ui, "START", &mut v, ParamMode::Free, ctrl).0 {
                         app.state.write().sample_instrument.loop_start = v.clamp(0.0, 1.0);
                         app.push_audio_params();
                     }
@@ -206,14 +232,16 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         app.push_audio_params();
                     }
                 }
+            });
+            widgets::centered_row(ui, |ui| {
                 let on = app.state.read().sample_instrument.loop_enabled;
-                let label = if on { "LP" } else { "1×" };
+                let label = if on { "LOOP" } else { "1×" };
                 let col = if on { theme::CHALK } else { theme::IRON };
                 if ui
                     .add_sized(
-                        [28.0, 18.0],
+                        [54.0, 20.0],
                         egui::Button::new(
-                            egui::RichText::new(label).monospace().size(8.0).color(col),
+                            egui::RichText::new(label).monospace().size(9.0).color(col),
                         ),
                     )
                     .clicked()
