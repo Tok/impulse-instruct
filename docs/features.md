@@ -4,6 +4,38 @@ A detailed log of what's built.
 
 ---
 
+### Eurorack patch generator (absurd queue #1)
+
+Creative-seed tool — wipe the rack, drop in a random selection of
+voices, FX, and LFOs, wire defaults so the result makes sound
+immediately.  "Show me what could happen" button for sketching
+new ideas.
+
+- Pure `state::rack_random::random_layout(seed) -> RandomLayout`
+  picks 2..=4 voices + 3..=7 FX + 1..=3 LFOs from curated pools.
+  Deterministic per seed (tiny LCG, no `rand` crate dep) so an
+  interesting roll can be replayed via
+  `POST /api/rack/random {"seed": 42}`.  Voices that need
+  user-loaded assets (`SampleInstrument`, `NeuTts`) stay out of
+  the pool — random picks should always make sound, not require
+  setup.
+- `apply_random_layout(state, seed)` is the shared helper:
+  wipes the rack to its persistent core (sequencer + master +
+  console), drops the layout's modules, runs
+  `wire_default_cables` + `arrange_canonical`.  Same code path
+  for the API endpoint and the UI menu entry — bit-identical
+  results for the same seed.
+- UI: `Edit → Random Patch (Eurorack)` menu item.  Nanosecond
+  seed → fresh roll on every click.
+- API: `POST /api/rack/random {"seed": <u64>}` (seed optional —
+  nanos by default).
+- 9 new tests cover: determinism per seed, divergence across
+  seeds, count ranges, distinct picks within a layout, pool
+  membership, pool-cap behaviour, LCG mixing on seed=0, and the
+  full apply round-trip (core preserved, every voice reaches
+  master, repeatable across two AppStates).  Total: **1895 tests
+  passing**.
+
 ### SampleInstrument time-stretch — continuous knob (UI follow-up)
 
 The previous commit shipped time-stretch as a 4-preset cycle

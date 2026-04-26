@@ -39,6 +39,52 @@ pub async fn post_state_reset(AxumState(api): AxumState<ApiState>) -> Json<OkRes
     })
 }
 
+/// Eurorack-style "patch generator" — wipes the rack to its minimal
+/// shape, then rebuilds it from a randomised layout (random voices /
+/// FX / LFOs picked from curated pools, deterministic per seed).
+/// Wires default cables on top so every voice reaches master out of
+/// the box.  Optional `seed` parameter lets the caller replay an
+/// interesting roll; without it, a nanosecond-derived seed is used.
+/// Inner logic lives in `state::rack_random::apply_random_layout`
+/// so the UI menu entry can call exactly the same code path.
+pub async fn post_rack_random(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<serde_json::Value>,
+) -> Json<OkResponse> {
+    use crate::state::rack_random::apply_random_layout;
+
+    let seed = req.get("seed").and_then(|v| v.as_u64()).unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0)
+    });
+
+    let layout = {
+        let mut s = api.app_state.write();
+        apply_random_layout(&mut s, seed)
+    };
+
+    api_log(
+        &api,
+        format!(
+            "[API] rack/random: seed={seed} → {} voices, {} fx, {} lfos",
+            layout.voices.len(),
+            layout.fx.len(),
+            layout.lfo_count
+        ),
+    );
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!(
+            "random rack: {} voices, {} fx, {} lfos (seed {seed})",
+            layout.voices.len(),
+            layout.fx.len(),
+            layout.lfo_count
+        )),
+    })
+}
+
 /// Clear the rack to a minimal setup: just sequencer + master + LLM console.
 pub async fn post_rack_reset(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
     use crate::state::ModuleKind;

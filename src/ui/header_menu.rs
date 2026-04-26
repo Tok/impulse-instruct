@@ -412,6 +412,41 @@ impl ImpulseApp {
                             }
                             ui.close_menu();
                         }
+                        ui.separator();
+                        // Eurorack patch generator — wipes the rack to
+                        // its core (sequencer + master + console),
+                        // drops in 2..=4 random voices, 3..=7 random
+                        // FX, 1..=3 LFOs, and runs `wire_default_cables`
+                        // so the result makes sound immediately.  The
+                        // shared `apply_random_layout` is the same
+                        // helper `POST /api/rack/random` calls, so the
+                        // two paths are bit-identical.  Nanosecond
+                        // seed → fresh roll on every click.
+                        if ui
+                            .button(
+                                egui::RichText::new("Random Patch (Eurorack)")
+                                    .monospace()
+                                    .size(10.0),
+                            )
+                            .on_hover_text(
+                                "Wipe the rack and drop in a random selection of voices, \
+                                 FX, and LFOs — patch cables included.  Creative-seed tool.",
+                            )
+                            .clicked()
+                        {
+                            use crate::state::rack_random::apply_random_layout;
+                            let seed = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_nanos() as u64)
+                                .unwrap_or(0);
+                            let _layout = {
+                                let mut s = self.state.write();
+                                apply_random_layout(&mut s, seed)
+                            };
+                            self.push_audio_params();
+                            self.session_dirty = true;
+                            ui.close_menu();
+                        }
                     });
 
                     ui.menu_button(egui::RichText::new("View").monospace().size(10.0), |ui| {

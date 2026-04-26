@@ -158,6 +158,7 @@ pub mod modulation;
 pub mod module_kind;
 pub mod rack;
 mod rack_presets;
+pub mod rack_random;
 pub mod rack_scope;
 mod rack_wiring;
 pub use fx_plan::compile_fx_plan;

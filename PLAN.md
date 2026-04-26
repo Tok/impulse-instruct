@@ -151,10 +151,7 @@ Modules that would plug a real gap in the current voice palette.
 User-prioritised order; each is its own module, shippable
 independently.  Anything left at "unscheduled" goes in last.
 
-1. [ ] **Eurorack patch generator** — button on the rack header
-   that resets the rack, drops a random selection of voices /
-   FX / modulators, and patches plausible cables between them.
-   "Show me what could happen" creative-seed tool.
+1. [x] ~~**Eurorack patch generator**~~ — shipped (see features.md).
 2. [ ] **Theremin** — XY pad → pitch (one axis) + volume (other).
    Heterodyning oscillator pair so the squeal character lands;
    could also be MIDI / mouse drivable.
