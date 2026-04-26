@@ -510,8 +510,27 @@ impl DspState {
                     break;
                 }
             }
+            let pre = sig;
             sig = self.apply_fx_step(step, sig, sidechain, p, delay_samples, sr, gate_env);
             self.prev_fx_output[step.idx()] = sig;
+            // Capture momentary gain reduction for the GrHistory viz —
+            // ratio of post / pre |amplitude| for dynamics steps,
+            // tracked as the most-attenuating ratio across the chain.
+            // Decays toward unity (no GR) so a transient peak is held
+            // briefly enough for the UI to sample at 60 Hz.
+            if matches!(
+                step,
+                FxStep::Compressor | FxStep::Limiter | FxStep::MultibandComp
+            ) {
+                let pre_abs = pre.abs();
+                if pre_abs > 1e-4 {
+                    let ratio = (sig.abs() / pre_abs).clamp(0.0, 1.0);
+                    if ratio < self.gr_env {
+                        // Snap down — capture the most attenuating sample.
+                        self.gr_env = ratio;
+                    }
+                }
+            }
         }
         sig
     }

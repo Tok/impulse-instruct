@@ -194,6 +194,15 @@ pub struct DspState {
     /// Shared atomic publish target for `voice_envs`.  Wrapped in
     /// `Arc` so the UI thread can read without locks.
     pub(crate) voice_meters: std::sync::Arc<crate::audio::voice_meters::VoiceLevels>,
+    /// Momentary gain-reduction envelope (linear gain ratio, 1.0 =
+    /// no reduction).  Audio thread updates inside `apply_fx_chain`
+    /// whenever a dynamics FX runs (Compressor / Limiter /
+    /// MultibandComp); decays toward 1.0 with a ~200 ms release so a
+    /// peak attenuation reads cleanly even at the UI's 60 Hz sample
+    /// rate.  Published once per audio callback via `gr_levels`.
+    pub(crate) gr_env: f32,
+    /// Shared atomic publish target for `gr_env`.
+    pub(crate) gr_levels: std::sync::Arc<crate::audio::gr_levels::GrLevels>,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -313,6 +322,7 @@ impl DspState {
         fx_plan: FxPlan,
         tts_consumer: rtrb::Consumer<f32>,
         voice_meters: std::sync::Arc<crate::audio::voice_meters::VoiceLevels>,
+        gr_levels: std::sync::Arc<crate::audio::gr_levels::GrLevels>,
     ) -> Self {
         let mut p = params;
         p.sample_rate = sample_rate;
@@ -371,6 +381,8 @@ impl DspState {
             wavefolder: WaveFolderFx::new(),
             voice_envs: [0.0; crate::audio::voice_meters::VOICE_METER_SLOTS],
             voice_meters,
+            gr_env: 1.0,
+            gr_levels,
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

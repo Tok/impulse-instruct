@@ -192,7 +192,9 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         MasterOutput | LfoModule | LlmAgent | LlmConsole | SpectrumAnalyzer | StereoMeter
         | ActivityTimeline | BarOscilloscope | StereoVectorscope | LfoScope | PitchTracker
         | ChordDisplay | Spectrogram | LoudnessMeter | PhaseWheel | EventStream
-        | PatternHeatmap | OnsetGrid | VoiceMeterStrip | CvSequencer | CvSeqScope => &[],
+        | PatternHeatmap | OnsetGrid | VoiceMeterStrip | GrHistory | CvSequencer | CvSeqScope => {
+            &[]
+        }
         // Slew — one Mod-In jack (CV input).  The compile pass in
         // params.rs walks `Source.CvOut → Slew.ModIn` cables and
         // resolves the slot's source_buf_idx; mod_inputs returns

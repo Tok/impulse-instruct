@@ -192,6 +192,10 @@ impl RackState {
                 // class FX.  Sort key 29 puts it next to FxTapeSat.
                 ModuleKind::FxWaveFolder => 29,
                 ModuleKind::VoiceMeterStrip => 33,
+                // GR history clusters with the LUFS / loudness viz
+                // (level / dynamics-domain meters) — sort 33 places it
+                // adjacent to the LoudnessMeter for stacked viewing.
+                ModuleKind::GrHistory => 33,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

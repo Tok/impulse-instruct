@@ -118,7 +118,8 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::EventStream
         | ModuleKind::PatternHeatmap
         | ModuleKind::OnsetGrid
-        | ModuleKind::VoiceMeterStrip => 20,
+        | ModuleKind::VoiceMeterStrip
+        | ModuleKind::GrHistory => 20,
         ModuleKind::LfoModule => 18,
         ModuleKind::CvSequencer => 18,
         ModuleKind::Slew => 18,

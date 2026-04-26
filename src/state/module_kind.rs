@@ -274,6 +274,13 @@ pub enum ModuleKind {
     /// per-voice envelope levels published once per audio callback
     /// from the engine; pure UI, no DSP touchpoints.
     VoiceMeterStrip,
+    /// Gain-reduction history scope — rolling waveform of the
+    /// momentary gain reduction across the dynamics FX
+    /// (FxCompressor / FxLimiter / FxMultibandComp).  Distinct from
+    /// `LoudnessMeter` (output level only) — this shows how hard
+    /// the chain is being compressed.  UI-only; samples the audio
+    /// thread's atomic GR snapshot once per repaint.
+    GrHistory,
     /// Onset / beat-grid overlay — rolling envelope of the master
     /// audio for the last bar with the 16 sequencer step-tick
     /// vertical lines drawn through it.  Glanceable groove drift
@@ -420,6 +427,7 @@ impl ModuleKind {
             Self::PatternHeatmap => "PATTERN MAP",
             Self::OnsetGrid => "ONSET GRID",
             Self::VoiceMeterStrip => "VOICE LEVELS",
+            Self::GrHistory => "GR HISTORY",
             Self::LfoModule => "LFO",
             Self::CvSequencer => "CV SEQ",
             Self::CvSeqScope => "CV SCOPE",
@@ -549,6 +557,10 @@ impl ModuleKind {
             // in a row; 2 rows tall so labels fit under each meter
             // without crowding.
             Self::VoiceMeterStrip => (6, 2),
+            // GR history — wide envelope strip showing the rolling
+            // gain-reduction trace.  Same envelope as the spectrum /
+            // bar oscilloscope so they line up when stacked.
+            Self::GrHistory => (4, 2),
             Self::LfoModule => (2, 2),
             // CV sequencer — 16 step bars need horizontal room.
             Self::CvSequencer => (5, 2),
@@ -725,6 +737,7 @@ impl ModuleKind {
             | Self::PatternHeatmap
             | Self::OnsetGrid
             | Self::VoiceMeterStrip
+            | Self::GrHistory
             | Self::LfoModule
             | Self::CvSequencer
             | Self::CvSeqScope

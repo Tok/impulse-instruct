@@ -4,6 +4,57 @@ A detailed log of what's built.
 
 ---
 
+### Gain-reduction history viz (`GrHistory`)
+
+Rolling waveform of the momentary gain reduction across the
+dynamics FX (`FxCompressor` / `FxLimiter` / `FxMultibandComp`).
+Distinct from `LoudnessMeter` (output level only) — this shows
+how hard the chain is being compressed.
+
+**Audio thread.**  New `audio::gr_levels` module with
+`Arc<GrLevels>` carrying a single `AtomicU32` storing the
+linear gain ratio (1.0 = no reduction; 0.5 ≈ −6 dB).  Inside
+`apply_fx_chain`, after each FX step that's a dynamics
+processor (Compressor / Limiter / MultibandComp), the
+`pre.abs() / post.abs()` ratio is captured and snap-down
+tracked into `gr_env` (most-attenuating wins).  Once per
+audio callback the envelope is decayed toward unity with a
+~200 ms release coefficient computed from block size, then
+published to the shared atomic.
+
+The post-FX-step ratio is the truthful "what actually
+happened to this signal" measure — picks up wet/dry mix,
+sidechain detector switching, etc., without modifying the
+individual dynamics processors.
+
+**UI thread.**  New `panels::gr_history` module reads the
+atomic at each repaint, appends to a 480-sample
+`VecDeque<f32>` ring (~8 sec at 60 fps), and paints a
+downward-falling trace with reference rails at -3 / -6 / -12 /
+-18 dB.  Trace brightness scales with attenuation (eye
+attracted to active GR).  Floor at -24 dB on the y-axis.
+Header readout shows the current GR in dB.
+
+**Wiring.**  `Arc<GrLevels>` constructed in `AudioEngine::new`
+alongside `voice_meters`, threaded through DspState's
+constructor and the UI's `AudioChannels` → `ImpulseApp.gr_levels`.
+Standard ModuleKind ritual: `GrHistory` ("GR HISTORY" label,
+4×2 grid matching the spectrum / scope viz envelope, sort-group
+33 next to LoudnessMeter so the dynamics-domain meters
+cluster).  Aliases grhistory / gr_history / gainreduction /
+gain_reduction / gr / grscope.  Singleton.
+
+**Tests.**  +5 in `audio::gr_levels` (atomic round-trip,
+default unity, dB conversion at unity / half / floor cases),
++5 state-side (label, alias parsing, FxMod zone, no audio
+output, singleton).  Suite **2259 → 2269**.
+
+Files: new `src/audio/gr_levels.rs`, new
+`src/ui/panels/gr_history.rs`, new
+`src/tests/gr_history_tests.rs`.
+
+---
+
 ### Voice meter strip viz (`VoiceMeterStrip`)
 
 Per-voice level meters for the rack viz pane — one mini-meter

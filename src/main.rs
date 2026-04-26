@@ -424,6 +424,7 @@ fn run() -> anyhow::Result<()> {
         tts_tx: audio_engine.tts_tx.clone(),
         sample_instrument_poly: Arc::clone(&audio_engine.sample_instrument_poly),
         voice_meters: Arc::clone(&audio_engine.voice_meters),
+        gr_levels: Arc::clone(&audio_engine.gr_levels),
     };
 
     log::info!("Launching UI window…");

@@ -917,5 +917,16 @@ impl DspState {
         for (i, &v) in self.voice_envs.iter().enumerate() {
             self.voice_meters.write(i, v);
         }
+        // Publish the momentary gain-reduction snapshot.  The GR
+        // envelope is captured per-sample inside `apply_fx_chain` as a
+        // snap-down (most-attenuating ratio); release here at a
+        // ~200 ms time constant so the UI can sample at 60 Hz and
+        // still catch peaks.  Decay coefficient computed once per
+        // block (using the block's frame count) is close enough to
+        // the per-sample exponential for the UI's purposes.
+        let block_frames = output.len().max(1) / channels.max(1);
+        let release_coef = (-(block_frames as f32) / (0.2 * sr)).exp();
+        self.gr_env = 1.0 + (self.gr_env - 1.0) * release_coef;
+        self.gr_levels.write(self.gr_env);
     }
 }

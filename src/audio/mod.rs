@@ -5,12 +5,14 @@
 pub mod analysis;
 pub mod audio_load;
 pub mod dsp;
+pub mod gr_levels;
 pub mod onset;
 pub mod sf2_loader;
 pub mod sfz_loader;
 pub mod spectrum;
 pub mod voice_meters;
 
+use gr_levels::GrLevels;
 use voice_meters::VoiceLevels;
 
 pub use audio_load::load_audio_to_engine;
@@ -143,6 +145,12 @@ pub struct AudioEngine {
     /// per-voice bus signals + publishes once per audio callback; UI
     /// thread reads when painting the strip.
     pub voice_meters: Arc<voice_meters::VoiceLevels>,
+    /// Momentary gain-reduction snapshot for the `GrHistory` viz —
+    /// most-attenuating linear gain ratio across active dynamics FX
+    /// (FxCompressor / FxLimiter / FxMultibandComp), updated by the
+    /// audio thread's `apply_fx_chain` and published once per
+    /// callback.  UI maintains its own scrolling ring buffer.
+    pub gr_levels: Arc<gr_levels::GrLevels>,
     /// Negotiated sample rate (Hz).
     pub sample_rate: u32,
     /// Audio callback block size (frames).
@@ -256,6 +264,11 @@ impl AudioEngine {
         let voice_meters = VoiceLevels::new();
         let voice_meters_audio = Arc::clone(&voice_meters);
 
+        // Momentary gain-reduction snapshot for the GrHistory viz —
+        // updated inside apply_fx_chain whenever a dynamics FX runs.
+        let gr_levels = GrLevels::new();
+        let gr_levels_audio = Arc::clone(&gr_levels);
+
         // Audio-thread-local DSP state — DSP always runs at SAMPLE_RATE, not
         // the device rate.  The callback resamples to the device rate at the
         // I/O boundary.
@@ -269,6 +282,7 @@ impl AudioEngine {
             initial_fx_plan,
             tts_consumer,
             voice_meters_audio,
+            gr_levels_audio,
         );
         let mut clock = ClockState::default();
         let mut monitor_vol = 1.0_f32;
@@ -679,6 +693,7 @@ impl AudioEngine {
             stereo_rx,
             sample_instrument_poly,
             voice_meters,
+            gr_levels,
             sample_rate: config.sample_rate.0,
             block_size: 0, // determined at runtime in callback
             _stream: stream,

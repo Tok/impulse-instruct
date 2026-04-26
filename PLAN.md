@@ -11,13 +11,6 @@ ship, not held here as history.
 Concrete additions to fill genuine gaps in the current inventory.
 Pick from the top down; each row is one focused commit.
 
-### Visualizations — new modules
-
-- [ ] **Gain reduction history** (`GrHistory`) — rolling 4-bar
-  view of the gain reduction signal from the dynamics modules
-  (FxCompressor, FxLimiter, FxMultibandComp).  Currently those
-  modules expose no visual feedback.
-
 ### Modulation — new utilities
 
 - [ ] **Function generator** (`FunctionGen`) — re-triggerable

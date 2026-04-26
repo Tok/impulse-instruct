@@ -267,6 +267,15 @@ pub struct ImpulseApp {
     /// viz module.  Updated once per audio callback by the engine; the
     /// panel reads atomically when painting.
     pub(crate) voice_meters: Arc<crate::audio::voice_meters::VoiceLevels>,
+    /// Momentary gain-reduction snapshot for the `GrHistory` viz.
+    /// Audio thread publishes once per callback; the panel reads at
+    /// each repaint and appends to its own scrolling ring buffer.
+    pub(crate) gr_levels: Arc<crate::audio::gr_levels::GrLevels>,
+    /// Scrolling history buffer for the `GrHistory` viz — appended
+    /// every UI repaint by sampling `gr_levels`.  Stores linear gain
+    /// ratios; UI converts to dB at paint time.  Sized for ~8 sec at
+    /// 60 fps.
+    pub(crate) gr_history: std::collections::VecDeque<f32>,
     pub(crate) amen_ui: panels::amen_viz::AmenUiState,
     /// Most recently loaded IR path for the convolution reverb.  The
     /// main update tick watches `fx.conv_reverb_ir_path` and reloads when
@@ -464,6 +473,7 @@ pub struct AudioChannels {
     pub tts_tx: crate::audio::TtsSink,
     pub sample_instrument_poly: Arc<std::sync::atomic::AtomicU8>,
     pub voice_meters: Arc<crate::audio::voice_meters::VoiceLevels>,
+    pub gr_levels: Arc<crate::audio::gr_levels::GrLevels>,
 }
 
 impl ImpulseApp {
@@ -551,6 +561,8 @@ impl ImpulseApp {
             dsp_load_buf: Vec::with_capacity(64),
             sample_instrument_poly: audio.sample_instrument_poly,
             voice_meters: audio.voice_meters,
+            gr_levels: audio.gr_levels,
+            gr_history: std::collections::VecDeque::with_capacity(512),
             amen_ui: Default::default(),
             last_conv_reverb_ir_path: String::new(),
             last_wavetable_path: String::new(),

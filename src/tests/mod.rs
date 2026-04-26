@@ -50,6 +50,7 @@ mod fx_trance_gate_tests;
 mod fx_tremolo_tests;
 mod fx_vibrato_tests;
 mod fx_wavefolder_tests;
+mod gr_history_tests;
 mod helpers_tests;
 mod heuristic_plan_edge_tests;
 mod jam_tools_tests;
