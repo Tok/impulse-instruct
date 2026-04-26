@@ -27,17 +27,16 @@ The 9 main stages are shipped (see features.md).  Stage 7.5 also
 shipped — drag-to-edit loop markers + SFZ zone selection +
 per-zone inspector all wired (see features.md).  Remaining slice:
 
-- [ ] **Multi-mic / multi-position SFZ blends** — V1 SFZ honours
-  one sample per region; multi-mic packs (close / room / ambient)
-  need a blend-position knob + opcode parsing.  Medium scope.
 - [ ] **`.sf2` SoundFont parsing** — entire format
   implementation; large.
 - [ ] **Disk streaming for huge banks** — architectural change;
   V1 fits everything in memory which caps usable bank size.
 
-(`.flac` / `.aiff` decoding + sample recording from the audio
-input shipped — see features.md.  Sample recording captures the
-master-output tap, mirroring the AmenSampler's REC→CHOP idiom.)
+(`.flac` / `.aiff` decoding, sample recording from the audio
+input, and multi-mic / multi-position SFZ blends shipped — see
+features.md.  Multi-mic uses the standard SFZ CC#1 crossfade
+convention; a future V2 could route the blend knob to other CC
+numbers for packs that don't pin to CC#1.)
 
 ## FX — still open
 

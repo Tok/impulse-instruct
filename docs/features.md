@@ -4,6 +4,47 @@ A detailed log of what's built.
 
 ---
 
+### SampleInstrument — multi-mic / multi-position SFZ blends
+
+V2 SampleInstrument follow-up.  V1 SFZ honoured one sample per
+region; multi-mic packs (close / room / ambient) need a way to
+crossfade across mic positions.  Implements the canonical SFZ
+**CC#1 (mod wheel) crossfade** convention so off-the-shelf
+multi-mic packs work without modification.
+
+- New SfzRegion fields `xfin_lo_cc1`, `xfin_hi_cc1`,
+  `xfout_lo_cc1`, `xfout_hi_cc1` parse the standard SFZ opcodes
+  `xfin_locc1`, `xfin_hicc1`, `xfout_locc1`, `xfout_hicc1`.
+- Per-region `cc1_crossfade_gain(cc)` helper combines the xfin
+  ramp (0 → 1 across `xfin_lo..xfin_hi`) with the xfout ramp
+  (1 → 0 across `xfout_lo..xfout_hi`); the product is the
+  region's gain at this CC.  Defaults represent "no crossfade"
+  → gain = 1 for any CC, so SFZs without multi-mic markup are
+  bit-identical to V1.
+- New `SampleInstrumentState.mic_blend` (0..1) drives a
+  synthetic CC#1 value at trigger time — the user's blend knob
+  picks the active mic position across the pack.
+- Trigger path skips silent regions early (cf_gain < 1e-4) to
+  save slot allocations when 6/8 mic positions in a stack are
+  inactive at the current blend value.
+- New MIC BLEND knob on the SampleInstrument panel.  LLM schema
+  + `apply_llm_update` honour the new field; lockable.
+
+5 new unit tests cover defaults staying at unity, xfin / xfout
+ramps in isolation, the combined window shape, and a 3-region
+multi-mic SFZ round-trip through the parser.
+
+### Refactor: split `arrange_grid` into sibling `rack_arrange.rs`
+
+`rack.rs` sat at 992/1000 lines — one bad ModuleKind add away
+from breaking the cap.  Lifted `arrange_grid` (~320 lines, the
+canonical sort + 2D bin-pack) into a new sibling
+`rack_arrange.rs`, mirroring the existing `rack_wiring.rs`
+impl-symmetry idiom.  `dyn_height_override` becomes
+`pub(super)` so the sibling can read the StepSequencer dynamic-
+height override during the bin-pack.  Behaviour unchanged; pure
+refactor.  Result: rack.rs now at 672 lines (~330 headroom).
+
 ### SampleInstrument — REC button (master-output capture)
 
 V2 SampleInstrument follow-up.  Mirrors the AmenSampler's REC→CHOP
