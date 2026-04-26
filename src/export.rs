@@ -21,7 +21,16 @@ fn render_bars(state: &AppState, bars: u32) -> Vec<f32> {
 
     // Dummy TTS consumer — export never mixes live TTS audio.
     let (_tts_tx, tts_rx) = rtrb::RingBuffer::<f32>::new(1);
-    let mut dsp = DspState::new(SAMPLE_RATE, params, compile_fx_plan(&state.rack), tts_rx);
+    // Disposable voice-meter sink — export doesn't paint the meter strip;
+    // the audio thread writes here and nobody reads.
+    let voice_meters = crate::audio::voice_meters::VoiceLevels::new();
+    let mut dsp = DspState::new(
+        SAMPLE_RATE,
+        params,
+        compile_fx_plan(&state.rack),
+        tts_rx,
+        voice_meters,
+    );
     let mut clock = ClockState::default();
 
     // Force sequencer running for export regardless of UI play state

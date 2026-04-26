@@ -186,6 +186,14 @@ pub struct DspState {
     plate: PlateFx,
     trance_gate: TranceGateFx,
     wavefolder: WaveFolderFx,
+    /// Per-voice peak-decay envelope state — one slot per
+    /// `VoiceMeterSlot`.  Updated every sample inside `process_block`
+    /// from the per-voice bus signals; published once per audio
+    /// callback to `voice_meters` for the UI to read.
+    voice_envs: [f32; crate::audio::voice_meters::VOICE_METER_SLOTS],
+    /// Shared atomic publish target for `voice_envs`.  Wrapped in
+    /// `Arc` so the UI thread can read without locks.
+    pub(crate) voice_meters: std::sync::Arc<crate::audio::voice_meters::VoiceLevels>,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -304,6 +312,7 @@ impl DspState {
         params: AudioParams,
         fx_plan: FxPlan,
         tts_consumer: rtrb::Consumer<f32>,
+        voice_meters: std::sync::Arc<crate::audio::voice_meters::VoiceLevels>,
     ) -> Self {
         let mut p = params;
         p.sample_rate = sample_rate;
@@ -360,6 +369,8 @@ impl DspState {
             plate: PlateFx::new(sample_rate),
             trance_gate: TranceGateFx::new(),
             wavefolder: WaveFolderFx::new(),
+            voice_envs: [0.0; crate::audio::voice_meters::VOICE_METER_SLOTS],
+            voice_meters,
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

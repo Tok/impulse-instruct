@@ -4,6 +4,64 @@ A detailed log of what's built.
 
 ---
 
+### Voice meter strip viz (`VoiceMeterStrip`)
+
+Per-voice level meters for the rack viz pane — one mini-meter
+per active voice.  Distinct from `StereoMeter` and
+`LoudnessMeter` (which show the master sum only); this strip
+exposes "which voice is contributing what" at a glance.
+
+**Audio thread.**  New `audio::voice_meters` module:
+`Arc<VoiceLevels>` carrying 20 `AtomicU32` slots indexed by
+`voice_meter_idx(kind)`.  `DspState` now owns a per-voice
+peak-decay envelope (`voice_envs: [f32; 20]`) updated every
+sample inside `process_block` from each voice bus signal
+(bus_bass / bus_808 / bus_909 / bus_hoover / bus_pluck /
+bus_wavetable / bus_sample / bus_an1x / bus_amen / bus_noise /
+theremin_out / pendulum_out / fm_ops_out / additive_out /
+modal_out / chiptune_out / vocal_out / bus_granular / gk /
+tts_raw).  Decay constant = 0.99988 (~83 ms half-life @ 48 kHz)
+gives a Hold-Until-Reset feel that reads as responsive without
+chasing per-sample noise.  Once per audio callback the
+envelopes are published into the shared atomic array as
+`f32::to_bits` (Relaxed; lock-free; cheaper than an rtrb
+stream the UI would have to drain).
+
+**UI thread.**  New `panels::voice_meter_strip` module reads
+the atomic slots, filters to voice kinds currently in the
+rack, and paints a vertical level bar + tiny label per
+voice.  Hybrid linear-then-log mapping keeps overshoots
+visible without saturating the bar; unity tick at 0 dBFS-ish
+for visual reference.  Empty rack → "no voices in rack"
+placeholder text.
+
+**Wiring.**  `Arc<VoiceLevels>` constructed in
+`AudioEngine::new`, cloned to both the audio-thread DSP path
+and the UI thread (`AudioChannels.voice_meters` →
+`ImpulseApp.voice_meters`).  Mirrors the existing
+`sample_instrument_poly` pattern (atomic shared between
+audio + UI for "latest value only" data).  Standard ModuleKind
+ritual: `VoiceMeterStrip` ("VOICE LEVELS" label, **6×2 grid**
+to host ~10 meter cells in a row + label row underneath,
+sort-group 33 next to `StereoMeter`).  Aliases voicemeter /
+voicemeterstrip / voicelevels / levels / etc.  Singleton
+(multiple strips would be redundant — they'd all read the same
+atomic array).
+
+**Tests.**  +5 in `audio::voice_meters` (atomic round-trip
+preserves f32 bits, out-of-range read returns 0, out-of-range
+write silently dropped, `voice_meter_idx` round-trips for
+every voice kind into a unique slot with non-empty label,
+`voice_meter_idx` returns None for non-voice kinds), +5
+state-side (label, alias parsing, lives in FxMod zone, no
+audio output, singleton).  Suite **2249 → 2259**.
+
+Files: new `src/audio/voice_meters.rs`, new
+`src/ui/panels/voice_meter_strip.rs`, new
+`src/tests/voice_meter_strip_tests.rs`.
+
+---
+
 ### Wavefolder FX (`FxWaveFolder`)
 
 West Coast (Buchla / Serge / Make Noise) fold distortion.

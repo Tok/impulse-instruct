@@ -195,6 +195,8 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         }
         "fxwavefolder" | "wavefolder" | "wave_folder" | "fold" | "westcoast" | "buchla"
         | "serge" => Some(FxWaveFolder),
+        "voicemeterstrip" | "voicemeter" | "voice_meter" | "voicemeters" | "voicelevels"
+        | "voice_levels" | "levels" => Some(VoiceMeterStrip),
         "lfomodule" | "lfo" => Some(LfoModule),
         "cvsequencer" | "cvseq" | "cv_seq" | "stepcv" | "cv" => Some(CvSequencer),
         "slew" | "glide" | "portacv" | "lag" => Some(Slew),
@@ -352,6 +354,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
                 | "buchla"
                 | "serge"
                 | "fx"
+        ),
+        ModuleKind::VoiceMeterStrip => matches!(
+            n.as_str(),
+            "voicemeterstrip" | "voicemeter" | "voice_meter" | "voice meter" | "levels"
         ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),

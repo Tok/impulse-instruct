@@ -125,6 +125,7 @@ mod tts_tests;
 mod tuning_tests;
 mod ui_prefs_tests;
 mod vocal_tests;
+mod voice_meter_strip_tests;
 mod vram_helpers_tests;
 mod vram_tests;
 mod wavetable_tests;

@@ -58,6 +58,7 @@ pub mod timeline;
 pub mod tts;
 pub mod viz;
 pub mod vocal;
+pub mod voice_meter_strip;
 pub mod wavetable;
 
 pub use additive::draw_additive;
@@ -99,4 +100,5 @@ pub use viz::{
     draw_pitch_tracker, draw_spectrogram, draw_vectorscope,
 };
 pub use vocal::draw_vocal;
+pub use voice_meter_strip::draw_voice_meter_strip;
 pub use wavetable::draw_wavetable;

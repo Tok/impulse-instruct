@@ -9,6 +9,9 @@ pub mod onset;
 pub mod sf2_loader;
 pub mod sfz_loader;
 pub mod spectrum;
+pub mod voice_meters;
+
+use voice_meters::VoiceLevels;
 
 pub use audio_load::load_audio_to_engine;
 
@@ -134,6 +137,12 @@ pub struct AudioEngine {
     /// `Arc<AtomicU8>` instead of an rtrb byte stream because the UI
     /// only ever cares about the latest value, not the history.
     pub sample_instrument_poly: Arc<AtomicU8>,
+    /// Per-voice peak-decay envelope levels for the `VoiceMeterStrip`
+    /// viz module.  20 fixed slots indexed by `voice_meters::voice_meter_idx`.
+    /// Audio thread updates the envelopes inside `process_block` from the
+    /// per-voice bus signals + publishes once per audio callback; UI
+    /// thread reads when painting the strip.
+    pub voice_meters: Arc<voice_meters::VoiceLevels>,
     /// Negotiated sample rate (Hz).
     pub sample_rate: u32,
     /// Audio callback block size (frames).
@@ -240,6 +249,13 @@ impl AudioEngine {
         let sample_instrument_poly = Arc::new(AtomicU8::new(0));
         let sample_instrument_poly_audio = Arc::clone(&sample_instrument_poly);
 
+        // Per-voice meter levels — shared atomic array for the
+        // VoiceMeterStrip viz module.  Audio thread updates inside
+        // process_block + publishes once per callback; UI thread reads
+        // when painting.
+        let voice_meters = VoiceLevels::new();
+        let voice_meters_audio = Arc::clone(&voice_meters);
+
         // Audio-thread-local DSP state — DSP always runs at SAMPLE_RATE, not
         // the device rate.  The callback resamples to the device rate at the
         // I/O boundary.
@@ -247,7 +263,13 @@ impl AudioEngine {
             let s = state.read();
             (AudioParams::from_app_state(&s), compile_fx_plan(&s.rack))
         };
-        let mut dsp = DspState::new(SAMPLE_RATE, initial_params, initial_fx_plan, tts_consumer);
+        let mut dsp = DspState::new(
+            SAMPLE_RATE,
+            initial_params,
+            initial_fx_plan,
+            tts_consumer,
+            voice_meters_audio,
+        );
         let mut clock = ClockState::default();
         let mut monitor_vol = 1.0_f32;
         // MIDI clock out: accumulator tracks fractional samples until next 0xF8 tick
@@ -656,6 +678,7 @@ impl AudioEngine {
             dsp_load_rx,
             stereo_rx,
             sample_instrument_poly,
+            voice_meters,
             sample_rate: config.sample_rate.0,
             block_size: 0, // determined at runtime in callback
             _stream: stream,

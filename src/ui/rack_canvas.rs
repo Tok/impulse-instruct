@@ -751,6 +751,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             crate::ui::panels::draw_pattern_heatmap(app, ui);
                         } else if kind == ModuleKind::OnsetGrid {
                             crate::ui::panels::draw_onset_grid(app, ui);
+                        } else if kind == ModuleKind::VoiceMeterStrip {
+                            crate::ui::panels::draw_voice_meter_strip(app, ui);
                         } else {
                             draw_fx_content(app, ui, kind, id);
                         }

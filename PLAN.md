@@ -13,10 +13,6 @@ Pick from the top down; each row is one focused commit.
 
 ### Visualizations — new modules
 
-- [ ] **Voice meter strip** (`VoiceMeterStrip`) — one mini-meter
-  per active voice in the rack.  Currently no way to see "which
-  voice is contributing what" at a glance; LUFS + stereo meter
-  show the sum only.
 - [ ] **Gain reduction history** (`GrHistory`) — rolling 4-bar
   view of the gain reduction signal from the dynamics modules
   (FxCompressor, FxLimiter, FxMultibandComp).  Currently those

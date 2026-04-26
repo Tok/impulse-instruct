@@ -609,6 +609,39 @@ impl DspState {
                 bus_granular,
             );
 
+            // Per-voice peak-decay envelopes — fed by the resolved
+            // bus signals + standalone voice outputs.  Decay constant
+            // chosen so a single peak takes ~250 ms to fall to ~10 %
+            // (Hold-Until-Reset feel; meters look responsive without
+            // chasing per-sample noise).  Slot indices must mirror
+            // `voice_meters::voice_meter_idx`.
+            let env_decay = 0.99988_f32; // ~83 ms half-life @ 48 kHz
+            let envs = &mut self.voice_envs;
+            macro_rules! env_update {
+                ($idx:expr, $sig:expr) => {
+                    envs[$idx] = (envs[$idx] * env_decay).max($sig.abs());
+                };
+            }
+            env_update!(0, bus_bass);
+            env_update!(1, bus_808);
+            env_update!(2, bus_909);
+            env_update!(3, bus_hoover);
+            env_update!(4, bus_pluck);
+            env_update!(5, bus_wavetable);
+            env_update!(6, bus_sample);
+            env_update!(7, bus_an1x);
+            env_update!(8, bus_amen);
+            env_update!(9, bus_noise);
+            env_update!(10, theremin_out);
+            env_update!(11, pendulum_out);
+            env_update!(12, fm_ops_out);
+            env_update!(13, additive_out);
+            env_update!(14, modal_out);
+            env_update!(15, chiptune_out);
+            env_update!(16, vocal_out);
+            env_update!(17, bus_granular);
+            env_update!(18, gk);
+
             // Route voices through FX chains and sum to output.
             // Fast path: no voice routes → apply global chain to full dry mix (unchanged behaviour).
             // Per-voice path: each bus through its own chain, then sum, then global chain.
@@ -705,6 +738,11 @@ impl DspState {
             // the `NeuTtsVolume` LFO target.  Scaling AFTER FX keeps duck
             // activity tied to the raw sample stream regardless of gain.
             let tts_raw = self.tts_consumer.pop().unwrap_or(0.0);
+            // NeuTts meter slot — same envelope shape as the bus_*
+            // voices.  Fed by the raw sample stream (pre-FX) so the
+            // meter reflects what the TTS is producing rather than
+            // what survives a downstream chain.
+            self.voice_envs[19] = (self.voice_envs[19] * 0.99988_f32).max(tts_raw.abs());
             let tts_fx = if tts_raw != 0.0 && sends_tts.count > 0 {
                 self.route_voice_sends(
                     tts_raw,
@@ -871,6 +909,13 @@ impl DspState {
                     *s = out;
                 }
             }
+        }
+
+        // Publish per-voice peak envelopes to the shared atomic array
+        // for the UI's `VoiceMeterStrip` to read.  Once per block keeps
+        // the audio-thread cost to ~20 relaxed atomic stores.
+        for (i, &v) in self.voice_envs.iter().enumerate() {
+            self.voice_meters.write(i, v);
         }
     }
 }

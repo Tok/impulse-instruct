@@ -191,6 +191,7 @@ impl RackState {
                 // waveshaper / vinyl colour family — all distortion-
                 // class FX.  Sort key 29 puts it next to FxTapeSat.
                 ModuleKind::FxWaveFolder => 29,
+                ModuleKind::VoiceMeterStrip => 33,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

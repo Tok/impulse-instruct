@@ -263,6 +263,10 @@ pub struct ImpulseApp {
     /// Updated once per audio callback by the engine; the panel reads
     /// it on paint to drive the dot meter.
     pub(crate) sample_instrument_poly: Arc<std::sync::atomic::AtomicU8>,
+    /// Per-voice peak-decay envelope levels for the `VoiceMeterStrip`
+    /// viz module.  Updated once per audio callback by the engine; the
+    /// panel reads atomically when painting.
+    pub(crate) voice_meters: Arc<crate::audio::voice_meters::VoiceLevels>,
     pub(crate) amen_ui: panels::amen_viz::AmenUiState,
     /// Most recently loaded IR path for the convolution reverb.  The
     /// main update tick watches `fx.conv_reverb_ir_path` and reloads when
@@ -459,6 +463,7 @@ pub struct AudioChannels {
     pub granular_capture_rx: rtrb::Consumer<f32>,
     pub tts_tx: crate::audio::TtsSink,
     pub sample_instrument_poly: Arc<std::sync::atomic::AtomicU8>,
+    pub voice_meters: Arc<crate::audio::voice_meters::VoiceLevels>,
 }
 
 impl ImpulseApp {
@@ -545,6 +550,7 @@ impl ImpulseApp {
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
             sample_instrument_poly: audio.sample_instrument_poly,
+            voice_meters: audio.voice_meters,
             amen_ui: Default::default(),
             last_conv_reverb_ir_path: String::new(),
             last_wavetable_path: String::new(),

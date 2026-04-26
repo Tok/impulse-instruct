@@ -267,6 +267,13 @@ pub enum ModuleKind {
     /// voices in the current pattern; complementary to the focused
     /// per-voice sequencer panels.  Pure UI; no DSP, no audio I/O.
     PatternHeatmap,
+    /// Per-voice level meter strip — one mini-meter per active voice
+    /// in the rack.  Distinct from `StereoMeter` and `LoudnessMeter`
+    /// which show the master sum only; this strip exposes "which
+    /// voice is contributing what" at a glance.  Reads atomic
+    /// per-voice envelope levels published once per audio callback
+    /// from the engine; pure UI, no DSP touchpoints.
+    VoiceMeterStrip,
     /// Onset / beat-grid overlay — rolling envelope of the master
     /// audio for the last bar with the 16 sequencer step-tick
     /// vertical lines drawn through it.  Glanceable groove drift
@@ -412,6 +419,7 @@ impl ModuleKind {
             Self::EventStream => "EVENT STREAM",
             Self::PatternHeatmap => "PATTERN MAP",
             Self::OnsetGrid => "ONSET GRID",
+            Self::VoiceMeterStrip => "VOICE LEVELS",
             Self::LfoModule => "LFO",
             Self::CvSequencer => "CV SEQ",
             Self::CvSeqScope => "CV SCOPE",
@@ -537,6 +545,10 @@ impl ModuleKind {
             Self::PatternHeatmap => (5, 3),
             // Onset grid — wide envelope strip; one row tall is enough.
             Self::OnsetGrid => (5, 2),
+            // Voice meter strip — wide enough to fit ~10 mini-meters
+            // in a row; 2 rows tall so labels fit under each meter
+            // without crowding.
+            Self::VoiceMeterStrip => (6, 2),
             Self::LfoModule => (2, 2),
             // CV sequencer — 16 step bars need horizontal room.
             Self::CvSequencer => (5, 2),
@@ -712,6 +724,7 @@ impl ModuleKind {
             | Self::EventStream
             | Self::PatternHeatmap
             | Self::OnsetGrid
+            | Self::VoiceMeterStrip
             | Self::LfoModule
             | Self::CvSequencer
             | Self::CvSeqScope
