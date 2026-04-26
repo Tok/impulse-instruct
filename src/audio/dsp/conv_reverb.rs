@@ -26,6 +26,8 @@ use std::sync::Arc;
 use rustfft::num_complex::Complex;
 use rustfft::{Fft, FftPlanner};
 
+use super::pitch_shift::PitchShift;
+
 /// Predelay ring buffer length — covers the full 0..200 ms knob range at
 /// the 48 kHz engine and any reasonable 44.1 kHz setting with headroom.
 pub const CONV_REVERB_PREDELAY_LEN: usize = 16384;
@@ -94,6 +96,17 @@ pub struct ConvReverb {
     out_l: Vec<f32>,
     out_r: Vec<f32>,
     out_pos: usize,
+
+    // ── Shimmer ─────────────────────────────────────────────────────────
+    /// Pitch-shift instance dedicated to the shimmer feedback path —
+    /// fixed at +12 semitones (one octave up).  The wet output is fed
+    /// through this and folded back into the convolution input on the
+    /// next sample, producing the classic ambient-shimmer ladder.
+    shimmer_shift: PitchShift,
+    /// Last produced wet (pre-tone-shaping) — feeds the shimmer
+    /// pitch-shift on the next call.  One-sample delay so the
+    /// feedback doesn't form an immediate algebraic loop.
+    last_wet_for_shimmer: f32,
 }
 
 impl ConvReverb {
@@ -126,6 +139,8 @@ impl ConvReverb {
             out_l: vec![0.0; CONV_PART],
             out_r: vec![0.0; CONV_PART],
             out_pos: CONV_PART,
+            shimmer_shift: PitchShift::new(),
+            last_wet_for_shimmer: 0.0,
         }
     }
 
@@ -243,12 +258,14 @@ impl ConvReverb {
         lowcut: f32,
         size: f32,
         width: f32,
+        shimmer: f32,
         sr: f32,
     ) -> f32 {
         let pd_len = self.predelay_buf.len();
 
         if mix < 0.001 {
             self.side = 0.0;
+            self.last_wet_for_shimmer = 0.0;
             // Keep the delay line advancing so the first non-zero mix
             // doesn't read stale audio from before the knob was opened.
             self.predelay_buf[self.predelay_head] = sig;
@@ -268,15 +285,41 @@ impl ConvReverb {
         let delayed = self.predelay_buf[read_idx];
         self.predelay_head = (self.predelay_head + 1) % pd_len;
 
+        // Shimmer: pitch-shift the previous wet sample +12 ST and
+        // mix it into the convolution input.  Internal mix on the
+        // pitch shifter stays at 1.0 (fully wet) so we get the pure
+        // shifted signal; the depth knob applies after.  The +12
+        // semitone offset is hard-wired — V1 of the shimmer flag is
+        // a single up-octave ladder, no chord stacking.
+        //
+        // One-sample delay (via `last_wet_for_shimmer`) breaks the
+        // algebraic loop — without it, the wet would depend on
+        // itself within the same `process` call.
+        let shimmer = shimmer.clamp(0.0, 1.0);
+        let shimmer_in = if shimmer > 0.001 {
+            let pitched =
+                self.shimmer_shift
+                    .process(self.last_wet_for_shimmer, 12.0, 0.0, 1.0, 0.0);
+            delayed + pitched * shimmer
+        } else {
+            // Keep the pitch-shifter ring buffer current at zero
+            // depth so the first non-zero shimmer doesn't pick up
+            // stale audio from before the knob was opened.
+            let _ = self
+                .shimmer_shift
+                .process(self.last_wet_for_shimmer, 12.0, 0.0, 0.0, 0.0);
+            delayed
+        };
+
         // Get the convolved (or filter-only fallback) wet pair.
         let (wet_l, wet_r) = if self.ir_l.is_empty() {
             // No IR loaded → Phase 1 stub.  Still honours damp/lowcut
             // on the wet path so the module always responds to the
             // full knob set regardless of IR state.
-            let w = delayed;
+            let w = shimmer_in;
             (w, w)
         } else {
-            self.feed_conv(delayed, size);
+            self.feed_conv(shimmer_in, size);
             // First `CONV_PART` calls after load: no full block yet,
             // so the out queue is "empty" (out_pos == CONV_PART).
             // Emit silence on the wet bus; the dry pass carries on via
@@ -327,6 +370,12 @@ impl ConvReverb {
         let width = width.clamp(0.0, 1.0);
         let mid = (wet_l + wet_r) * 0.5;
         self.side = (wet_l - wet_r) * 0.5 * width;
+
+        // Stash the wet for next call's shimmer feedback.  We grab
+        // the post-tone mid so the shimmer ladder inherits the
+        // damp / lowcut shaping — keeps the up-octave fold from
+        // building harshness in bands the user has already cut.
+        self.last_wet_for_shimmer = mid;
 
         let mix = mix.clamp(0.0, 1.0);
         sig * (1.0 - mix) + mid * mix

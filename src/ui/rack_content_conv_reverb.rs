@@ -31,7 +31,7 @@ pub(super) fn draw_conv_reverb(
     let user_owned = |path: &str| matches!(pm(path), ParamMode::UserOwned);
 
     let mut changed = false;
-    let (mut mix, mut size, mut pre, mut damp, mut lc, mut wd, mut rev, ir_path) = {
+    let (mut mix, mut size, mut pre, mut damp, mut lc, mut wd, mut shim, mut rev, ir_path) = {
         let s = app.state.read();
         (
             s.fx.conv_reverb_mix,
@@ -40,6 +40,7 @@ pub(super) fn draw_conv_reverb(
             s.fx.conv_reverb_damp,
             s.fx.conv_reverb_lowcut,
             s.fx.conv_reverb_width,
+            s.fx.conv_reverb_shimmer,
             s.fx.conv_reverb_reverse,
             s.fx.conv_reverb_ir_path.clone(),
         )
@@ -77,6 +78,13 @@ pub(super) fn draw_conv_reverb(
                 changed = true;
             }
             if widgets::param_control(ui, "WIDTH", &mut wd, pm("fx.conv_reverb_width"), ctrl).0 {
+                changed = true;
+            }
+        });
+        widgets::centered_row(ui, |ui| {
+            if widgets::param_control(ui, "SHIMMER", &mut shim, pm("fx.conv_reverb_shimmer"), ctrl)
+                .0
+            {
                 changed = true;
             }
         });
@@ -191,6 +199,7 @@ pub(super) fn draw_conv_reverb(
         s.fx.conv_reverb_damp = damp;
         s.fx.conv_reverb_lowcut = lc;
         s.fx.conv_reverb_width = wd;
+        s.fx.conv_reverb_shimmer = shim;
         s.fx.conv_reverb_reverse = rev;
     }
     changed || rev_changed
