@@ -80,12 +80,16 @@ use fx_vinyl::VinylFx;
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 pub use lfo_target_opcode::lfo_target_to_u8;
-pub use mod_compile::{compile_mod_routes, compile_quantizer_params, compile_slew_params};
+pub use mod_compile::{
+    compile_comparator_params, compile_math_params, compile_mod_routes, compile_quantizer_params,
+    compile_sample_hold_params, compile_slew_params,
+};
 use ms_master::MsMaster;
 use param_eq::ParamEq;
 pub use params::{
-    AudioParams, MAX_MOD_ROUTES, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE, MOD_BUF_QUANTIZER_BASE,
-    MOD_BUF_SIZE, MOD_BUF_SLEW_BASE, MOD_UTIL_SLOTS,
+    AudioParams, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE,
+    MOD_BUF_MATH_BASE, MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE, MOD_BUF_SIZE,
+    MOD_BUF_SLEW_BASE, MOD_UTIL_SLOTS,
 };
 use pendulum::PendulumVoice;
 use pitch_shift::PitchShift;
@@ -203,6 +207,11 @@ pub struct DspState {
     /// smoothed target across blocks so the rise / fall envelope
     /// is continuous rather than restarting at each callback.
     slew_state: [f32; crate::state::SLEW_SLOTS],
+    /// Cached Sample-and-hold latch per slot.
+    sample_hold_state: [f32; crate::state::SAMPLE_HOLD_SLOTS],
+    /// Last sequencer step seen by `process_block`.  Used by S&H
+    /// to detect step transitions (the "clock edge").
+    prev_seq_step: u32,
     lfo_noise: NoiseGen,
     free_eg_phase: f32, // 0..1 through the 8-step EG period
     free_eg_done: bool, // true after one-shot completes
@@ -364,6 +373,8 @@ impl DspState {
             lfo_phases: [0.0; 4],
             lfo_sh_held: [0.0; 4],
             slew_state: [0.0; crate::state::SLEW_SLOTS],
+            sample_hold_state: [0.0; crate::state::SAMPLE_HOLD_SLOTS],
+            prev_seq_step: u32::MAX,
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
             free_eg_phase: 0.0,
             free_eg_done: false,

@@ -9,7 +9,10 @@
 use crate::state::{AppState, BPM_MAX, BPM_MIN, LfoWaveform, ModuleKind};
 
 use super::lfo_target_opcode::lfo_target_to_u8;
-use super::mod_compile::{compile_mod_routes, compile_quantizer_params, compile_slew_params};
+use super::mod_compile::{
+    compile_comparator_params, compile_math_params, compile_mod_routes, compile_quantizer_params,
+    compile_sample_hold_params, compile_slew_params,
+};
 use super::params::{AudioParams, BassVoiceParams, LfoParamsCopy};
 
 impl AudioParams {
@@ -304,6 +307,9 @@ impl AudioParams {
             },
             slew: compile_slew_params(s),
             quantizer: compile_quantizer_params(s),
+            comparator: compile_comparator_params(s),
+            sample_hold: compile_sample_hold_params(s),
+            math: compile_math_params(s),
             mod_routes,
             mod_route_count,
             // cv_buf is filled per block by `process_block` from

@@ -105,20 +105,21 @@ deferred (re-open if it grows legs).
 
 ## Visualizations — wishlist
 
-- [ ] **CV sequence visualiser** — paired with the
-  modulation-wishlist CV sequencer below if shipped.
+- [ ] **CV sequence visualiser** — focused waveform / value-bar
+  view of an assigned CV-seq slot's per-step output.  The
+  CV sequencer module is shipped; this is the dedicated
+  visualiser companion (the existing CV-seq panel already shows
+  its 16 step bars in-place, so this is V2 polish rather than
+  an unmet need).
 
 ## Modulation — wishlist
 
-- [ ] **Slew / glide module** — smooth a CV with separate
-  rise / fall times.  Currently glide is bass-only.
-- [ ] **Quantizer** — snap a CV to the nearest scale note.
-- [ ] **Comparator / threshold** — CV → gate when above a level.
-- [ ] **Math** — combine two CVs (add / multiply / blend).  Opens
-  patches the rack can't currently express (e.g. one LFO scaling
-  another).
-- [ ] **Sequenced sample-and-hold** — externally clockable S&H
-  module, distinct from the LFO's S&H waveform option.
+All previously-listed modulation utilities have shipped (CV
+sequencer, Slew, Quantizer, Comparator, Sample-and-hold, Math).
+The CV cable-routing infrastructure (cv_buf + per-utility
+compile passes) was built up in Phase 1; each utility now
+participates in the full graph — sources can chain through
+utilities to drive any synth/FX param.
 
 ## Absurd / unusual — all shipped
 

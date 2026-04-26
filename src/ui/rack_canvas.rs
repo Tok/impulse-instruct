@@ -715,6 +715,12 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             crate::ui::rack_content::draw_slew_content(app, ui, id);
                         } else if kind == ModuleKind::Quantizer {
                             crate::ui::rack_content::draw_quantizer_content(app, ui, id);
+                        } else if kind == ModuleKind::Comparator {
+                            crate::ui::rack_content::draw_comparator_content(app, ui, id);
+                        } else if kind == ModuleKind::SampleHold {
+                            crate::ui::rack_content::draw_sample_hold_content(app, ui, id);
+                        } else if kind == ModuleKind::Math {
+                            crate::ui::rack_content::draw_math_content(app, ui, id);
                         } else if kind == ModuleKind::SpectrumAnalyzer {
                             crate::ui::panels::draw_spectrum(app, ui);
                         } else if kind == ModuleKind::StereoMeter {

@@ -14,8 +14,10 @@
 
 use super::lfo_target_opcode::lfo_target_to_u8;
 use super::params::{
-    MAX_MOD_ROUTES, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE, MOD_BUF_QUANTIZER_BASE,
-    MOD_BUF_SLEW_BASE, ModRouteCopy, QuantizerParamsCopy, SlewParamsCopy,
+    ComparatorParamsCopy, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CV_SEQ_BASE,
+    MOD_BUF_LFO_BASE, MOD_BUF_MATH_BASE, MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE,
+    MOD_BUF_SLEW_BASE, MathParamsCopy, ModRouteCopy, QuantizerParamsCopy, SampleHoldParamsCopy,
+    SlewParamsCopy,
 };
 use crate::state::{AppState, LfoTarget, ModuleKind, PortKind};
 
@@ -27,6 +29,9 @@ struct CvSourceMaps {
     cv_seq: Vec<u32>,
     slew: Vec<u32>,
     quantizer: Vec<u32>,
+    comparator: Vec<u32>,
+    sample_hold: Vec<u32>,
+    math: Vec<u32>,
 }
 
 impl CvSourceMaps {
@@ -35,12 +40,18 @@ impl CvSourceMaps {
         let mut cv_seq = Vec::new();
         let mut slew = Vec::new();
         let mut quantizer = Vec::new();
+        let mut comparator = Vec::new();
+        let mut sample_hold = Vec::new();
+        let mut math = Vec::new();
         for m in &s.rack.modules {
             match m.kind {
                 ModuleKind::LfoModule => lfo.push(m.id),
                 ModuleKind::CvSequencer => cv_seq.push(m.id),
                 ModuleKind::Slew => slew.push(m.id),
                 ModuleKind::Quantizer => quantizer.push(m.id),
+                ModuleKind::Comparator => comparator.push(m.id),
+                ModuleKind::SampleHold => sample_hold.push(m.id),
+                ModuleKind::Math => math.push(m.id),
                 _ => {}
             }
         }
@@ -49,6 +60,9 @@ impl CvSourceMaps {
             cv_seq,
             slew,
             quantizer,
+            comparator,
+            sample_hold,
+            math,
         }
     }
 
@@ -79,6 +93,24 @@ impl CvSourceMaps {
                 return None;
             }
             return Some((MOD_BUF_QUANTIZER_BASE + idx) as u8);
+        }
+        if let Some(idx) = self.comparator.iter().position(|id| *id == src_module_id) {
+            if idx >= crate::state::COMPARATOR_SLOTS {
+                return None;
+            }
+            return Some((MOD_BUF_COMPARATOR_BASE + idx) as u8);
+        }
+        if let Some(idx) = self.sample_hold.iter().position(|id| *id == src_module_id) {
+            if idx >= crate::state::SAMPLE_HOLD_SLOTS {
+                return None;
+            }
+            return Some((MOD_BUF_SAMPLE_HOLD_BASE + idx) as u8);
+        }
+        if let Some(idx) = self.math.iter().position(|id| *id == src_module_id) {
+            if idx >= crate::state::MATH_SLOTS {
+                return None;
+            }
+            return Some((MOD_BUF_MATH_BASE + idx) as u8);
         }
         None
     }
@@ -223,6 +255,120 @@ pub fn compile_quantizer_params(
         }
         if let Some(buf_idx) = maps.resolve(s, cable.from.module_id) {
             out[qidx].cv_in_buf_idx = buf_idx;
+        }
+    }
+    out
+}
+
+/// Walk the rack's cables and produce the Comparator utility-slot
+/// snapshot.
+pub fn compile_comparator_params(
+    s: &AppState,
+) -> [ComparatorParamsCopy; crate::state::COMPARATOR_SLOTS] {
+    let mut out = [ComparatorParamsCopy::default(); crate::state::COMPARATOR_SLOTS];
+    let maps = CvSourceMaps::build(s);
+    let ids = &maps.comparator;
+    for (i, slot) in s
+        .comparator
+        .iter()
+        .enumerate()
+        .take(crate::state::COMPARATOR_SLOTS)
+    {
+        out[i] = ComparatorParamsCopy {
+            enabled: slot.enabled,
+            threshold: slot.threshold.clamp(-1.0, 1.5),
+            cv_in_buf_idx: u8::MAX,
+        };
+    }
+    for cable in &s.rack.cables {
+        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
+            continue;
+        }
+        let Some(idx) = ids.iter().position(|id| *id == cable.to.module_id) else {
+            continue;
+        };
+        if idx >= crate::state::COMPARATOR_SLOTS {
+            continue;
+        }
+        if let Some(buf_idx) = maps.resolve(s, cable.from.module_id) {
+            out[idx].cv_in_buf_idx = buf_idx;
+        }
+    }
+    out
+}
+
+/// Walk the rack's cables and produce the Sample-and-hold
+/// utility-slot snapshot.
+pub fn compile_sample_hold_params(
+    s: &AppState,
+) -> [SampleHoldParamsCopy; crate::state::SAMPLE_HOLD_SLOTS] {
+    let mut out = [SampleHoldParamsCopy::default(); crate::state::SAMPLE_HOLD_SLOTS];
+    let maps = CvSourceMaps::build(s);
+    let ids = &maps.sample_hold;
+    for (i, slot) in s
+        .sample_hold
+        .iter()
+        .enumerate()
+        .take(crate::state::SAMPLE_HOLD_SLOTS)
+    {
+        out[i] = SampleHoldParamsCopy {
+            enabled: slot.enabled,
+            cv_in_buf_idx: u8::MAX,
+        };
+    }
+    for cable in &s.rack.cables {
+        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
+            continue;
+        }
+        let Some(idx) = ids.iter().position(|id| *id == cable.to.module_id) else {
+            continue;
+        };
+        if idx >= crate::state::SAMPLE_HOLD_SLOTS {
+            continue;
+        }
+        if let Some(buf_idx) = maps.resolve(s, cable.from.module_id) {
+            out[idx].cv_in_buf_idx = buf_idx;
+        }
+    }
+    out
+}
+
+/// Walk the rack's cables and produce the Math utility-slot
+/// snapshot.  The Math module exposes TWO Mod-In ports
+/// (index 0 = A, index 1 = B); each cable's `to.index` selects
+/// which input the source feeds.
+pub fn compile_math_params(s: &AppState) -> [MathParamsCopy; crate::state::MATH_SLOTS] {
+    let mut out = [MathParamsCopy::default(); crate::state::MATH_SLOTS];
+    let maps = CvSourceMaps::build(s);
+    let ids = &maps.math;
+    for (i, slot) in s.math.iter().enumerate().take(crate::state::MATH_SLOTS) {
+        out[i] = MathParamsCopy {
+            enabled: slot.enabled,
+            op: slot.op,
+            blend: slot.blend.clamp(0.0, 1.0),
+            cv_in_a_buf_idx: u8::MAX,
+            cv_in_b_buf_idx: u8::MAX,
+        };
+    }
+    for cable in &s.rack.cables {
+        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
+            continue;
+        }
+        let Some(idx) = ids.iter().position(|id| *id == cable.to.module_id) else {
+            continue;
+        };
+        if idx >= crate::state::MATH_SLOTS {
+            continue;
+        }
+        let Some(buf_idx) = maps.resolve(s, cable.from.module_id) else {
+            continue;
+        };
+        // to.index picks which input port (A or B) this cable
+        // feeds.  Anything > 1 is silently ignored for now.
+        match cable.to.index {
+            0 => out[idx].cv_in_a_buf_idx = buf_idx,
+            1 => out[idx].cv_in_b_buf_idx = buf_idx,
+            _ => {}
         }
     }
     out

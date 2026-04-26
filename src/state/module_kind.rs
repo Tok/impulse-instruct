@@ -274,6 +274,21 @@ pub enum ModuleKind {
     /// configured scale.  Useful for turning continuous LFO
     /// sweeps into pitch-quantised arpeggios.
     Quantizer,
+    /// Comparator CV utility — output 1.0 when input > threshold,
+    /// 0.0 otherwise.  Turns an LFO / envelope into a gate
+    /// signal driving another modulation target.
+    Comparator,
+    /// Sample-and-hold CV utility — latch the incoming CV value
+    /// on each new sequencer step (the "clock edge"), hold until
+    /// the next step.  Distinct from the LFO's S&H waveform
+    /// (which re-latches on its own LFO phase wrap): this one
+    /// re-latches on the audio sequencer's grid so the held
+    /// value is always musically aligned.
+    SampleHold,
+    /// Math CV utility — combine two CV inputs with a chosen
+    /// operation (add / multiply / blend / max / min).  Two
+    /// Mod-In ports per instance.
+    Math,
     LlmAgent,
     // ── LLM console (singleton, Global zone) ──────────────────────────────
     LlmConsole,
@@ -367,6 +382,9 @@ impl ModuleKind {
             Self::CvSequencer => "CV SEQ",
             Self::Slew => "SLEW",
             Self::Quantizer => "QUANTIZER",
+            Self::Comparator => "COMPARATOR",
+            Self::SampleHold => "S&H",
+            Self::Math => "MATH",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
             Self::MasterOutput => "MASTER",
@@ -491,6 +509,12 @@ impl ModuleKind {
             Self::Slew => (2, 1),
             // Quantizer — root + scale dropdowns, 2×1 fits.
             Self::Quantizer => (2, 1),
+            // Comparator — single threshold knob.
+            Self::Comparator => (2, 1),
+            // S&H — knobless, just an enabled toggle.
+            Self::SampleHold => (2, 1),
+            // Math — op cycle button + blend knob, 2×1 fits.
+            Self::Math => (2, 1),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
             // Convolution Reverb — 6 knobs in a glass-grouped 2-row
@@ -645,7 +669,10 @@ impl ModuleKind {
             | Self::LfoModule
             | Self::CvSequencer
             | Self::Slew
-            | Self::Quantizer => Zone::FxMod,
+            | Self::Quantizer
+            | Self::Comparator
+            | Self::SampleHold
+            | Self::Math => Zone::FxMod,
         }
     }
 
@@ -825,6 +852,9 @@ impl ModuleKind {
                 | Self::CvSequencer
                 | Self::Slew
                 | Self::Quantizer
+                | Self::Comparator
+                | Self::SampleHold
+                | Self::Math
                 | Self::LlmAgent
         )
     }

@@ -4,6 +4,75 @@ A detailed log of what's built.
 
 ---
 
+### Modulation utility cluster (Comparator + S&H + Math)
+
+Last three items from the Modulation wishlist, shipped
+together because they all share the cable-graph compile
+infrastructure built up in the Slew + Quantizer phases.
+With these, the modulation graph supports the full Eurorack
+utility set: any LFO / CV-seq output can chain through any
+combination of slew → quantize → compare → S&H → math
+operations before driving a synth/FX target.
+
+**Comparator (`ModuleKind::Comparator`).**  Outputs 1.0 when
+the input CV exceeds `threshold`, 0.0 otherwise.  Single
+threshold knob; per-block lookup.  Useful for turning an
+envelope or LFO into a gate signal that drives some other
+modulation target.
+
+**Sample-and-hold (`ModuleKind::SampleHold`).**  Latches the
+incoming CV value on each new sequencer step (the "clock
+edge"), holds it until the next step.  Distinct from the
+LFO's S&H waveform option (which re-latches on its own LFO
+phase wrap): this one re-latches on the audio sequencer's
+grid so the held value is always musically aligned with the
+bar.  Knobless — just an enabled toggle; the timing is the
+sequencer's.
+
+**Math (`ModuleKind::Math`).**  Combines two CV inputs with a
+chosen operation: Add, Multiply, Blend (lerp), Max, Min.
+Two Mod-In ports per instance (cable to index 0 = A, index
+1 = B).  Op cycle button + blend knob in the panel.  First
+utility module with > 1 Mod-In jack — the cable compile pass
+in `mod_compile.rs` switches on `cable.to.index` to resolve
+each input independently.
+
+**Compile-pass refactor.**  The earlier per-utility
+`CvSourceMaps::resolve` helper grew to handle every CV-out
+emitter: LFO, CvSequencer, Slew, Quantizer, Comparator,
+SampleHold, Math.  All seven kinds resolve through a single
+shared lookup so the wiring scales without per-utility
+duplication.
+
+**Audio-thread state.**  DspState gains
+`sample_hold_state: [f32; 4]` (latch value per slot) and
+`prev_seq_step: u32` (last seen sequencer step, used to
+detect step transitions).  Allocation-free.
+
+**ModuleKind metadata.**  All three modules are 2×1 grid,
+FxMod zone, sort-group 35 (modulation cluster).  Aliases
+comparator / compare / threshold; samplehold / sample_hold /
+snh; math / mathmodule / cvmath.
+
+**Tests.**  +16 (state defaults + slot round-trips + label/
+zone/aliases × 3 modules; LFO→utility input compile + utility→
+synth route compile; Math.A vs Math.B independent input
+resolution; Math op-cycle visiting all 5 variants).
+2151 → 2167 lib tests passing.
+
+This entry closes out the Modulation wishlist.  Combined with
+Phase 1 (cv_buf + multi-source mod_routes) and Phase 2.1/2.2
+(Slew + Quantizer), the rack now has a full Eurorack-style
+CV pipeline: any modulation source can chain through any
+combination of utilities before driving a synth / FX param.
+
+Files: new `src/state/comparator.rs`,
+`src/state/sample_hold.rs`, `src/state/math_module.rs`;
+new panels for each in `src/ui/panels/`; consolidated tests
+in `src/tests/cv_utility_tests.rs`.
+
+---
+
 ### CV sequencer module (`CvSequencer`)
 
 First entry from the Modulation wishlist.  16-step CV pattern

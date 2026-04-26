@@ -804,6 +804,51 @@ pub(super) fn draw_quantizer_content(app: &mut ImpulseApp, ui: &mut egui::Ui, mo
     crate::ui::panels::draw_quantizer(app, ui, slot);
 }
 
+pub(super) fn draw_comparator_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::Comparator)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_comparator(app, ui, slot);
+}
+
+pub(super) fn draw_sample_hold_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::SampleHold)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_sample_hold(app, ui, slot);
+}
+
+pub(super) fn draw_math_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::Math)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_math(app, ui, slot);
+}
+
 pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     use crate::ui::widgets;
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);

@@ -72,6 +72,9 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::CvSequencer,
     ModuleKind::Slew,
     ModuleKind::Quantizer,
+    ModuleKind::Comparator,
+    ModuleKind::SampleHold,
+    ModuleKind::Math,
 ];
 
 pub(super) fn draw_remove_confirm(app: &mut ImpulseApp, ctx: &egui::Context) {

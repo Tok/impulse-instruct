@@ -118,6 +118,9 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         ModuleKind::CvSequencer => 18,
         ModuleKind::Slew => 18,
         ModuleKind::Quantizer => 18,
+        ModuleKind::Comparator => 18,
+        ModuleKind::SampleHold => 18,
+        ModuleKind::Math => 18,
         ModuleKind::LlmAgent => 30,
         ModuleKind::LlmConsole => 28,
     };

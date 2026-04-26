@@ -43,6 +43,12 @@ pub const MOD_UTIL_SLOTS: usize = 4;
 pub const MOD_BUF_SLEW_BASE: usize = 8;
 /// Quantizer utility output range starts here.
 pub const MOD_BUF_QUANTIZER_BASE: usize = 12;
+/// Comparator utility output range starts here.
+pub const MOD_BUF_COMPARATOR_BASE: usize = 16;
+/// Sample-and-hold utility output range starts here.
+pub const MOD_BUF_SAMPLE_HOLD_BASE: usize = 20;
+/// Math utility output range starts here.
+pub const MOD_BUF_MATH_BASE: usize = 24;
 
 /// Per-slot LFO configuration passed to the audio thread (Copy-safe).
 #[derive(Clone, Copy, Debug)]
@@ -121,6 +127,65 @@ impl Default for QuantizerParamsCopy {
             root: 0,
             scale: crate::state::Scale::Major,
             cv_in_buf_idx: u8::MAX,
+        }
+    }
+}
+
+/// Per-slot Comparator configuration.
+#[derive(Clone, Copy, Debug)]
+pub struct ComparatorParamsCopy {
+    pub enabled: bool,
+    pub threshold: f32,
+    pub cv_in_buf_idx: u8,
+}
+
+impl Default for ComparatorParamsCopy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            threshold: 0.0,
+            cv_in_buf_idx: u8::MAX,
+        }
+    }
+}
+
+/// Per-slot Sample-and-hold configuration.  No knobs in V1 —
+/// the slot just latches its input on each new sequencer step.
+#[derive(Clone, Copy, Debug)]
+pub struct SampleHoldParamsCopy {
+    pub enabled: bool,
+    pub cv_in_buf_idx: u8,
+}
+
+impl Default for SampleHoldParamsCopy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            cv_in_buf_idx: u8::MAX,
+        }
+    }
+}
+
+/// Per-slot Math configuration.  Two CV-input ports (resolved by
+/// the cable compile pass into `cv_in_a_buf_idx` and
+/// `cv_in_b_buf_idx`) and an op selector + blend knob.
+#[derive(Clone, Copy, Debug)]
+pub struct MathParamsCopy {
+    pub enabled: bool,
+    pub op: crate::state::MathOp,
+    pub blend: f32,
+    pub cv_in_a_buf_idx: u8,
+    pub cv_in_b_buf_idx: u8,
+}
+
+impl Default for MathParamsCopy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            op: crate::state::MathOp::Add,
+            blend: 0.5,
+            cv_in_a_buf_idx: u8::MAX,
+            cv_in_b_buf_idx: u8::MAX,
         }
     }
 }
@@ -489,6 +554,9 @@ pub struct AudioParams {
     /// as bipolar -1..+1 → -12..+12 semitones) to the nearest
     /// note in the configured scale.
     pub quantizer: [QuantizerParamsCopy; crate::state::QUANTIZER_SLOTS],
+    pub comparator: [ComparatorParamsCopy; crate::state::COMPARATOR_SLOTS],
+    pub sample_hold: [SampleHoldParamsCopy; crate::state::SAMPLE_HOLD_SLOTS],
+    pub math: [MathParamsCopy; crate::state::MATH_SLOTS],
     /// Per-block modulation source buffer.  The audio thread fills
     /// the LFO range (0..4), CV-seq range (4..8), and utility
     /// module ranges (8..32) before applying `mod_routes`.

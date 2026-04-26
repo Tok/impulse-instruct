@@ -189,6 +189,13 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         Slew => &[Selector],
         // Quantizer — same shape as Slew.
         Quantizer => &[Selector],
+        Comparator => &[Selector],
+        SampleHold => &[Selector],
+        // Math — TWO Mod-In jacks (A + B); cables target index
+        // 0 or 1.  Both are Selector with empty target lists;
+        // the per-utility compile pass resolves each input
+        // independently.
+        Math => &[Selector, Selector],
     }
 }
 
@@ -608,7 +615,10 @@ pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
         | ModuleKind::StepSequencer
         | ModuleKind::CvSequencer
         | ModuleKind::Slew
-        | ModuleKind::Quantizer => PortKind::Cv,
+        | ModuleKind::Quantizer
+        | ModuleKind::Comparator
+        | ModuleKind::SampleHold
+        | ModuleKind::Math => PortKind::Cv,
         _ => PortKind::Audio,
     }
 }

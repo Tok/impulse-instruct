@@ -177,6 +177,82 @@ impl DspState {
             p.cv_buf[out_idx] = out;
         }
 
+        // ── Comparator utility ────────────────────────────────────────────────
+        // Output 1.0 when input > threshold, else 0.0.  Disabled
+        // = passthrough.  Useful for turning an LFO / envelope
+        // into a gate signal that drives another mod target.
+        for (i, cp) in p_base.comparator.iter().enumerate() {
+            let out_idx = super::params::MOD_BUF_COMPARATOR_BASE + i;
+            let raw = if cp.cv_in_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[cp.cv_in_buf_idx as usize]
+            };
+            if !cp.enabled {
+                p.cv_buf[out_idx] = raw;
+                continue;
+            }
+            p.cv_buf[out_idx] = if raw > cp.threshold { 1.0 } else { 0.0 };
+        }
+
+        // ── Sample-and-hold utility ───────────────────────────────────────────
+        // Latch input on each new sequencer step.  Detects the
+        // step change against the cached `prev_seq_step`; on a
+        // change, every enabled S&H slot copies its current
+        // input into the held value.  Held value is what
+        // downstream cables read.
+        let cur_step = p_base.sequencer_current_step;
+        let step_changed = self.prev_seq_step != cur_step;
+        for (i, sh) in p_base.sample_hold.iter().enumerate() {
+            let out_idx = super::params::MOD_BUF_SAMPLE_HOLD_BASE + i;
+            let raw = if sh.cv_in_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[sh.cv_in_buf_idx as usize]
+            };
+            if !sh.enabled {
+                p.cv_buf[out_idx] = raw;
+                self.sample_hold_state[i] = raw;
+                continue;
+            }
+            if step_changed {
+                self.sample_hold_state[i] = raw;
+            }
+            p.cv_buf[out_idx] = self.sample_hold_state[i];
+        }
+        self.prev_seq_step = cur_step;
+
+        // ── Math utility ──────────────────────────────────────────────────────
+        // Combine two CV inputs per the slot's op selector.
+        // Unwired inputs read 0; the op semantics handle this
+        // gracefully (Add → 0+b = b, Multiply → 0*b = 0, etc.).
+        for (i, mp) in p_base.math.iter().enumerate() {
+            let out_idx = super::params::MOD_BUF_MATH_BASE + i;
+            let a = if mp.cv_in_a_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[mp.cv_in_a_buf_idx as usize]
+            };
+            let b = if mp.cv_in_b_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[mp.cv_in_b_buf_idx as usize]
+            };
+            if !mp.enabled {
+                p.cv_buf[out_idx] = a;
+                continue;
+            }
+            use crate::state::MathOp;
+            let out = match mp.op {
+                MathOp::Add => (a + b).clamp(-1.0, 1.0),
+                MathOp::Multiply => (a * b).clamp(-1.0, 1.0),
+                MathOp::Blend => a + (b - a) * mp.blend.clamp(0.0, 1.0),
+                MathOp::Max => a.max(b),
+                MathOp::Min => a.min(b),
+            };
+            p.cv_buf[out_idx] = out;
+        }
+
         // ── Apply cable-routed modulation ─────────────────────────────────────
         // All sources have been staged into `cv_buf` by the
         // preceding stages.  Now walk the compiled route list and
