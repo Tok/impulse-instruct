@@ -45,6 +45,8 @@ pub(crate) fn record_into_sample_instrument(app: &mut ImpulseApp) {
     // the disk-load single-WAV path.
     app.sample_sfz_regions.clear();
     app.sample_selected_region = None;
+    app.sample_sf2_presets.clear();
+    app.sample_sf2_preset_idx = 0;
     let thumb = crate::ui::panels::sample_instrument_viz::build_thumbnail(&buf, 128);
     app.sample_wave_cache = (REC_LABEL.to_string(), thumb);
     let arc = std::sync::Arc::new(buf);
@@ -148,6 +150,66 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             crate::ui::panels::sample_instrument_viz::draw_poly_meter(ui, active);
         });
     });
+
+    // SF2 preset picker — only visible when an SF2 is loaded.
+    // Most banks ship dozens of presets; the combo box renders the
+    // phdr name list and on selection re-parses + reloads regions
+    // for the chosen preset.  Empty for SFZ / single-WAV modes.
+    if !app.sample_sf2_presets.is_empty() {
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("PRESET")
+                    .monospace()
+                    .size(8.0)
+                    .color(theme::FOG),
+            );
+            let current_idx = app
+                .sample_sf2_preset_idx
+                .min(app.sample_sf2_presets.len().saturating_sub(1));
+            let current_label = app
+                .sample_sf2_presets
+                .get(current_idx)
+                .map(|p| {
+                    if p.name.is_empty() {
+                        format!("#{}", current_idx)
+                    } else {
+                        p.name.clone()
+                    }
+                })
+                .unwrap_or_else(|| "(none)".to_string());
+            let mut chosen = current_idx;
+            egui::ComboBox::from_id_source("sf2_preset_picker")
+                .width((ui.available_width() - 20.0).max(120.0))
+                .selected_text(egui::RichText::new(current_label).monospace().size(8.5))
+                .show_ui(ui, |ui| {
+                    for (i, p) in app.sample_sf2_presets.iter().enumerate() {
+                        let label = if p.name.is_empty() {
+                            format!("{:3}: #{}", i, p.preset)
+                        } else {
+                            format!("{:3}: {}  (b{}/p{})", i, p.name, p.bank, p.preset)
+                        };
+                        ui.selectable_value(
+                            &mut chosen,
+                            i,
+                            egui::RichText::new(label).monospace().size(8.5),
+                        );
+                    }
+                });
+            if chosen != current_idx {
+                app.sample_sf2_preset_idx = chosen;
+                let path = app.state.read().sample_instrument.sample_path.clone();
+                if !path.is_empty()
+                    && let Some(regions) = crate::audio::sf2_loader::load_sf2_preset(&path, chosen)
+                {
+                    app.sample_sfz_regions = regions.clone();
+                    app.sample_selected_region = None;
+                    let _ = app
+                        .audio_tx
+                        .push(AudioCommand::LoadSampleInstrumentSfz(regions));
+                }
+            }
+        });
+    }
 
     ui.add_space(2.0);
 
@@ -528,13 +590,26 @@ fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
         // Both `.sfz` and `.sf2` end up as a `Vec<SfzRegionRuntime>` —
         // the SF2 parser maps SoundFont preset/instrument/sample
         // chains onto SfzRegion entries so the SampleInstrument
-        // trigger path stays uniform across formats.  V1 SF2 loads
-        // the first preset only; future V2 adds a preset picker.
+        // trigger path stays uniform across formats.  SF2 loads the
+        // first preset by default; the panel's preset picker
+        // re-loads on selection change.
         let loaded = if is_sfz {
             crate::audio::sfz_loader::load_sfz_file(path)
         } else {
+            // Populate the preset list before loading regions so the
+            // picker UI can render immediately.  Empty list = an
+            // SF2 with only the EOP sentinel (degenerate).
+            app.sample_sf2_presets =
+                crate::audio::sf2_loader::load_sf2_presets(path).unwrap_or_default();
+            app.sample_sf2_preset_idx = 0;
             crate::audio::sf2_loader::load_sf2_file(path)
         };
+        if !is_sf2 {
+            // Switching to an SFZ load clears any stale SF2 picker
+            // state from a previous load.
+            app.sample_sf2_presets.clear();
+            app.sample_sf2_preset_idx = 0;
+        }
         if let Some(regions) = loaded {
             // Stash a UI-side copy for the zone-map visualizer before
             // the Vec is moved into the audio command — the audio
@@ -562,6 +637,8 @@ fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
         // cache + rebuild the waveform thumbnail for paint.
         app.sample_sfz_regions.clear();
         app.sample_selected_region = None;
+        app.sample_sf2_presets.clear();
+        app.sample_sf2_preset_idx = 0;
         let thumb = crate::ui::panels::sample_instrument_viz::build_thumbnail(&data, 128);
         app.sample_wave_cache = (path.to_string(), thumb);
         let _ = app.audio_tx.push(AudioCommand::LoadSampleInstrument(data));

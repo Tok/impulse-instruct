@@ -30,6 +30,19 @@ use crate::audio::dsp::sample_instrument::SfzRegionRuntime;
 use crate::audio::{SAMPLE_RATE, SAMPLE_RATE_HZ};
 use crate::state::sfz::SfzRegion;
 
+/// One entry in the SoundFont's preset table.  Banks ship dozens of
+/// these (drum kit, piano, organ, ...); the SampleInstrument UI uses
+/// the list to render a preset picker.
+#[derive(Clone, Debug)]
+pub struct Sf2PresetInfo {
+    /// Display name from the `phdr` chunk (trimmed of trailing nulls).
+    pub name: String,
+    /// MIDI bank number (0 for melodic, 128 for drums by convention).
+    pub bank: u16,
+    /// MIDI preset number (0..127) within the bank.
+    pub preset: u16,
+}
+
 /// Parse `path` as an SF2 SoundFont and return the runtime region list
 /// for the first preset.  Returns `None` on any I/O or parse error;
 /// the SampleInstrument falls back to silence when given an empty or
@@ -37,14 +50,103 @@ use crate::state::sfz::SfzRegion;
 /// content (rare but possible — soundfonts whose first preset has no
 /// linked samples).
 pub fn load_sf2_file(path: &str) -> Option<Vec<SfzRegionRuntime>> {
+    load_sf2_preset(path, 0)
+}
+
+/// Load a specific preset's region list from `path`.  V2 entry point —
+/// the UI's preset picker calls this when the user changes selection.
+/// Returns `None` for I/O / parse errors; `Some(vec![])` for a valid
+/// preset with no playable content.
+pub fn load_sf2_preset(path: &str, preset_idx: usize) -> Option<Vec<SfzRegionRuntime>> {
     let bytes = std::fs::read(path).ok()?;
-    parse_sf2_bytes(&bytes)
+    parse_sf2_preset_regions(&bytes, preset_idx)
+}
+
+/// Read the bank's preset list off disk — used by the UI to populate
+/// the picker combo box.  Cheap; only walks the `phdr` chunk header.
+pub fn load_sf2_presets(path: &str) -> Option<Vec<Sf2PresetInfo>> {
+    let bytes = std::fs::read(path).ok()?;
+    parse_sf2_presets(&bytes)
+}
+
+/// Walk the `phdr` chunk and return one `Sf2PresetInfo` per real
+/// preset (skipping the EOP sentinel).  Pure — drives off bytes so
+/// tests can exercise the multi-preset path without disk I/O.
+pub fn parse_sf2_presets(bytes: &[u8]) -> Option<Vec<Sf2PresetInfo>> {
+    let pdta = locate_pdta(bytes)?;
+    let phdr = find_subchunk(pdta, b"phdr")?;
+    // phdr is an array of 38-byte records.  The last record is the
+    // "EOP" sentinel: its bagNdx bounds the previous preset's bag
+    // range but it's not itself a playable preset, so we drop it.
+    if phdr.len() < 38 {
+        return Some(Vec::new());
+    }
+    let n_records = phdr.len() / 38;
+    let n_presets = n_records.saturating_sub(1); // skip EOP
+    let mut out = Vec::with_capacity(n_presets);
+    for i in 0..n_presets {
+        let off = i * 38;
+        let name_bytes = &phdr[off..off + 20];
+        let name = preset_name_from_bytes(name_bytes);
+        let preset = u16::from_le_bytes(phdr[off + 20..off + 22].try_into().ok()?);
+        let bank = u16::from_le_bytes(phdr[off + 22..off + 24].try_into().ok()?);
+        out.push(Sf2PresetInfo { name, bank, preset });
+    }
+    Some(out)
+}
+
+/// Decode a 20-byte phdr / inst / shdr name field into a String.
+/// SF2 names are zero-padded ASCII; we trim the nulls and any
+/// trailing whitespace, fall back to a placeholder if the bytes
+/// aren't valid UTF-8 (rare — most banks are ASCII).
+fn preset_name_from_bytes(b: &[u8]) -> String {
+    let end = b.iter().position(|&c| c == 0).unwrap_or(b.len());
+    let slice = &b[..end];
+    std::str::from_utf8(slice)
+        .map(|s| s.trim_end().to_string())
+        .unwrap_or_else(|_| "(non-utf8 name)".to_string())
+}
+
+/// Helper — locate the `pdta` LIST body inside the top-level RIFF
+/// container.  Pulled out so the preset-list and region-list parsers
+/// can both use it.  Returns the inner body (without the 4cc / size
+/// header).
+fn locate_pdta(bytes: &[u8]) -> Option<&[u8]> {
+    if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"sfbk" {
+        return None;
+    }
+    let mut pos = 12;
+    while pos + 8 <= bytes.len() {
+        let tag = &bytes[pos..pos + 4];
+        let chunk_len = u32::from_le_bytes(bytes[pos + 4..pos + 8].try_into().ok()?) as usize;
+        pos += 8;
+        if pos + chunk_len > bytes.len() {
+            return None;
+        }
+        if tag == b"LIST" && chunk_len >= 4 && &bytes[pos..pos + 4] == b"pdta" {
+            return Some(&bytes[pos + 4..pos + chunk_len]);
+        }
+        pos += chunk_len;
+        if chunk_len & 1 == 1 {
+            pos += 1;
+        }
+    }
+    None
 }
 
 /// Pure parser — separates the byte-walk from disk I/O so tests can
-/// drive synthesised SF2 fixtures.  Returns the regions for the
-/// first preset only (V1 scope).
+/// drive synthesised SF2 fixtures.  Returns the regions for preset 0
+/// (kept as a thin wrapper for V1 callers; new code should reach for
+/// `parse_sf2_preset_regions` directly).
 pub fn parse_sf2_bytes(bytes: &[u8]) -> Option<Vec<SfzRegionRuntime>> {
+    parse_sf2_preset_regions(bytes, 0)
+}
+
+/// Pure parser — return the runtime region list for the preset at
+/// `preset_idx`.  Out-of-range index returns `None` so the caller
+/// distinguishes "no such preset" from "preset has no playable
+/// regions" (the latter returns `Some(vec![])`).
+pub fn parse_sf2_preset_regions(bytes: &[u8], preset_idx: usize) -> Option<Vec<SfzRegionRuntime>> {
     // Top-level RIFF: "RIFF" <size:u32 LE> "sfbk" <chunks...>
     if bytes.len() < 12 || &bytes[0..4] != b"RIFF" || &bytes[8..12] != b"sfbk" {
         return None;
@@ -91,15 +193,19 @@ pub fn parse_sf2_bytes(bytes: &[u8]) -> Option<Vec<SfzRegionRuntime>> {
     let igen = find_subchunk(pdta, b"igen")?;
     let shdr = find_subchunk(pdta, b"shdr")?;
 
-    // Walk the first preset's bags.  phdr records are 38 bytes; the
-    // last record is a sentinel "EOP" entry whose `presetBagNdx`
-    // gives the upper bound for the previous preset's bags.  We only
-    // need the first two records to bound preset 0's range.
-    if phdr.len() < 38 * 2 {
+    // Walk preset_idx's bags.  phdr records are 38 bytes; the last
+    // record is a sentinel "EOP" entry whose `presetBagNdx` gives
+    // the upper bound for the previous preset's bags, so we need
+    // `(preset_idx + 2)` records to bound this preset's range.
+    let needed_records = preset_idx.checked_add(2).and_then(|n| n.checked_mul(38))?;
+    if phdr.len() < needed_records {
         return None;
     }
-    let preset_bag_start = u16::from_le_bytes(phdr[24..26].try_into().ok()?) as usize;
-    let preset_bag_end = u16::from_le_bytes(phdr[38 + 24..38 + 26].try_into().ok()?) as usize;
+    let start_off = preset_idx * 38 + 24;
+    let end_off = (preset_idx + 1) * 38 + 24;
+    let preset_bag_start =
+        u16::from_le_bytes(phdr[start_off..start_off + 2].try_into().ok()?) as usize;
+    let preset_bag_end = u16::from_le_bytes(phdr[end_off..end_off + 2].try_into().ok()?) as usize;
 
     let mut regions = Vec::new();
     let mut sample_cache: std::collections::HashMap<u16, Arc<Vec<f32>>> =
@@ -651,5 +757,49 @@ mod tests {
         // -1 sentinel = "use sample originalPitch" → leaves field as-is.
         g.absorb(GEN_OVERRIDING_ROOT_KEY, &(-1_i16).to_le_bytes());
         assert_eq!(g.overriding_root, Some(69));
+    }
+
+    #[test]
+    fn parse_sf2_presets_returns_one_entry_for_minimal_fixture() {
+        // The minimal fixture has exactly one real preset + the EOP
+        // sentinel.  Listing should report one entry, dropping the
+        // sentinel.
+        let bytes = fixture_minimal_sf2();
+        let presets = parse_sf2_presets(&bytes).expect("preset list");
+        assert_eq!(presets.len(), 1);
+        assert_eq!(presets[0].preset, 0);
+        assert_eq!(presets[0].bank, 0);
+    }
+
+    #[test]
+    fn parse_sf2_preset_regions_with_idx_zero_matches_legacy_call() {
+        // The new preset-indexed entry point at idx=0 should produce
+        // the same regions as the legacy `parse_sf2_bytes` wrapper.
+        let bytes = fixture_minimal_sf2();
+        let by_legacy = parse_sf2_bytes(&bytes).expect("legacy");
+        let by_idx = parse_sf2_preset_regions(&bytes, 0).expect("indexed");
+        assert_eq!(by_legacy.len(), by_idx.len());
+        assert_eq!(by_legacy[0].region.lokey, by_idx[0].region.lokey);
+        assert_eq!(by_legacy[0].region.hikey, by_idx[0].region.hikey);
+    }
+
+    #[test]
+    fn parse_sf2_preset_regions_out_of_range_returns_none() {
+        // Asking for preset 99 on a single-preset fixture should
+        // bail with None — the caller (UI) treats that as "preset
+        // index out of range" and re-clamps the picker.
+        let bytes = fixture_minimal_sf2();
+        assert!(parse_sf2_preset_regions(&bytes, 99).is_none());
+    }
+
+    #[test]
+    fn preset_name_decodes_trimmed_ascii() {
+        // Standard zero-padded ASCII — trailing nulls trimmed.
+        let bytes = b"Grand Piano\0\0\0\0\0\0\0\0\0";
+        assert_eq!(preset_name_from_bytes(bytes), "Grand Piano");
+        // Empty / all-null name decodes to empty string rather than
+        // bubbling up an error.
+        let bytes = b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+        assert_eq!(preset_name_from_bytes(bytes), "");
     }
 }

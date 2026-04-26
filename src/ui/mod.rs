@@ -287,6 +287,15 @@ pub struct ImpulseApp {
     /// Cleared when a fresh SFZ loads or a single-WAV swap empties
     /// the region list.
     pub(crate) sample_selected_region: Option<usize>,
+    /// Preset list parsed from the loaded `.sf2` SoundFont.  Empty
+    /// for `.sfz` / single-WAV / no-load — the UI hides the picker
+    /// when this is empty.  V2 SF2 follow-up.
+    pub(crate) sample_sf2_presets: Vec<crate::audio::sf2_loader::Sf2PresetInfo>,
+    /// Currently-selected preset index into `sample_sf2_presets`.
+    /// Defaults to 0 (the V1 SF2 behaviour); changing it re-parses
+    /// the bank for the chosen preset and pushes the new region
+    /// list to the audio thread.
+    pub(crate) sample_sf2_preset_idx: usize,
     /// Ableton Link bidirectional tempo sync.  Disabled by default;
     /// the user toggles via Preferences → Sync.  When enabled +
     /// built with the `link` feature, `update()` polls every frame
@@ -542,6 +551,8 @@ impl ImpulseApp {
             last_sample_instrument_path: String::new(),
             sample_sfz_regions: Vec::new(),
             sample_selected_region: None,
+            sample_sf2_presets: Vec::new(),
+            sample_sf2_preset_idx: 0,
             sample_wave_cache: (String::new(), Vec::new()),
             link_sync: crate::sync::LinkSync::new(120.0),
             last_link_bpm: 0.0,
