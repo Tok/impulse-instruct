@@ -429,21 +429,30 @@ impl NoiseVoice {
 }
 
 // ─── Hoover Lead Voice ────────────────────────────────────────────────────────
-// Supersaw oscillator into a resonant lowpass filter that starts open (bright)
-// and sweeps DOWN as the envelope decays. High resonance creates a moving
-// resonant peak — the authentic "vacuum cleaner" hoover sweep.
-// Named after Human Resource "Dominator" (1991).
+// Supersaw + PWM pulse + sub-octave into a resonant lowpass filter that starts
+// open (bright) and sweeps DOWN as the envelope decays.  High resonance creates
+// a moving resonant peak — the authentic "vacuum cleaner" hoover sweep.
+// Modeled after the Roland Alpha Juno "What The" patch (Human Resource
+// "Dominator", 1991): saw stack for body, PWM pulse for the vowel formant, and
+// a brief downward pitch dip at attack for the "wow" transient.
 
 #[derive(Clone)]
 pub(super) struct HooverVoice {
     phase: f32,
     unison_phases: [f32; 6],
+    /// PWM pulse oscillator phase — adds the Alpha Juno vowel formant.
+    pwm_phase: f32,
+    /// Sub-oscillator phase (one octave below) — sine for body.
+    sub_phase: f32,
     freq: f32,
     /// Glide target.  Equal to `freq` when no slide is in progress.
     target_freq: f32,
     gate: bool,
     amp_env: f32,  // VCA envelope
     filt_env: f32, // Filter sweep: 1.0 = LP wide open (bright), decays to 0.0 (dark)
+    /// Pitch-dip envelope.  Set to 1.0 on trigger, decays fast (~30 ms) to 0.
+    /// Modulates pitch DOWN by ~0.6 semitones at attack — the hoover "wow".
+    pitch_env: f32,
     svf_low: f32,
     svf_band: f32,
     lfo_phase: f32,
@@ -462,11 +471,14 @@ impl HooverVoice {
         Self {
             phase: 0.0,
             unison_phases: [0.0; 6],
+            pwm_phase: 0.0,
+            sub_phase: 0.0,
             freq: 220.0,
             target_freq: 220.0,
             gate: false,
             amp_env: 0.0,
             filt_env: 0.0,
+            pitch_env: 0.0,
             svf_low: 0.0,
             svf_band: 0.0,
             lfo_phase: 0.0,
@@ -496,6 +508,7 @@ impl HooverVoice {
         self.gate = true;
         self.amp_env = 0.0; // will rise on fast attack
         self.filt_env = 1.0; // start wide open (LP fully bright)
+        self.pitch_env = 1.0; // pitch dip at attack ("wow")
         self.svf_low = 0.0;
         self.svf_band = 0.0;
     }
@@ -536,6 +549,14 @@ impl HooverVoice {
             self.freq = self.target_freq - (self.target_freq - self.freq) * coeff;
         }
 
+        // Pitch-dip envelope: fast decay (~30 ms) gives the hoover "wow"
+        // transient where the note swoops up into pitch on attack.
+        let pitch_dip_coeff = (-1.0_f32 / (0.03 * sr)).exp();
+        self.pitch_env *= pitch_dip_coeff;
+        if self.pitch_env < 1e-4 {
+            self.pitch_env = 0.0;
+        }
+
         // Pitch LFO (sine, adds the wailing character)
         self.lfo_phase += p.hoover_pitch_lfo_rate / sr;
         if self.lfo_phase >= 1.0 {
@@ -543,7 +564,9 @@ impl HooverVoice {
         }
         let lfo = (self.lfo_phase * std::f32::consts::TAU).sin();
         let freq_mod = 2.0_f32.powf(lfo * p.hoover_pitch_lfo_depth / 12.0);
-        let eff_freq = self.freq * freq_mod;
+        // Pitch dip: ~-0.6 semitone at attack, decays into the LFO modulation.
+        let dip_mod = 2.0_f32.powf(-self.pitch_env * 0.6 / 12.0);
+        let eff_freq = self.freq * freq_mod * dip_mod;
 
         // Supersaw oscillator (same algorithm as Bass303)
         let n = p.hoover_voices.clamp(2, 7) as usize;
@@ -567,7 +590,28 @@ impl HooverVoice {
             }
             osc_sum += self.unison_phases[i] * 2.0 - 1.0;
         }
-        let osc = osc_sum / n as f32 * 1.4;
+        let saw_stack = osc_sum / n as f32 * 1.4;
+
+        // PWM pulse — Alpha Juno vowel formant.  Runs at the fundamental, with
+        // pulse width sweeping ±0.35 around 0.5 at the same rate as the pitch
+        // LFO (one slow LFO drives both pitch and PWM, like the original
+        // analog).  Anchored to `self.freq` (not `eff_freq`) so the pitch dip
+        // doesn't bleed into the PWM tone — only the slow LFO drives it.
+        self.pwm_phase += self.freq * freq_mod / sr;
+        if self.pwm_phase >= 1.0 {
+            self.pwm_phase -= 1.0;
+        }
+        let pw = (0.5 + 0.35 * lfo).clamp(0.05, 0.95);
+        let pulse = if self.pwm_phase < pw { 1.0 } else { -1.0 };
+
+        // Sub-octave sine — adds body without aliasing.
+        self.sub_phase += self.freq * 0.5 / sr;
+        if self.sub_phase >= 1.0 {
+            self.sub_phase -= 1.0;
+        }
+        let sub = (self.sub_phase * std::f32::consts::TAU).sin();
+
+        let osc = saw_stack + pulse * 0.45 + sub * 0.18;
 
         // Chamberlin SVF — LP + BP mix for authentic resonant sweep.
         //
