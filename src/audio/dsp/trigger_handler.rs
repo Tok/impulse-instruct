@@ -202,6 +202,21 @@ impl DspState {
                     self.fm_ops.gate_off();
                 }
             }
+            AdditiveTrigger {
+                note,
+                accent,
+                slide: _,
+            } => {
+                if self.params.rack_additive {
+                    let freq = super::midi_to_hz_tuned(*note, self.params.tuning);
+                    self.additive.trigger(freq, *accent);
+                }
+            }
+            AdditiveGateOff => {
+                if self.params.rack_additive {
+                    self.additive.gate_off();
+                }
+            }
         }
     }
 }

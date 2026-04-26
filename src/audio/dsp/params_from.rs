@@ -322,6 +322,20 @@ impl AudioParams {
             fm_ops_op4_decay: s.fm_ops.op4.decay.clamp(0.0, 1.0),
             fm_ops_op4_sustain: s.fm_ops.op4.sustain.clamp(0.0, 1.0),
             fm_ops_op4_release: s.fm_ops.op4.release.clamp(0.0, 1.0),
+            additive_enabled: s.additive.enabled,
+            additive_volume: s.additive.volume.clamp(0.0, 1.5),
+            additive_pan: s.additive.pan.clamp(-1.0, 1.0),
+            additive_levels: {
+                let mut a = [0.0_f32; crate::state::ADDITIVE_HARMONICS];
+                for (i, slot) in a.iter_mut().enumerate() {
+                    *slot = s.additive.levels[i].clamp(0.0, 1.0);
+                }
+                a
+            },
+            additive_attack: s.additive.attack.clamp(0.0, 1.0),
+            additive_decay: s.additive.decay.clamp(0.0, 1.0),
+            additive_sustain: s.additive.sustain.clamp(0.0, 1.0),
+            additive_release: s.additive.release.clamp(0.0, 1.0),
             granular_enabled: s.granular.enabled,
             granular_volume: s.granular.volume,
             granular_density: s.granular.density,
@@ -367,6 +381,11 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::FmOpsVoice && m.enabled),
+            rack_additive: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::AdditiveVoice && m.enabled),
             sample_attack: s.sample_instrument.attack.clamp(0.0, 1.0),
             sample_decay: s.sample_instrument.decay.clamp(0.0, 1.0),
             sample_sustain: s.sample_instrument.sustain.clamp(0.0, 1.0),

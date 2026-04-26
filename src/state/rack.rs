@@ -281,6 +281,7 @@ impl RackState {
                 | ModuleKind::Theremin
                 | ModuleKind::Pendulum
                 | ModuleKind::FmOpsVoice
+                | ModuleKind::AdditiveVoice
                 | ModuleKind::An1xVoice
                 | ModuleKind::NeuTts
                 | ModuleKind::FxReverb
@@ -489,6 +490,11 @@ impl RackState {
                 // HooverLead range).  Bell / FM-bass / E-piano
                 // territory complements the AN1X subtractive bank.
                 ModuleKind::FmOpsVoice => 13,
+                // Additive — sequencer-driven voice; sits next to
+                // the FM op synth in the synthesised-voice cluster
+                // since both are spectrum-shaping voices that
+                // complement the subtractive AN1X.
+                ModuleKind::AdditiveVoice => 13,
                 ModuleKind::GranularTexture => 18,
                 ModuleKind::NeuTts => 19,
                 ModuleKind::FxWaveshaper => 20,

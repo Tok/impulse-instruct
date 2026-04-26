@@ -93,9 +93,6 @@ features.md.  No remaining items in this section.)
 
 Modules that would plug a real gap in the current voice palette.
 
-- [ ] **Additive synth** with per-harmonic level sliders.  Distinct
-  from wavetable: the user draws the spectrum directly instead of
-  scanning frames.
 - [ ] **Modal / struck physical model** — mass-spring bank for
   marimba, bell, glass.  Cheap N-mode resonator excited by an
   impulse / noise burst.

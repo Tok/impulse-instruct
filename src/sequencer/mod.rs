@@ -99,6 +99,16 @@ pub enum TriggerEvent {
         slide: f32,
     },
     FmOpsGateOff,
+    /// Additive synth trigger — same shape as the other melodic
+    /// voices.  Voice's `trigger` resets the amp envelope and sets
+    /// the fundamental from the played note; harmonics 1..=16 play
+    /// at integer multiples.
+    AdditiveTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    AdditiveGateOff,
 }
 
 impl TriggerEvent {
@@ -119,6 +129,7 @@ impl TriggerEvent {
                 | TriggerEvent::WavetableGateOff
                 | TriggerEvent::SampleGateOff
                 | TriggerEvent::FmOpsGateOff
+                | TriggerEvent::AdditiveGateOff
         )
     }
 }
@@ -155,6 +166,7 @@ pub struct ClockState {
     pub gate_counter_wavetable: u32, // samples remaining in wavetable gate
     pub gate_counter_sample: u32, // samples remaining in sample-instrument gate
     pub gate_counter_fm_ops: u32, // samples remaining in FM-ops gate
+    pub gate_counter_additive: u32, // samples remaining in additive-voice gate
     // Ratchet sub-hit tracking — fixed arrays, no allocation
     pub ratchet_remaining: [u8; NUM_DRUM_VOICES], // sub-hits left per voice
     pub ratchet_acc: [f64; NUM_DRUM_VOICES],      // sample accumulator since step fire
@@ -176,6 +188,7 @@ impl Default for ClockState {
             gate_counter_wavetable: 0,
             gate_counter_sample: 0,
             gate_counter_fm_ops: 0,
+            gate_counter_additive: 0,
             ratchet_remaining: [0; NUM_DRUM_VOICES],
             ratchet_acc: [0.0; NUM_DRUM_VOICES],
             ratchet_interval: [0.0; NUM_DRUM_VOICES],
@@ -221,6 +234,7 @@ pub fn advance_clock(
     let mut gate_counter_wavetable = clock.gate_counter_wavetable;
     let mut gate_counter_sample = clock.gate_counter_sample;
     let mut gate_counter_fm_ops = clock.gate_counter_fm_ops;
+    let mut gate_counter_additive = clock.gate_counter_additive;
     let mut ratchet_remaining = clock.ratchet_remaining;
     let mut ratchet_acc = clock.ratchet_acc;
     let mut ratchet_interval = clock.ratchet_interval;
@@ -304,6 +318,16 @@ pub fn advance_clock(
             gate_counter_fm_ops = 0;
         } else {
             gate_counter_fm_ops -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for additive voice
+    if gate_counter_additive > 0 {
+        if block_size as u32 >= gate_counter_additive {
+            events.push(TriggerEvent::AdditiveGateOff);
+            gate_counter_additive = 0;
+        } else {
+            gate_counter_additive -= block_size as u32;
         }
     }
 
@@ -683,6 +707,19 @@ pub fn advance_clock(
                 slide: fs.slide,
             });
         }
+
+        // Additive voice trigger.
+        let astep = step % seq.additive_steps.max(1);
+        let as_step = seq.additive_pattern.get(astep).copied().unwrap_or_default();
+        if as_step.active && cond_gate(step / seq.additive_steps.max(1), as_step.cond) {
+            let gate_samples = (sps * as_step.gate as f64) as u32;
+            gate_counter_additive = gate_samples;
+            events.push(TriggerEvent::AdditiveTrigger {
+                note: as_step.note,
+                accent: as_step.accent,
+                slide: as_step.slide,
+            });
+        }
     }
 
     let new_clock = ClockState {
@@ -696,6 +733,7 @@ pub fn advance_clock(
         gate_counter_wavetable,
         gate_counter_sample,
         gate_counter_fm_ops,
+        gate_counter_additive,
         ratchet_remaining,
         ratchet_acc,
         ratchet_interval,

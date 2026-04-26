@@ -673,6 +673,72 @@ pub(super) fn apply_fm_ops_update(
     }
 }
 
+/// Apply Additive synth fields from an LLM JSON update object.
+/// Voice params + 16-element `levels` array + sequencer pattern.
+/// `levels` accepts a JSON array of numbers in `[0, 1]` — shorter
+/// arrays leave the trailing partials untouched, longer arrays
+/// drop the surplus.
+pub(super) fn apply_additive_update(
+    s: &mut AppState,
+    a: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("additive.enabled")
+        && let Some(v) = a.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.additive.enabled = v;
+    }
+    s.additive.volume = unlocked_f32_range(
+        s.additive.volume,
+        a,
+        "volume",
+        "additive.volume",
+        locked,
+        0.0,
+        1.5,
+    );
+    if !locked.contains("additive.pan")
+        && let Some(v) = a.get("pan").and_then(|v| v.as_f64())
+    {
+        s.additive.pan = (v as f32).clamp(-1.0, 1.0);
+    }
+    s.additive.attack = unlocked_f32(s.additive.attack, a, "attack", "additive.attack", locked);
+    s.additive.decay = unlocked_f32(s.additive.decay, a, "decay", "additive.decay", locked);
+    s.additive.sustain = unlocked_f32(s.additive.sustain, a, "sustain", "additive.sustain", locked);
+    s.additive.release = unlocked_f32(s.additive.release, a, "release", "additive.release", locked);
+    if !locked.contains("additive.levels")
+        && let Some(arr) = a.get("levels").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr
+            .iter()
+            .enumerate()
+            .take(crate::state::ADDITIVE_HARMONICS)
+        {
+            if let Some(f) = val.as_f64() {
+                s.additive.levels[i] = (f as f32).clamp(0.0, 1.0);
+            }
+        }
+    }
+    if !locked.contains("sequencer.additive_steps")
+        && let Some(arr) = a.get("additive_steps").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(b) = val.as_bool() {
+                s.sequencer.additive_pattern[i].active = b;
+            }
+        }
+    }
+    if !locked.contains("sequencer.additive_notes")
+        && let Some(arr) = a.get("additive_notes").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.additive_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}
+
 /// Apply AN1X voice fields from an LLM JSON update object.
 pub(super) fn apply_an1x_update(
     s: &mut AppState,

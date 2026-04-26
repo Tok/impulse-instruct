@@ -39,6 +39,11 @@ pub enum ModuleKind {
     /// Plugs the bell / E-piano / FM-bass gap that the existing
     /// AN1X subtractive voice and SAMPLER+ recordings can't fill.
     FmOpsVoice,
+    /// Additive synth — 16 sine partials at integer multiples of
+    /// the played note, with per-harmonic level sliders.  Distinct
+    /// from `WavetableVoice`: the user draws the spectrum directly
+    /// instead of scanning pre-baked frames.  Sequencer-driven.
+    AdditiveVoice,
     GranularTexture,
     /// Dedicated hardcore-style kick voice — distinct from the 808/909 kicks.
     GabberKick,
@@ -185,6 +190,7 @@ impl ModuleKind {
             Self::Theremin => "THEREMIN",
             Self::Pendulum => "PENDULUM",
             Self::FmOpsVoice => "FM OPS",
+            Self::AdditiveVoice => "ADDITIVE",
             Self::GranularTexture => "GRANULAR",
             Self::GabberKick => "GABBER KICK",
             Self::NeuTts => "TTS VOICE",
@@ -294,6 +300,11 @@ impl ModuleKind {
             // RELEASE).  6 cols wide gives the per-op rows breathing
             // room; 5 rows tall fits header + 4 ops.
             Self::FmOpsVoice => (6, 5),
+            // Additive synth — header row (ON/OFF + ADSR + vol +
+            // pan) above a 16-bar harmonic histogram.  6 cols wide
+            // so the histogram has ~30 px per partial slider with
+            // breathing room; 3 rows tall is plenty.
+            Self::AdditiveVoice => (6, 3),
             Self::GranularTexture => (3, 2),
             Self::GabberKick => (3, 2),
             Self::LlmAgent => (3, 2),
@@ -407,6 +418,7 @@ impl ModuleKind {
             | Self::Theremin
             | Self::Pendulum
             | Self::FmOpsVoice
+            | Self::AdditiveVoice
             | Self::GranularTexture
             | Self::NeuTts
             | Self::GabberKick => Zone::Voice,
@@ -481,6 +493,7 @@ impl ModuleKind {
                 | Self::Theremin
                 | Self::Pendulum
                 | Self::FmOpsVoice
+                | Self::AdditiveVoice
                 | Self::An1xVoice
                 | Self::NeuTts
                 | Self::FxReverb

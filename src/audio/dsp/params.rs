@@ -696,6 +696,16 @@ pub struct AudioParams {
     pub fm_ops_op4_decay: f32,
     pub fm_ops_op4_sustain: f32,
     pub fm_ops_op4_release: f32,
+    // Additive synth — 16-partial harmonic series with per-harmonic
+    // level + voice-wide ADSR.
+    pub additive_enabled: bool,
+    pub additive_volume: f32,
+    pub additive_pan: f32,
+    pub additive_levels: [f32; crate::state::ADDITIVE_HARMONICS],
+    pub additive_attack: f32,
+    pub additive_decay: f32,
+    pub additive_sustain: f32,
+    pub additive_release: f32,
     // Granular texture
     pub granular_enabled: bool,
     pub granular_volume: f32,
@@ -729,6 +739,7 @@ pub struct AudioParams {
     pub sample_pitch_offset_cents: f32,
     pub rack_sample: bool,
     pub rack_fm_ops: bool,
+    pub rack_additive: bool,
     // ADSR envelope
     pub sample_attack: f32,
     pub sample_decay: f32,

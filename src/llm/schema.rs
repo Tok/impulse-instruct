@@ -298,6 +298,23 @@ pub fn param_json_schema() -> serde_json::Value {
                 },
                 "additionalProperties": false
             },
+            "additive": {
+                "type": "object",
+                "description": "Additive synth — 16-partial harmonic series with per-partial level sliders.  LLM triggers: 'add an organ', 'drawbar pad', 'pure sine stack', 'harmonic-rich tone'.  Distinct from `wavetable` (scans pre-baked frames) and `fm_ops` (uses cross-modulation): each level slider directly contributes one sine partial at an integer multiple of the played note.",
+                "properties": {
+                    "enabled":      { "type": "boolean" },
+                    "volume":       { "type": "number", "minimum": 0.0, "maximum": 1.5 },
+                    "pan":          { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+                    "levels":       { "type": "array", "items": { "type": "number", "minimum": 0.0, "maximum": 1.0 }, "maxItems": 16, "description": "Per-partial level [fund, 2nd, 3rd, … 16th].  Values 0..1; output normalised by the sum so a fully-pegged spectrum stays bounded.  Drawbar-style additive: e.g. [1, 0.7, 0.5, 0.3, 0.2, 0.15, 0.1, 0.07, ...] for a sawtooth approximation; [1, 0, 1, 0, 1, ...] for a square approximation; [1] for a pure sine." },
+                    "attack":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "decay":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "sustain":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "release":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                    "additive_steps": bool_array,
+                    "additive_notes": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per additive step" }
+                },
+                "additionalProperties": false
+            },
             "pluck": {
                 "type": "object",
                 "description": "Karplus-Strong plucked-string voice — dry melodic voice filling the gap between bass and AN1X.  LLM triggers: 'add a pluck', 'acoustic melody', 'string pad'.",

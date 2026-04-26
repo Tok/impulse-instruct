@@ -3,6 +3,7 @@
 // Run: ./run-tests.sh
 //      ./run-tests.sh --coverage
 
+mod additive_tests;
 mod agent_budget_sleep_tests;
 mod analysis_tests;
 mod api_tests;

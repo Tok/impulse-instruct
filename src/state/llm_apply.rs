@@ -4,8 +4,9 @@ use super::llm_apply_seq::{
     apply_melodic_lane_lens, apply_preecho_voices, apply_sequencer_globals,
 };
 use super::llm_helpers::{
-    apply_an1x_update, apply_bass_update, apply_fm_ops_update, apply_hoover_update,
-    apply_pluck_update, apply_sample_instrument_update, apply_wavetable_update, unlocked_f32,
+    apply_additive_update, apply_an1x_update, apply_bass_update, apply_fm_ops_update,
+    apply_hoover_update, apply_pluck_update, apply_sample_instrument_update,
+    apply_wavetable_update, unlocked_f32,
 };
 use super::llm_helpers_fx::apply_fx_update;
 use super::transitions::{set_drum_step_probability, set_drum_step_ratchet, set_drum_voice_steps};
@@ -687,6 +688,12 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         && let Some(f) = update.get("fm_ops").and_then(|v| v.as_object())
     {
         apply_fm_ops_update(&mut s, f, locked);
+    }
+
+    if in_scope("additive")
+        && let Some(a) = update.get("additive").and_then(|v| v.as_object())
+    {
+        apply_additive_update(&mut s, a, locked);
     }
 
     if in_scope("an1x")

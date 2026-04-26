@@ -10,6 +10,7 @@ pub(super) const KNOB_SPACING: f32 = 8.0;
 /// Spacing between adjacent glass panes (used in ui.horizontal layouts containing glass groups).
 pub(crate) const GLASS_GAP: f32 = 5.0;
 
+pub mod additive;
 pub mod amen;
 mod amen_strips;
 pub(crate) mod amen_viz;
@@ -48,6 +49,7 @@ pub mod tts;
 pub mod viz;
 pub mod wavetable;
 
+pub use additive::draw_additive;
 pub use amen::draw_amen;
 pub use an1x::draw_an1x;
 pub use bass::draw_bass;

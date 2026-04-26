@@ -49,6 +49,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::Theremin => Some("theremin".to_string()),
         ModuleKind::Pendulum => Some("pendulum".to_string()),
         ModuleKind::FmOpsVoice => Some("fm_ops".to_string()),
+        ModuleKind::AdditiveVoice => Some("additive".to_string()),
         ModuleKind::GranularTexture => Some("granular".to_string()),
         ModuleKind::GabberKick => Some("gabber_kick".to_string()),
         ModuleKind::StepSequencer => Some("sequencer".to_string()),
@@ -109,6 +110,9 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "theremin" => Some(Theremin),
         "pendulum" => Some(Pendulum),
         "fmopsvoice" | "fm_ops" | "fmops" | "fm" | "dx7" | "operator" => Some(FmOpsVoice),
+        "additivevoice" | "additive" | "harmonic" | "partials" | "drawbar" | "organ" => {
+            Some(AdditiveVoice)
+        }
         "granulartexture" | "granular" | "grain" | "texture" => Some(GranularTexture),
         "gabberkick" | "gabber" | "hardcorekick" | "rotterdam" => Some(GabberKick),
         "fxreverb" | "reverb" | "verb" => Some(FxReverb),
@@ -269,6 +273,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FmOpsVoice => {
             matches!(n.as_str(), "fm_ops" | "fmops" | "fm" | "dx7" | "operator")
         }
+        ModuleKind::AdditiveVoice => matches!(
+            n.as_str(),
+            "additive" | "harmonic" | "partials" | "drawbar" | "organ"
+        ),
         ModuleKind::GranularTexture => matches!(n.as_str(), "granular" | "grain" | "texture"),
         ModuleKind::GabberKick => {
             matches!(

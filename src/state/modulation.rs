@@ -46,6 +46,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // dedicated jacks — selectors let the user route LFOs to
         // any combination of op level / ratio / ADSR fields.
         FmOpsVoice => &[Selector, Selector, Selector],
+        // Additive: 16 per-harmonic levels + voice ADSR + vol +
+        // pan — too many fixed jacks would be needed; selectors
+        // let the user pick which fields to drive.
+        AdditiveVoice => &[Selector, Selector, Selector],
         // ── Voices without a single pan (multi-voice kits / pan-less) ─────
         DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
             &[Selector, Selector, Selector]

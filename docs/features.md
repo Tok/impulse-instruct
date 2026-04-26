@@ -4,6 +4,78 @@ A detailed log of what's built.
 
 ---
 
+### Additive synth voice
+
+16-partial harmonic-series voice from the wishlist.  Distinct
+from `WavetableVoice` (which scans pre-baked frames): the user
+draws the spectrum directly via per-partial level sliders.
+Sequencer-driven like every other melodic voice.
+
+**DSP shape.**  16 sine-oscillator phase accumulators, each at
+`(i+1) × base_freq` where `base_freq` is set on trigger from
+the played MIDI note.  Per-partial levels (0..1) weight the
+sum; output is normalised by the sum of the levels so a fully-
+pegged spectrum stays bounded at ~1.0 amplitude before
+envelope.  A single voice-wide ADSR shapes the summed output —
+per-partial decays deferred (a follow-up could add per-partial
+decay rates to mimic real instruments where high partials die
+first).  Allocation-free in `process()`.
+
+**State.**  `AdditiveState` with `[f32; 16] levels`, voice
+volume / pan / enabled, plus voice-wide ADSR.  Default partial
+bank uses a 1/n falloff (sawtooth-like) so a freshly enabled
+module produces a recognisable harmonic-rich tone rather than
+a single flat sine.
+
+**Sequencer integration.**  Full lane mirroring Pluck /
+Wavetable / Sample / FM-ops — `additive_pattern: Vec<TB303Step>`,
+`additive_steps: usize`, `AdditiveTrigger` / `AdditiveGateOff`
+events, `gate_counter_additive` in `ClockState`,
+`rack_additive` derived flag in `AudioParams`.
+
+**LLM apply + schema.**  `apply_additive_update` accepts the
+voice fields plus a `levels` array of up to 16 floats.
+Shorter arrays leave the trailing partials untouched (LLM can
+adjust just the fundamental + 2nd + 3rd without repeating the
+1/n tail every time).  Schema entry prompts the LLM to reach
+for additive on organ / drawbar / harmonic-rich / pure-sine-
+stack requests.
+
+**UI.**  6×3 panel.  Header row: ON/OFF + VOLUME + PAN +
+ATTACK / DECAY / SUSTAIN / RELEASE.  Below: an interactive
+16-bar harmonic histogram inside a glass pane.  Click a column
+to set its partial level; drag horizontally to "draw" a curve
+across the spectrum in a single sweep.  Fundamental (column 0)
+gets a brighter shade so the user knows where the played-note
+pitch sits; harmonic numbers labelled at columns 1, 5, 9, 13
+to keep the strip readable without crowding every column.
+
+**Tests.**  15 new — DSP-side: silence-before-trigger,
+silence-when-disabled, audible-after-trigger, fully-pegged
+spectrum bounded, release silences, single-partial drives at
+correct frequency (zero-crossing count of 4th-only harmonic
+matches 400 Hz when fundamental = 100 Hz).  State-side:
+defaults / apply-knobs / apply-levels / shorter-array-keeps-
+trailing / lock-honoured / sequencer-lane / label / alias
+parsing / zone + audio-output.  Full suite **1962 → 1977**.
+
+Files: new `src/state/additive.rs`,
+`src/audio/dsp/additive.rs`, `src/ui/panels/additive.rs`,
+`src/tests/additive_tests.rs`.  Edits across the usual
+voice-add ritual: `src/state/mod.rs`,
+`src/state/sequencer_state.rs`, `src/state/module_kind.rs`,
+`src/state/modulation.rs`, `src/state/rack.rs`,
+`src/state/rack_random.rs`, `src/state/rack_scope.rs`,
+`src/state/rack_wiring.rs`, `src/state/llm_helpers.rs`,
+`src/state/llm_apply.rs`, `src/sequencer/mod.rs`,
+`src/audio/dsp/mod.rs`, `src/audio/dsp/params.rs` +
+`params_from.rs`, `src/audio/dsp/process_block.rs`,
+`src/audio/dsp/trigger_handler.rs`, `src/llm/schema.rs`,
+`src/ui/rack_content.rs`, `src/ui/module_card.rs`,
+`src/ui/panels/mod.rs`, `src/tests/mod.rs`.
+
+---
+
 ### Refactor: split `fx_extras.rs` glitch family into a sibling
 
 `src/audio/dsp/fx_extras.rs` was at 989 lines — 11 from the

@@ -1,5 +1,6 @@
 // ─── audio/dsp/mod.rs ── Pure DSP synthesis, no allocations in process_block()
 
+pub mod additive;
 pub mod an1x;
 pub mod bass303;
 pub mod conv_reverb;
@@ -33,6 +34,7 @@ pub mod theremin;
 mod trigger_handler;
 pub mod voices;
 pub mod wavetable;
+use additive::AdditiveVoice;
 use an1x::An1xVoice;
 use bass303::Bass303;
 use conv_reverb::ConvReverb;
@@ -143,6 +145,7 @@ pub struct DspState {
     theremin: ThereminVoice,
     pendulum: PendulumVoice,
     fm_ops: FmOpsVoice,
+    additive: AdditiveVoice,
     granular: GranularVoice,
     hoover: HooverVoice,
     pluck: PluckVoice,
@@ -291,6 +294,7 @@ impl DspState {
             theremin: ThereminVoice::new(),
             pendulum: PendulumVoice::new(),
             fm_ops: FmOpsVoice::new(),
+            additive: AdditiveVoice::new(),
             granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
             pluck: PluckVoice::new(),
