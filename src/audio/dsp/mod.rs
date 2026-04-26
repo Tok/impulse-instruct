@@ -24,6 +24,7 @@ pub mod fx_sidechain;
 pub mod fx_spectral_gate;
 mod fx_step;
 pub mod fx_tape_echo;
+pub mod fx_trance_gate;
 pub mod fx_tremolo;
 pub mod fx_vibrato;
 pub mod fx_vinyl;
@@ -76,6 +77,7 @@ use fx_resbank::ResBankFx;
 use fx_sidechain::{Gate, Vocoder};
 use fx_spectral_gate::SpectralGateFx;
 use fx_tape_echo::TapeEchoFx;
+use fx_trance_gate::TranceGateFx;
 use fx_tremolo::TremoloFx;
 use fx_vibrato::VibratoFx;
 use fx_vinyl::VinylFx;
@@ -180,6 +182,7 @@ pub struct DspState {
     grain_delay: GrainDelayFx,
     spectral_gate: SpectralGateFx,
     plate: PlateFx,
+    trance_gate: TranceGateFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -352,6 +355,7 @@ impl DspState {
             grain_delay: GrainDelayFx::new(),
             spectral_gate: SpectralGateFx::new(),
             plate: PlateFx::new(sample_rate),
+            trance_gate: TranceGateFx::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

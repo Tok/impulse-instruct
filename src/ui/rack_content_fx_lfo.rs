@@ -39,7 +39,8 @@ pub(super) fn try_draw_fx_lfo_content(
         | ModuleKind::FxMultibandComp
         | ModuleKind::FxGrainDelay
         | ModuleKind::FxSpectralGate
-        | ModuleKind::FxPlate => {}
+        | ModuleKind::FxPlate
+        | ModuleKind::FxTranceGate => {}
         _ => return None,
     }
 
@@ -450,6 +451,99 @@ pub(super) fn try_draw_fx_lfo_content(
                 st.fx.spec_tilt = tl;
                 st.fx.spec_mix = m;
                 st.fx.spec_stft = stft;
+            }
+        }
+        ModuleKind::FxTranceGate => {
+            // Card layout: 16 step toggles in a single row, then a
+            // control row with rate selector + SMOOTH knob + MIX knob.
+            // Pattern bits: bit 0 = leftmost cell, bit 15 = rightmost.
+            let (mut pattern, mut rate, mut sm, mut m) = {
+                let st = app.state.read();
+                (
+                    st.fx.tg_pattern,
+                    st.fx.tg_rate,
+                    st.fx.tg_smooth,
+                    st.fx.tg_mix,
+                )
+            };
+
+            // Step toggle row.  Painted as small fixed-size buttons so
+            // 16 fit comfortably in the 4-col grid.  Active cells use
+            // the IRON fill that matches the toggle_button widget.
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                for i in 0..16 {
+                    let bit_set = (pattern >> i) & 1 == 1;
+                    let fill = if bit_set {
+                        crate::ui::theme::IRON
+                    } else {
+                        crate::ui::theme::PIT
+                    };
+                    let stroke = egui::Stroke::new(
+                        1.0,
+                        if bit_set {
+                            crate::ui::theme::ASH
+                        } else {
+                            crate::ui::theme::SLATE
+                        },
+                    );
+                    let label = egui::RichText::new(format!("{}", i + 1))
+                        .color(if bit_set {
+                            crate::ui::theme::CHALK
+                        } else {
+                            crate::ui::theme::ASH
+                        })
+                        .size(8.5)
+                        .monospace();
+                    let btn = egui::Button::new(label)
+                        .fill(fill)
+                        .stroke(stroke)
+                        .min_size(egui::Vec2::new(18.0, 18.0));
+                    if ui.add(btn).clicked() {
+                        pattern ^= 1 << i;
+                        changed = true;
+                    }
+                }
+            });
+
+            // Control row: rate cycle + SMOOTH knob + MIX knob.
+            ui.horizontal(|ui| {
+                let rate_label = match rate {
+                    0 => "1/4",
+                    1 => "1/8",
+                    2 => "1/16",
+                    _ => "1/32",
+                };
+                let btn = egui::Button::new(
+                    egui::RichText::new(format!("RATE {rate_label}"))
+                        .size(9.5)
+                        .monospace()
+                        .color(crate::ui::theme::CHALK),
+                )
+                .fill(crate::ui::theme::IRON)
+                .stroke(egui::Stroke::new(1.0, crate::ui::theme::ASH))
+                .min_size(egui::Vec2::new(60.0, 18.0));
+                if ui.add(btn).clicked() {
+                    rate = (rate + 1) % crate::audio::dsp::fx_trance_gate::TG_RATE_COUNT;
+                    changed = true;
+                }
+                if widgets::param_control(ui, "SMOOTH", &mut sm, pm("fx.tg_smooth"), ctrl).0 {
+                    changed = true;
+                }
+                if widgets::param_control(ui, "MIX", &mut m, pm("fx.tg_mix"), ctrl).0 {
+                    changed = true;
+                }
+            });
+
+            if changed
+                || pattern != app.state.read().fx.tg_pattern
+                || rate != app.state.read().fx.tg_rate
+            {
+                let mut st = app.state.write();
+                st.fx.tg_pattern = pattern;
+                st.fx.tg_rate = rate;
+                st.fx.tg_smooth = sm;
+                st.fx.tg_mix = m;
             }
         }
         ModuleKind::FxPlate => {

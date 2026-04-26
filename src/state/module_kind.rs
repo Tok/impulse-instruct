@@ -199,6 +199,12 @@ pub enum ModuleKind {
     /// Captures the dense, slightly metallic Lexicon / EMT plate
     /// character.
     FxPlate,
+    /// Trance gate — 16-cell pattern-driven gate synced to the
+    /// sequencer clock.  Distinct from `FxGate` (envelope-driven
+    /// sidechain ducker / noise gate): cell traversal is rhythmic
+    /// rather than amplitude-triggered, with a per-cell-edge ramp
+    /// to suppress clicks.  Classic trance / EDM "chopped pad" FX.
+    FxTranceGate,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -383,6 +389,7 @@ impl ModuleKind {
             Self::FxGrainDelay => "GRAIN DEL",
             Self::FxSpectralGate => "SPEC GATE",
             Self::FxPlate => "PLATE",
+            Self::FxTranceGate => "TRANCE GATE",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -599,6 +606,9 @@ impl ModuleKind {
             | Self::FxGrainDelay
             | Self::FxSpectralGate
             | Self::FxPlate => (2, 1),
+            // Trance gate — 16 step toggles need horizontal room
+            // (4 cols), plus a control row with rate + smooth + mix.
+            Self::FxTranceGate => (4, 2),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -677,6 +687,7 @@ impl ModuleKind {
             | Self::FxGrainDelay
             | Self::FxSpectralGate
             | Self::FxPlate
+            | Self::FxTranceGate
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -773,6 +784,7 @@ impl ModuleKind {
                 | Self::FxGrainDelay
                 | Self::FxSpectralGate
                 | Self::FxPlate
+                | Self::FxTranceGate
         )
     }
 
@@ -877,6 +889,7 @@ impl ModuleKind {
                 | Self::FxVinyl
                 | Self::FxDjFilter
                 | Self::FxPlate
+                | Self::FxTranceGate
                 | Self::LfoModule
                 | Self::CvSequencer
                 | Self::CvSeqScope

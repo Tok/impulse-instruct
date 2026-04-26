@@ -54,6 +54,7 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxGrainDelay => Some(FxStep::GrainDelay),
         ModuleKind::FxSpectralGate => Some(FxStep::SpectralGate),
         ModuleKind::FxPlate => Some(FxStep::Plate),
+        ModuleKind::FxTranceGate => Some(FxStep::TranceGate),
         _ => None,
     }
 }

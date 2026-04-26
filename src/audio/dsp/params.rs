@@ -680,6 +680,11 @@ pub struct AudioParams {
     pub plate_damping: f32,
     pub plate_diffusion: f32,
     pub plate_mix: f32,
+    // Trance gate — 16-cell pattern-driven gate synced to the sequencer clock.
+    pub tg_pattern: u16,
+    pub tg_rate: u8,
+    pub tg_smooth: f32,
+    pub tg_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,

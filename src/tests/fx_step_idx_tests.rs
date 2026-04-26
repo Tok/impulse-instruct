@@ -59,6 +59,7 @@ const ALL_FX_STEPS: &[FxStep] = &[
     FxStep::GrainDelay,
     FxStep::SpectralGate,
     FxStep::Plate,
+    FxStep::TranceGate,
 ];
 
 #[test]
@@ -142,6 +143,7 @@ fn kind_to_fx_step_maps_every_fx_kind_to_its_matching_step() {
         (ModuleKind::FxParamEq, FxStep::ParamEq),
         (ModuleKind::FxPitchShift, FxStep::PitchShift),
         (ModuleKind::FxPlate, FxStep::Plate),
+        (ModuleKind::FxTranceGate, FxStep::TranceGate),
     ] {
         assert_eq!(
             fx_plan::kind_to_fx_step(kind),

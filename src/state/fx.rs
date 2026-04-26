@@ -755,6 +755,24 @@ pub struct FxState {
     /// Wet/dry mix 0..1 (0 = bypass).
     #[serde(default)]
     pub plate_mix: f32,
+    // ── Trance gate ──────────────────────────────────────────────────────
+    /// 16-cell gate pattern as a u16 bitmask — bit N = cell N's gate
+    /// state (1 = open, 0 = closed).  Default `0xAAAA` (alternating)
+    /// engages with an audible eighth-note pulse at 1/16 rate.
+    #[serde(default = "default_tg_pattern")]
+    pub tg_pattern: u16,
+    /// Cell traversal rate selector.  0 = 1/4, 1 = 1/8, 2 = 1/16,
+    /// 3 = 1/32 — cells per bar respectively 4/8/16/32.  Default 1
+    /// (1/8) — quarter-note feel at the default pattern.
+    #[serde(default = "default_tg_rate")]
+    pub tg_rate: u8,
+    /// Per-cell-edge ramp 0..1 → 0.5..50 ms one-pole smoother.  Stops
+    /// the gate from clicking on each transition.
+    #[serde(default = "default_tg_smooth")]
+    pub tg_smooth: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).
+    #[serde(default)]
+    pub tg_mix: f32,
 }
 
 impl Default for FxState {
@@ -942,6 +960,10 @@ impl Default for FxState {
             plate_damping: default_plate_damping(),
             plate_diffusion: default_plate_diffusion(),
             plate_mix: 0.0,
+            tg_pattern: default_tg_pattern(),
+            tg_rate: default_tg_rate(),
+            tg_smooth: default_tg_smooth(),
+            tg_mix: 0.0,
         }
     }
 }

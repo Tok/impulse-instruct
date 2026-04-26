@@ -182,6 +182,11 @@ impl RackState {
                 // by other FX, ConvReverb / Plate sit together) — users
                 // tend to A/B between them in the same context.
                 ModuleKind::FxPlate => 37,
+                // Trance gate clusters with FxGate / FxStutter / FxFreeze
+                // — the rhythmic / gating family.  23 lands it next to
+                // Stutter and TapeStop, both also pattern / time-domain
+                // chopping FX.
+                ModuleKind::FxTranceGate => 23,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

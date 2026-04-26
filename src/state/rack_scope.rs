@@ -95,7 +95,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxMultibandComp
         | ModuleKind::FxGrainDelay
         | ModuleKind::FxSpectralGate
-        | ModuleKind::FxPlate => Some("fx".to_string()),
+        | ModuleKind::FxPlate
+        | ModuleKind::FxTranceGate => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         ModuleKind::CvSequencer => Some("cv_seq".to_string()),
         ModuleKind::Slew => Some("slew".to_string()),
@@ -188,6 +189,9 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
             Some(FxSpectralGate)
         }
         "fxplate" | "plate" | "platereverb" | "plate_reverb" | "emt" | "lexicon" => Some(FxPlate),
+        "fxtrancegate" | "trancegate" | "trance_gate" | "trance" | "patterngate" | "stepgate" => {
+            Some(FxTranceGate)
+        }
         "lfomodule" | "lfo" => Some(LfoModule),
         "cvsequencer" | "cvseq" | "cv_seq" | "stepcv" | "cv" => Some(CvSequencer),
         "slew" | "glide" | "portacv" | "lag" => Some(Slew),
@@ -324,6 +328,16 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxPlate => matches!(
             n.as_str(),
             "plate" | "platereverb" | "plate_reverb" | "plate reverb" | "emt" | "lexicon" | "fx"
+        ),
+        ModuleKind::FxTranceGate => matches!(
+            n.as_str(),
+            "trancegate"
+                | "trance_gate"
+                | "trance gate"
+                | "trance"
+                | "patterngate"
+                | "stepgate"
+                | "fx"
         ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),

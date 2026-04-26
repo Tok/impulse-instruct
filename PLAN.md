@@ -13,10 +13,6 @@ Pick from the top down; each row is one focused commit.
 
 ### FX — new modules
 
-- [ ] **Trance gate** (`FxTranceGate`) — 16-step pattern-driven
-  gate.  Distinct from the envelope-driven `FxGate`: this one
-  toggles wet/dry on a step grid synced to the sequencer clock.
-  Rhythmic chopping for pads / drones, no LFO involvement.
 - [ ] **Wavefolder** (`FxWaveFolder`) — West Coast fold
   distortion.  Sine input → multiple harmonics by reflecting the
   signal back when it crosses ±threshold.  Distinct character

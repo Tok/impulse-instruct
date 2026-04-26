@@ -4,6 +4,67 @@ A detailed log of what's built.
 
 ---
 
+### Trance gate FX (`FxTranceGate`)
+
+Pattern-driven 16-cell gate synced to the sequencer clock.
+Distinct from `FxGate` (envelope-driven sidechain ducker /
+noise gate): cell traversal is rhythmic rather than amplitude-
+triggered, with a per-cell-edge ramp to suppress clicks.
+Classic trance / EDM "chopped pad" effect.
+
+**DSP shape.**  Pattern stored as a `u16` bitmask (bit 0 =
+cell 0, bit 15 = cell 15).  Cell index derived from
+`p.sequencer_current_step` + an internal sub-step phase
+counter (samples elapsed since the last step boundary, reset
+on `prev_seq_step` change).  Cell traversal rate is 1/4, 1/8,
+1/16, or 1/32 of a bar (4 / 8 / 16 / 32 cells per bar);
+sub-step resolution at 1/32 keeps the gate aligned to half-
+sequencer-step boundaries derived from BPM.
+
+On cell-index change the target gate amplitude latches from
+the bit lookup; a one-pole smoother ramps the live gate
+toward target each sample.  Cheap-bypass when `tg_mix < 0.001`.
+
+**Knobs.**
+- `tg_pattern` (u16) — 16-bit gate pattern.  Default `0xAAAA`
+  (alternating odd cells active).
+- `tg_rate` (u8 0..3) — cell-rate selector (1/4, 1/8, 1/16, 1/32).
+  Default 1 (1/8) so the default pattern reads as a quarter-note
+  pulse.
+- `tg_smooth` 0..1 → 0.5..50 ms one-pole smoother time constant.
+  Default 0.2 (~10 ms — clean rhythmic chop without click).
+- `tg_mix` 0..1 wet/dry.  Default 0 so insert is no-op until
+  dialed in.
+
+**Wiring.**  Standard FX add ritual — `FxStep::TranceGate`
+(idx 44, `FX_STEP_COUNT` bumped to 45), `ModuleKind::FxTranceGate`
+("TRANCE GATE" label, **4×2 grid** so the 16 step toggles fit
+in the top row + control row underneath, sort-group 23 next to
+`FxStutter` / `FxTapeStop` — the rhythmic / pattern-chop
+family).  Aliases trancegate / trance_gate / fxtrancegate /
+trance / patterngate / stepgate.
+
+UI is custom (not the templated 4-knob shape): top row paints
+16 small `1`–`16` step toggles (click toggles the bit), bottom
+row has a RATE cycle button + SMOOTH knob + MIX knob.  No XY
+pad — the pattern is the primary surface.
+
+Modulation: 2 selector jacks (smooth + mix only — pattern is a
+bitmask and rate is a discrete selector, neither suited to LFO
+modulation).
+
+**Tests.**  +5 DSP (mix=0 bypass, all-on pattern transparent at
+full mix, all-off silences at full mix, alternating pattern
+visits both states across step changes, output bounded under
+chopping), +7 state-side (defaults are alternating @ 1/8, llm-
+apply all 4 fields, rate above max clamps, lock honoured,
+FxStep mapping, label, alias).  Suite **2226 → 2238**.
+
+Files: new `src/audio/dsp/fx_trance_gate.rs`, new
+`src/tests/fx_trance_gate_tests.rs`.
+
+---
+
 ### Plate reverb FX (`FxPlate`)
 
 Dattorro-style plate reverb — figure-of-eight tank of modulated

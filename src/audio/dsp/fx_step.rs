@@ -405,6 +405,16 @@ impl DspState {
                 p.plate_mix,
                 sr,
             ),
+            FxStep::TranceGate => self.trance_gate.process(
+                sig,
+                p.tg_pattern,
+                p.tg_rate,
+                p.tg_smooth,
+                p.tg_mix,
+                p.sequencer_current_step,
+                p.sequencer_bpm,
+                sr,
+            ),
         }
     }
 

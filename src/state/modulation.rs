@@ -110,6 +110,11 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // all selectors so an LFO on size gives a slowly-evolving
         // tail length.
         FxPlate => &[Selector, Selector, Selector, Selector],
+        // Trance gate: only 2 continuous knobs (smooth + mix); pattern
+        // is a u16 bitmask and rate is a discrete selector, neither
+        // suited to LFO modulation.  Two selectors lets the user
+        // automate the smooth ramp + wet/dry blend.
+        FxTranceGate => &[Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],

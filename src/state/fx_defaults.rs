@@ -222,3 +222,19 @@ pub(super) fn default_plate_damping() -> f32 {
 pub(super) fn default_plate_diffusion() -> f32 {
     0.7 // Dense diffusion network — what gives the plate its smooth-tail character.
 }
+
+pub(super) fn default_tg_pattern() -> u16 {
+    // 0xAAAA = 1010 1010 1010 1010 — odd cells active.  At 1/16 rate
+    // this gives a classic eighth-note pulse; at 1/8 it pulses every
+    // quarter; at 1/4 it pulses on the downbeat only.  Engages
+    // immediately when the user dials mix > 0.
+    0xAAAA
+}
+
+pub(super) fn default_tg_smooth() -> f32 {
+    0.2 // ~10 ms cell-edge ramp — clean rhythmic chop without click.
+}
+
+pub(super) fn default_tg_rate() -> u8 {
+    1 // 1/8 — common trance / EDM cell rate; pairs cleanly with 4/4 grids.
+}

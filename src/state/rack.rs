@@ -314,6 +314,7 @@ impl RackState {
                 | ModuleKind::FxGrainDelay
                 | ModuleKind::FxSpectralGate
                 | ModuleKind::FxPlate
+                | ModuleKind::FxTranceGate
         );
         if !has_audio_out {
             return true;

@@ -327,6 +327,18 @@ pub(super) fn apply_fx_update(
         "fx.plate_diffusion"
     );
     u!(s.fx.plate_mix, "plate_mix", "fx.plate_mix");
+    if !locked.contains("fx.tg_pattern")
+        && let Some(v) = fx.get("tg_pattern").and_then(|v| v.as_u64())
+    {
+        s.fx.tg_pattern = (v & 0xFFFF) as u16;
+    }
+    if !locked.contains("fx.tg_rate")
+        && let Some(v) = fx.get("tg_rate").and_then(|v| v.as_u64())
+    {
+        s.fx.tg_rate = (v as u8).min(crate::audio::dsp::fx_trance_gate::TG_RATE_COUNT - 1);
+    }
+    u!(s.fx.tg_smooth, "tg_smooth", "fx.tg_smooth");
+    u!(s.fx.tg_mix, "tg_mix", "fx.tg_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {
