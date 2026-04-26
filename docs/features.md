@@ -4,6 +4,60 @@ A detailed log of what's built.
 
 ---
 
+### SampleInstrument — SF2 envelope generators (V2 follow-up)
+
+Builds on the per-region ADSR override (immediately prior).
+SF2 stores volume-envelope timing as **timecents**
+(`secs = 2^(tc / 1200)`) and sustain as **centibels of
+attenuation** from peak.  The loader now parses the four volume-
+envelope generators and writes them into `SfzRegion.ampeg_*` so
+the DSP path's per-region override applies automatically.
+
+- New generator opcodes parsed: `attackVolEnv` (34),
+  `decayVolEnv` (36), `sustainVolEnv` (37), `releaseVolEnv`
+  (38).  Generator absent → SfzRegion fields stay at defaults
+  (the DSP falls through to global knobs).  Spec sentinel of
+  -12000 timecents (~1 ms = "instant") is also treated as
+  "default" — the audible result with -12000 is indistinguishable
+  from "no envelope" so collapsing them avoids accidentally
+  routing real samples through a 1 ms attack.
+- Sustain conversion: `pct = 10^(-cB / 200) × 100` (proper
+  amplitude attenuation curve, so 200 cB = 20 dB → ~10 %
+  sustain).  0 cB → 100 % full sustain.
+- New `sf2_timecents_to_secs` helper handles both the absent and
+  sentinel cases uniformly.
+- Generators struct gains `attack_vol_env_tc`, `decay_vol_env_tc`,
+  `sustain_vol_env_cb`, `release_vol_env_tc` as `Option<i16>` so
+  preset-zone → instrument-zone clone+absorb cleanly inherits
+  inheriting values.
+
+3 new unit tests: timecents sentinel + None map to 0; standard
+timecents (-1200, 0, 1200) round-trip to expected seconds; the
+absorb path captures all four volEnv opcodes correctly.
+
+### SampleInstrument — per-region ADSR override (DSP)
+
+`SfzRegion.ampeg_attack_s` / `ampeg_decay_s` / `ampeg_sustain_pct`
+/ `ampeg_release_s` were parsed but ignored.  Wiring them into
+the slot's ADSR closes the gap for SFZ regions immediately and
+gives SF2 envelope generators a place to land.
+
+- `TriggerShape` and `SampleInstrumentSlot` gain a
+  `region_adsr: Option<(attack_s, decay_s, sustain_level,
+  release_s)>` field.  `Some` = SFZ / SF2 region with at least
+  one non-default `ampeg_*` field; `None` = single-WAV path.
+- `step_adsr` reads from the slot's override when present; falls
+  back to `params.sample_attack` / `_decay` / `_sustain` /
+  `_release` (the live global knobs) otherwise.  Single-WAV
+  mode keeps the V1 behaviour where rotating the attack knob
+  mid-note is audible immediately.
+- Sustain conversion: SfzRegion stores sustain as 0..100
+  percent, the DSP wants 0..1 — converted at trigger time.
+
+2 new unit tests: a 1 ms region release overrides a long global
+release (~2 s); a region with all `ampeg_*` at default leaves
+the global knob in charge so the short global release fires.
+
 ### SampleInstrument — `.sf2` preset picker (V2 follow-up)
 
 V1 SF2 loaded only the first preset.  Most SoundFont banks pack
