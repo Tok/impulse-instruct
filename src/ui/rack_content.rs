@@ -755,6 +755,24 @@ pub(super) fn draw_lfo_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_i
     crate::ui::panels::draw_lfo_slot(app, ui, slot);
 }
 
+pub(super) fn draw_cv_seq_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    // Multiple CvSequencer instances share the four CV-seq slots.
+    // Slot index = the instance's order in the rack, capped to
+    // CV_SEQ_SLOTS - 1 so a 5th instance stacks on the last slot.
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::CvSequencer)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_cv_seq(app, ui, slot);
+}
+
 pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     use crate::ui::widgets;
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);

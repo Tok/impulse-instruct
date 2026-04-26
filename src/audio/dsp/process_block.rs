@@ -80,6 +80,22 @@ impl DspState {
             }
         }
 
+        // ── CV sequencer ──────────────────────────────────────────────────────
+        // Step-based modulation: each enabled slot reads the
+        // sequencer's `current_step % 16` and applies the
+        // bipolar-centered step value (× depth) to its target
+        // opcode.  Walks in lock-step with the audio pattern.
+        let cv_step = (p_base.sequencer_current_step as usize) % crate::state::CV_SEQ_STEPS;
+        for slot in p_base.cv_seq.iter() {
+            if !slot.enabled || slot.target == 0 {
+                continue;
+            }
+            // Bipolar swing — 0.5 step value = 0 mod (no effect).
+            let bipolar = (slot.step_values[cv_step] - 0.5) * 2.0;
+            let mod_val = bipolar * slot.depth.clamp(0.0, 1.0);
+            apply_mod_target(&mut p, slot.target, mod_val);
+        }
+
         // ── Free EG ───────────────────────────────────────────────────────────
         if p_base.free_eg_enabled && p_base.free_eg_target != 0 && !self.free_eg_done {
             // Advance phase by one block

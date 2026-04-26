@@ -248,6 +248,28 @@ pub struct LfoParamsCopy {
     pub target: u8,        // opcode from `lfo_target_to_u8`
 }
 
+/// Per-slot CV sequencer configuration passed to the audio thread
+/// (Copy-safe).  Step values stored as a fixed `[f32; 16]` so the
+/// audio thread can index by `current_step` without a heap walk.
+#[derive(Clone, Copy, Debug)]
+pub struct CvSeqParamsCopy {
+    pub enabled: bool,
+    pub step_values: [f32; crate::state::CV_SEQ_STEPS],
+    pub depth: f32, // 0..1 — bipolar swing around 0.5 step value
+    pub target: u8, // opcode from `lfo_target_to_u8`
+}
+
+impl Default for CvSeqParamsCopy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            step_values: [0.5; crate::state::CV_SEQ_STEPS],
+            depth: 0.0,
+            target: 0,
+        }
+    }
+}
+
 /// Per-voice bass synth params — one per Bass303 instance.
 #[derive(Clone, Copy, Debug)]
 pub struct BassVoiceParams {
@@ -599,11 +621,20 @@ pub struct AudioParams {
     pub sample_rate: f32,
     // LFO
     pub lfo: [LfoParamsCopy; 4],
+    // CV sequencer slots — step-sequenced modulation.  Each slot's
+    // `step_values[current_step % 16]` is read per-block and
+    // applied to its target opcode at the configured depth.
+    pub cv_seq: [CvSeqParamsCopy; crate::state::CV_SEQ_SLOTS],
     /// Cable-declared modulation routes — populated from rack Mod cables.
     /// Each route says: "LFO slot N drives target T at depth D".
     pub mod_routes: [ModRouteCopy; MAX_MOD_ROUTES],
     pub mod_route_count: u8,
     pub sequencer_running: bool,
+    /// Current sequencer step (0..15 for the canonical bar).
+    /// Snapshotted per block; CV sequencer slots index their step
+    /// table by `step % CV_SEQ_STEPS` to walk in lock-step with
+    /// the audio pattern.
+    pub sequencer_current_step: u32,
     /// MPE per-note pitch bend, semitones.  Populated from
     /// `AppState.mpe.pitch_bend` × the configured bend range
     /// (currently fixed at ±2 semitones, the GM standard).  Added

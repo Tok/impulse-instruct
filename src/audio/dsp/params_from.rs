@@ -289,9 +289,23 @@ impl AudioParams {
                 }
                 arr
             },
+            cv_seq: {
+                let mut arr =
+                    [super::params::CvSeqParamsCopy::default(); crate::state::CV_SEQ_SLOTS];
+                for (i, slot) in s.cv_seq.iter().enumerate() {
+                    arr[i] = super::params::CvSeqParamsCopy {
+                        enabled: slot.enabled,
+                        step_values: slot.step_values,
+                        depth: slot.depth.clamp(0.0, 1.0),
+                        target: lfo_target_to_u8(slot.target),
+                    };
+                }
+                arr
+            },
             mod_routes,
             mod_route_count,
             sequencer_running: s.sequencer.running,
+            sequencer_current_step: s.sequencer.current_step as u32,
             // MPE expression — bend folded as ±2 semitones (GM
             // standard); pressure / timbre carried as 0..=1 for the
             // bass voice's per-block additive modulation.

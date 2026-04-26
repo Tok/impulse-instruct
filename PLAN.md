@@ -110,9 +110,6 @@ deferred (re-open if it grows legs).
 
 ## Modulation — wishlist
 
-- [ ] **CV sequencer** — 16-step CV pattern module distinct from
-  the audio sequencer.  Outputs CV that other modules can patch
-  in for envelope / pitch automation.
 - [ ] **Slew / glide module** — smooth a CV with separate
   rise / fall times.  Currently glide is bass-only.
 - [ ] **Quantizer** — snap a CV to the nearest scale note.

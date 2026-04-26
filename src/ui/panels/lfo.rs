@@ -6,7 +6,7 @@
 use crate::state::{FreeEg, LfoSlot, LfoTarget, LfoWaveform};
 use crate::ui::{ImpulseApp, theme, widgets};
 
-const TARGET_LABELS: &[(&str, LfoTarget)] = &[
+pub(crate) const TARGET_LABELS: &[(&str, LfoTarget)] = &[
     ("NONE", LfoTarget::None),
     ("CUTOFF", LfoTarget::BassCutoff),
     ("RESONANCE", LfoTarget::BassResonance),
@@ -56,7 +56,7 @@ const TARGET_LABELS: &[(&str, LfoTarget)] = &[
     ("AN1X.PITCH", LfoTarget::An1xPitch),
 ];
 
-fn target_label(t: &LfoTarget) -> &'static str {
+pub(crate) fn target_label(t: &LfoTarget) -> &'static str {
     TARGET_LABELS
         .iter()
         .find(|(_, v)| v == t)
@@ -64,7 +64,7 @@ fn target_label(t: &LfoTarget) -> &'static str {
         .unwrap_or("NONE")
 }
 
-fn next_target(t: &LfoTarget) -> LfoTarget {
+pub(crate) fn next_target(t: &LfoTarget) -> LfoTarget {
     let idx = TARGET_LABELS.iter().position(|(_, v)| v == t).unwrap_or(0);
     TARGET_LABELS[(idx + 1) % TARGET_LABELS.len()].1
 }

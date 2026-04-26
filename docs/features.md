@@ -4,6 +4,57 @@ A detailed log of what's built.
 
 ---
 
+### CV sequencer module (`CvSequencer`)
+
+First entry from the Modulation wishlist.  16-step CV pattern
+that drives a chosen `LfoTarget` parameter, advancing in
+lock-step with the audio step clock.  Distinct from
+`LfoModule` (continuous waveform: sine, saw, etc.) — the CV
+sequencer is a hand-drawn per-step value table, useful for
+stepped modulation patterns (filter sweeps that change every
+step, gate-like duck patterns, pitch transposition tables).
+
+**Engine.**  Four CV-seq slots in `AppState.cv_seq[]` (mirrors
+the four LFO slots), each with `enabled`, `step_values:
+[f32; 16]`, `target: LfoTarget`, `depth: f32`.  Audio thread
+reads `current_step % 16` per block and applies
+`(value - 0.5) * 2.0 * depth` to the target opcode via the
+existing `apply_mod_target` dispatch — same path the LFO uses.
+The 0.5 centre means a flat-row pattern leaves the target
+untouched; bars above 0.5 push positive, below 0.5 push
+negative.
+
+**Per-instance slot mapping.**  Multiple `CvSequencer` rack
+modules share the four backing slots; each instance maps to
+the slot matching its rack-order position (same idiom as the
+existing `LfoModule`).  Instance 5+ stacks on slot 4 — UI
+edits go through, but only the most-recently-registered slot
+is audible.
+
+**UI.**  16 vertical step bars (click + drag to set value),
+beat markers (every 4 steps) brighter, playhead column
+highlighted with a top-and-bottom band that reads through
+both empty and active bars.  Header row: ON/OFF toggle,
+target cycle button (reuses the LFO panel's `TARGET_LABELS`
+and `next_target` — promoted to `pub(crate)` so the new panel
+doesn't duplicate the table), depth `DragValue` 0..1.
+
+**Wiring.**  `ModuleKind::CvSequencer` ("CV SEQ" label, 5×2
+grid, FxMod zone, sort-group 35 alongside `LfoModule`).
+Aliases cvsequencer / cvseq / cv_seq / stepcv / cv.  No audio
+bus output (CV-only); included in the cycle-detect "CV-source"
+matchset alongside `LfoModule`.
+
+**Tests.**  +6 — defaults are disabled with neutral 0.5 step
+values, default round-trips, step-count matches the canonical
+bar, label, zone + no-audio-output, alias parsing.  Suite
+**2128 → 2134**.
+
+Files: new `src/state/cv_seq.rs`, new `src/ui/panels/cv_seq.rs`,
+new `src/tests/cv_seq_tests.rs`.
+
+---
+
 ### Onset / beat-grid overlay viz (`OnsetGrid`)
 
 Second entry from the Visualizations wishlist.  Glanceable

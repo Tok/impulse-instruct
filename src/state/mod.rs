@@ -64,8 +64,10 @@ pub use an1x::{An1xLfoTarget, An1xState, An1xWave};
 pub mod sequencer_state;
 pub use sequencer_state::{SequencerState, Step, TB303Step};
 
+pub mod cv_seq;
 pub mod fx;
 mod fx_defaults;
+pub use cv_seq::{CV_SEQ_SLOTS, CV_SEQ_STEPS, CvSeqSlot};
 pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
 
 pub mod chain_advance;
@@ -257,6 +259,8 @@ pub struct AppState {
     #[serde(default)]
     pub lfo: [LfoSlot; 4],
     #[serde(default)]
+    pub cv_seq: [CvSeqSlot; CV_SEQ_SLOTS],
+    #[serde(default)]
     pub free_eg: FreeEg,
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
@@ -425,6 +429,7 @@ impl Default for AppState {
             fx: Default::default(),
             llm: Default::default(),
             lfo: Default::default(),
+            cv_seq: std::array::from_fn(|_| CvSeqSlot::default()),
             free_eg: Default::default(),
             noise_voice: Default::default(),
             theremin: Default::default(),

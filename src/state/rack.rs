@@ -618,6 +618,7 @@ impl RackState {
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,
                 ModuleKind::LfoModule => 35,
+                ModuleKind::CvSequencer => 35,
                 // Bar oscilloscope sorts next to the spectrum module —
                 // both are global-bus visualisers; users tend to want
                 // them adjacent.

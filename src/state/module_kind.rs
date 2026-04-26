@@ -257,6 +257,12 @@ pub enum ModuleKind {
     OnsetGrid,
     // ── Modulation ────────────────────────────────────────────────────────────
     LfoModule,
+    /// CV sequencer — 16-step CV pattern that drives a chosen
+    /// modulation target, advancing in lock-step with the audio
+    /// step clock.  Distinct from `LfoModule` (continuous
+    /// waveform): a hand-drawn per-step value table for stepped
+    /// filter sweeps, gate-like duck patterns, pitch transposition.
+    CvSequencer,
     LlmAgent,
     // ── LLM console (singleton, Global zone) ──────────────────────────────
     LlmConsole,
@@ -347,6 +353,7 @@ impl ModuleKind {
             Self::PatternHeatmap => "PATTERN MAP",
             Self::OnsetGrid => "ONSET GRID",
             Self::LfoModule => "LFO",
+            Self::CvSequencer => "CV SEQ",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
             Self::MasterOutput => "MASTER",
@@ -465,6 +472,8 @@ impl ModuleKind {
             // Onset grid — wide envelope strip; one row tall is enough.
             Self::OnsetGrid => (5, 2),
             Self::LfoModule => (2, 2),
+            // CV sequencer — 16 step bars need horizontal room.
+            Self::CvSequencer => (5, 2),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
             // Convolution Reverb — 6 knobs in a glass-grouped 2-row
@@ -616,7 +625,8 @@ impl ModuleKind {
             | Self::EventStream
             | Self::PatternHeatmap
             | Self::OnsetGrid
-            | Self::LfoModule => Zone::FxMod,
+            | Self::LfoModule
+            | Self::CvSequencer => Zone::FxMod,
         }
     }
 
@@ -793,6 +803,7 @@ impl ModuleKind {
                 | Self::FxVinyl
                 | Self::FxDjFilter
                 | Self::LfoModule
+                | Self::CvSequencer
                 | Self::LlmAgent
         )
     }
