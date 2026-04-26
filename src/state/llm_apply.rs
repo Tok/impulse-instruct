@@ -5,7 +5,7 @@ use super::llm_apply_seq::{
 };
 use super::llm_helpers::{
     apply_additive_update, apply_an1x_update, apply_bass_update, apply_fm_ops_update,
-    apply_hoover_update, apply_pluck_update, apply_sample_instrument_update,
+    apply_hoover_update, apply_modal_update, apply_pluck_update, apply_sample_instrument_update,
     apply_wavetable_update, unlocked_f32,
 };
 use super::llm_helpers_fx::apply_fx_update;
@@ -694,6 +694,12 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         && let Some(a) = update.get("additive").and_then(|v| v.as_object())
     {
         apply_additive_update(&mut s, a, locked);
+    }
+
+    if in_scope("modal")
+        && let Some(m) = update.get("modal").and_then(|v| v.as_object())
+    {
+        apply_modal_update(&mut s, m, locked);
     }
 
     if in_scope("an1x")

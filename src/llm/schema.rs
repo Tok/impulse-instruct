@@ -298,6 +298,22 @@ pub fn param_json_schema() -> serde_json::Value {
                 },
                 "additionalProperties": false
             },
+            "modal": {
+                "type": "object",
+                "description": "Modal / struck physical-model voice — 8 parallel resonant biquads excited by a short noise burst on each trigger.  LLM triggers: 'add a bell', 'marimba pad', 'glass tone', 'tubular chime', 'metal percussion'.  Distinct from `additive` (which sums per-partial sines): each mode is a damped sinusoid and `decay_scale` controls how long it rings — long for bells, short for damped wood blocks.  Pick `ratio_preset` first to set the harmonic relationship, then redraw `levels` to taste.",
+                "properties": {
+                    "enabled":      { "type": "boolean" },
+                    "volume":       { "type": "number", "minimum": 0.0, "maximum": 1.5 },
+                    "pan":          { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+                    "levels":       { "type": "array", "items": { "type": "number", "minimum": 0.0, "maximum": 1.0 }, "maxItems": 8, "description": "Per-mode amplitude.  8 modes; index 0 = strike tone (= played note when ratio_preset=harmonic, fundamental even when inharmonic)." },
+                    "brightness":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Excitation noise-burst LP cutoff: 0 → ~200 Hz (soft mallet), 1 → ~12 kHz (sharp metallic stick hit)." },
+                    "decay_scale":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Global ring time — 0 = ~5 ms (very damped, wood block), 1 = ~5 s (long bell tail).  Higher modes always die ~30% faster per index step." },
+                    "ratio_preset": { "type": "integer", "minimum": 0, "maximum": 3, "description": "Mode-frequency relationship: 0 = harmonic (string-like integer multiples), 1 = bell (idealised church-bell partials, distinctly inharmonic), 2 = tubular (chime-style narrower inharmonic spread), 3 = metal (marimba-/glass-bar with strong odd-mode emphasis)." },
+                    "modal_steps":  bool_array,
+                    "modal_notes":  { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per modal step" }
+                },
+                "additionalProperties": false
+            },
             "additive": {
                 "type": "object",
                 "description": "Additive synth — 16-partial harmonic series with per-partial level sliders.  LLM triggers: 'add an organ', 'drawbar pad', 'pure sine stack', 'harmonic-rich tone'.  Distinct from `wavetable` (scans pre-baked frames) and `fm_ops` (uses cross-modulation): each level slider directly contributes one sine partial at an integer multiple of the played note.",

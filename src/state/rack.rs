@@ -282,6 +282,7 @@ impl RackState {
                 | ModuleKind::Pendulum
                 | ModuleKind::FmOpsVoice
                 | ModuleKind::AdditiveVoice
+                | ModuleKind::ModalVoice
                 | ModuleKind::An1xVoice
                 | ModuleKind::NeuTts
                 | ModuleKind::FxReverb
@@ -495,6 +496,10 @@ impl RackState {
                 // since both are spectrum-shaping voices that
                 // complement the subtractive AN1X.
                 ModuleKind::AdditiveVoice => 13,
+                // Modal — same cluster as Additive / FM op since
+                // it's another spectrum-shaping voice (struck
+                // resonator bank instead of partial sum).
+                ModuleKind::ModalVoice => 13,
                 ModuleKind::GranularTexture => 18,
                 ModuleKind::NeuTts => 19,
                 ModuleKind::FxWaveshaper => 20,

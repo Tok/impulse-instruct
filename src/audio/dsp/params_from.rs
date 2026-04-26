@@ -336,6 +336,22 @@ impl AudioParams {
             additive_decay: s.additive.decay.clamp(0.0, 1.0),
             additive_sustain: s.additive.sustain.clamp(0.0, 1.0),
             additive_release: s.additive.release.clamp(0.0, 1.0),
+            modal_enabled: s.modal.enabled,
+            modal_volume: s.modal.volume.clamp(0.0, 1.5),
+            modal_pan: s.modal.pan.clamp(-1.0, 1.0),
+            modal_levels: {
+                let mut a = [0.0_f32; crate::state::MODAL_MODES];
+                for (i, slot) in a.iter_mut().enumerate() {
+                    *slot = s.modal.levels[i].clamp(0.0, 1.0);
+                }
+                a
+            },
+            modal_brightness: s.modal.brightness.clamp(0.0, 1.0),
+            modal_decay_scale: s.modal.decay_scale.clamp(0.0, 1.0),
+            modal_ratio_preset: s
+                .modal
+                .ratio_preset
+                .min(crate::state::MODAL_RATIO_PRESETS - 1),
             granular_enabled: s.granular.enabled,
             granular_volume: s.granular.volume,
             granular_density: s.granular.density,
@@ -386,6 +402,11 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::AdditiveVoice && m.enabled),
+            rack_modal: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::ModalVoice && m.enabled),
             sample_attack: s.sample_instrument.attack.clamp(0.0, 1.0),
             sample_decay: s.sample_instrument.decay.clamp(0.0, 1.0),
             sample_sustain: s.sample_instrument.sustain.clamp(0.0, 1.0),

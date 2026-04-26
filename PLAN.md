@@ -93,9 +93,6 @@ features.md.  No remaining items in this section.)
 
 Modules that would plug a real gap in the current voice palette.
 
-- [ ] **Modal / struck physical model** — mass-spring bank for
-  marimba, bell, glass.  Cheap N-mode resonator excited by an
-  impulse / noise burst.
 - [ ] **Chiptune voice** — 2× pulse + triangle + LFSR noise +
   optional 1-bit DPCM, NES-authentic.  Pairs well with the existing
   step sequencer for tracker workflows.

@@ -78,6 +78,14 @@ fn default_additive_steps() -> usize {
     32
 }
 
+fn default_modal_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_modal_steps() -> usize {
+    32
+}
+
 // ─── Step types ──────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
@@ -215,6 +223,8 @@ pub struct SequencerState {
     pub fm_ops_pattern: Vec<TB303Step>,
     #[serde(default = "default_additive_pattern")]
     pub additive_pattern: Vec<TB303Step>,
+    #[serde(default = "default_modal_pattern")]
+    pub modal_pattern: Vec<TB303Step>,
     /// Tonic note (0=C … 11=B). Used for scale highlighting and LLM music theory.
     pub root_note: u8,
     /// Active scale / mode for this pattern.
@@ -238,6 +248,8 @@ pub struct SequencerState {
     pub fm_ops_steps: usize,
     #[serde(default = "default_additive_steps")]
     pub additive_steps: usize,
+    #[serde(default = "default_modal_steps")]
+    pub modal_steps: usize,
     /// Per-voice bass patterns for multi-voice support. Voice 0 mirrors `bass_pattern`.
     #[serde(default = "default_bass_patterns")]
     pub bass_patterns: Vec<Vec<TB303Step>>,
@@ -320,6 +332,7 @@ impl Default for SequencerState {
             sample_pattern: vec![TB303Step::default(); MAX_STEPS],
             fm_ops_pattern: vec![TB303Step::default(); MAX_STEPS],
             additive_pattern: vec![TB303Step::default(); MAX_STEPS],
+            modal_pattern: vec![TB303Step::default(); MAX_STEPS],
             root_note: 9, // A
             scale: Scale::NaturalMinor,
             scale_snap: false,
@@ -332,6 +345,7 @@ impl Default for SequencerState {
             sample_steps: 32,
             fm_ops_steps: 32,
             additive_steps: 32,
+            modal_steps: 32,
             muted_drums: std::collections::HashSet::new(),
             soloed_drums: std::collections::HashSet::new(),
             midi_clock_sync: false,

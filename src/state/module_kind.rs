@@ -44,6 +44,12 @@ pub enum ModuleKind {
     /// from `WavetableVoice`: the user draws the spectrum directly
     /// instead of scanning pre-baked frames.  Sequencer-driven.
     AdditiveVoice,
+    /// Modal / struck-physical-model synth — 8 parallel resonant
+    /// biquads excited by a short noise burst on each trigger.
+    /// Idiomatic for marimba / bell / glass / metal-bar timbres
+    /// the harmonic-stack voices (Additive, AN1X) can't reach.
+    /// Sequencer-driven.
+    ModalVoice,
     GranularTexture,
     /// Dedicated hardcore-style kick voice — distinct from the 808/909 kicks.
     GabberKick,
@@ -191,6 +197,7 @@ impl ModuleKind {
             Self::Pendulum => "PENDULUM",
             Self::FmOpsVoice => "FM OPS",
             Self::AdditiveVoice => "ADDITIVE",
+            Self::ModalVoice => "MODAL",
             Self::GranularTexture => "GRANULAR",
             Self::GabberKick => "GABBER KICK",
             Self::NeuTts => "TTS VOICE",
@@ -305,6 +312,12 @@ impl ModuleKind {
             // so the histogram has ~30 px per partial slider with
             // breathing room; 3 rows tall is plenty.
             Self::AdditiveVoice => (6, 3),
+            // Modal voice — same shape as Additive: header row
+            // (ON/OFF + voice fields + preset cycle) above an
+            // 8-bar mode-amplitude histogram.  6×3 keeps the
+            // histogram sliders comfortable to drag without
+            // dominating the rack.
+            Self::ModalVoice => (6, 3),
             Self::GranularTexture => (3, 2),
             Self::GabberKick => (3, 2),
             Self::LlmAgent => (3, 2),
@@ -419,6 +432,7 @@ impl ModuleKind {
             | Self::Pendulum
             | Self::FmOpsVoice
             | Self::AdditiveVoice
+            | Self::ModalVoice
             | Self::GranularTexture
             | Self::NeuTts
             | Self::GabberKick => Zone::Voice,
@@ -494,6 +508,7 @@ impl ModuleKind {
                 | Self::Pendulum
                 | Self::FmOpsVoice
                 | Self::AdditiveVoice
+                | Self::ModalVoice
                 | Self::An1xVoice
                 | Self::NeuTts
                 | Self::FxReverb

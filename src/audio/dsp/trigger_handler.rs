@@ -217,6 +217,22 @@ impl DspState {
                     self.additive.gate_off();
                 }
             }
+            ModalTrigger {
+                note,
+                accent,
+                slide: _,
+            } => {
+                if self.params.rack_modal {
+                    let freq = super::midi_to_hz_tuned(*note, self.params.tuning);
+                    self.modal
+                        .trigger(freq, *accent, &self.params, self.sample_rate);
+                }
+            }
+            ModalGateOff => {
+                if self.params.rack_modal {
+                    self.modal.gate_off();
+                }
+            }
         }
     }
 }

@@ -50,6 +50,9 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // pan — too many fixed jacks would be needed; selectors
         // let the user pick which fields to drive.
         AdditiveVoice => &[Selector, Selector, Selector],
+        // Modal: same problem — 8 per-mode levels + voice fields
+        // → selectors let the user pick which fields to drive.
+        ModalVoice => &[Selector, Selector, Selector],
         // ── Voices without a single pan (multi-voice kits / pan-less) ─────
         DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
             &[Selector, Selector, Selector]

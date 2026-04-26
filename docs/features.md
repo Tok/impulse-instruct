@@ -4,6 +4,82 @@ A detailed log of what's built.
 
 ---
 
+### Modal / struck physical-model voice
+
+Cheap N-mode resonator from the Voices wishlist.  Plugs the
+marimba / bell / glass / metal-bar gap that the harmonic-stack
+voices (Additive, AN1X) can't reach — modal synthesis models
+each mode as a damped sinusoid, so the inharmonic ratios that
+characterise real struck-percussion timbres come naturally.
+
+**DSP shape.**  8 parallel two-pole resonant biquads excited by
+a short LP-filtered noise burst on each trigger.  Each
+resonator implements `y[n] = 2·r·cos(ω)·y[n-1] − r²·y[n-2] +
+in_scale·x[n]`; the coefficients give an impulse response of
+`A·exp(-t/τ)·sin(2πfₙt)` — exactly modal synthesis's damped
+sinusoid.  `in_scale = √(1 − r²)` is the energy-preserving
+input gain — without it, long-decay modes (r → 1) blow up
+because their resonance gain scales with Q; the full `(1 − r²)`
+form would clamp output too aggressively at long decays.  256-
+sample noise burst (~5.3 ms) excites every mode in the bank
+on each trigger.
+
+**Ratio presets.**  The mode-frequency relationship picks the
+character.  Four presets in V1, all sourced from acoustics
+references for idealised resonators:
+- **0 Harmonic**: integer multiples 1, 2, 3, … 8 — string- /
+  pluck-like timbres.
+- **1 Bell**: 1, 2, 2.4, 3, 4.5, 5.33, 6.66, 8 — idealised
+  church bell with a strong "hum tone" feel.
+- **2 Tubular**: 1, 2.756, 5.404, 8.933, … — narrower
+  inharmonic spread than the bell.
+- **3 Metal**: 1, 3.984, 9.933, 11.32, … — strong odd-mode
+  emphasis with glassy overtones (uniform-thickness metal bar).
+Default preset is Bell — the most musically distinctive of the
+four, and the most interesting straight out of the box.
+
+**State.**  `ModalState` with `[f32; 8] levels` (per-mode
+amplitude), `brightness`, `decay_scale` (global ring time —
+~5 ms to ~5 s on the fundamental, with each higher mode dying
+~30 % faster per index step), `ratio_preset` (clamped
+`0..=3`), plus voice volume + pan + enabled.
+
+**Sequencer integration.**  Full lane mirroring Additive /
+FM-ops — `modal_pattern`, `modal_steps`, `ModalTrigger` /
+`ModalGateOff` events, `gate_counter_modal`, `rack_modal`
+derived flag.  Gate-off dampens the bank's state ×½ as a
+"hand on the bell" gesture rather than abrupt silence.
+
+**LLM apply + schema.**  `apply_modal_update` with the same
+shorter-array-keeps-trailing semantics as Additive.  Schema
+prompts the LLM on bell / marimba / glass / tubular / metal
+percussion requests.  `ratio_preset` clamps defensively at
+apply time.
+
+**UI.**  6×3 panel mirroring Additive's UX: header row
+(ON/OFF + VOLUME + PAN + BRIGHTNESS + DECAY + preset cycle
+button cycling HARMONIC → BELL → TUBULAR → METAL) above an
+8-bar drawable mode-amplitude histogram.  Click or drag to set
+per-mode amplitudes; fundamental column brighter than the rest;
+all 8 columns labelled (vs. Additive's every-4 spacing — we
+have room with only 8).
+
+**Tests.**  16 new — DSP-side: silence-before-trigger,
+silence-when-disabled, audible-after-trigger, fully-pegged
+spectrum bounded, modes-die-after-short-decay, every-preset-
+produces-audible-output (catches regressions where a too-high
+ratio hits the Nyquist clamp).  State-side: defaults-are-bell-
+preset, apply-knobs / apply-levels / shorter-array / lock /
+preset clamp / sequencer lane / label / alias parsing / zone +
+audio-output.  Full suite **1977 → 1993**.
+
+Files: new `src/state/modal.rs`, `src/audio/dsp/modal.rs`,
+`src/ui/panels/modal.rs`, `src/tests/modal_tests.rs`.  Edits
+across the voice-add ritual: same ~22 files as the Additive
+ship.
+
+---
+
 ### Additive synth voice
 
 16-partial harmonic-series voice from the wishlist.  Distinct

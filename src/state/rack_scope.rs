@@ -50,6 +50,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::Pendulum => Some("pendulum".to_string()),
         ModuleKind::FmOpsVoice => Some("fm_ops".to_string()),
         ModuleKind::AdditiveVoice => Some("additive".to_string()),
+        ModuleKind::ModalVoice => Some("modal".to_string()),
         ModuleKind::GranularTexture => Some("granular".to_string()),
         ModuleKind::GabberKick => Some("gabber_kick".to_string()),
         ModuleKind::StepSequencer => Some("sequencer".to_string()),
@@ -113,6 +114,8 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "additivevoice" | "additive" | "harmonic" | "partials" | "drawbar" | "organ" => {
             Some(AdditiveVoice)
         }
+        "modalvoice" | "modal" | "physical" | "physicalmodel" | "bell" | "marimba" | "tubular"
+        | "glass" | "struck" => Some(ModalVoice),
         "granulartexture" | "granular" | "grain" | "texture" => Some(GranularTexture),
         "gabberkick" | "gabber" | "hardcorekick" | "rotterdam" => Some(GabberKick),
         "fxreverb" | "reverb" | "verb" => Some(FxReverb),
@@ -276,6 +279,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::AdditiveVoice => matches!(
             n.as_str(),
             "additive" | "harmonic" | "partials" | "drawbar" | "organ"
+        ),
+        ModuleKind::ModalVoice => matches!(
+            n.as_str(),
+            "modal" | "physical" | "bell" | "marimba" | "tubular" | "glass" | "struck"
         ),
         ModuleKind::GranularTexture => matches!(n.as_str(), "granular" | "grain" | "texture"),
         ModuleKind::GabberKick => {

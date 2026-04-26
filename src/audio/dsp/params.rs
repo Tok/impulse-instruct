@@ -706,6 +706,14 @@ pub struct AudioParams {
     pub additive_decay: f32,
     pub additive_sustain: f32,
     pub additive_release: f32,
+    // Modal / struck physical model — 8-mode resonator bank.
+    pub modal_enabled: bool,
+    pub modal_volume: f32,
+    pub modal_pan: f32,
+    pub modal_levels: [f32; crate::state::MODAL_MODES],
+    pub modal_brightness: f32,
+    pub modal_decay_scale: f32,
+    pub modal_ratio_preset: u8,
     // Granular texture
     pub granular_enabled: bool,
     pub granular_volume: f32,
@@ -740,6 +748,7 @@ pub struct AudioParams {
     pub rack_sample: bool,
     pub rack_fm_ops: bool,
     pub rack_additive: bool,
+    pub rack_modal: bool,
     // ADSR envelope
     pub sample_attack: f32,
     pub sample_decay: f32,

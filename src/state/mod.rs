@@ -44,6 +44,9 @@ pub use fm_ops::{FM_ALGORITHM_COUNT, FmOp, FmOpsState};
 pub mod additive;
 pub use additive::{ADDITIVE_HARMONICS, AdditiveState};
 
+pub mod modal;
+pub use modal::{MODAL_MODES, MODAL_RATIO_PRESETS, ModalState};
+
 pub mod granular;
 pub use granular::GranularState;
 
@@ -257,6 +260,8 @@ pub struct AppState {
     #[serde(default)]
     pub additive: AdditiveState,
     #[serde(default)]
+    pub modal: ModalState,
+    #[serde(default)]
     pub granular: GranularState,
     #[serde(default)]
     pub hoover: HooverState,
@@ -413,6 +418,7 @@ impl Default for AppState {
             pendulum: Default::default(),
             fm_ops: Default::default(),
             additive: Default::default(),
+            modal: Default::default(),
             granular: Default::default(),
             hoover: Default::default(),
             pluck: Default::default(),

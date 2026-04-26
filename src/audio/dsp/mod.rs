@@ -19,6 +19,7 @@ pub mod fx_vinyl;
 pub mod gabber_kick;
 pub mod granular_voice;
 pub mod mod_apply;
+pub mod modal;
 pub mod ms_master;
 pub mod param_eq;
 mod params;
@@ -46,6 +47,7 @@ use fx_djfilter::DjFilter;
 use fx_extras::*;
 use fx_freq_shift::FreqShift;
 use fx_glitch::*;
+use modal::ModalVoice;
 // fx_math symbols (free_eg_value_at, lfo_value_at, sidechain_duck,
 // sidechain_envelope_step, gated_reverb_envelope_step) are only used
 // inside the extracted `process_block.rs`; pulled in there directly.
@@ -146,6 +148,7 @@ pub struct DspState {
     pendulum: PendulumVoice,
     fm_ops: FmOpsVoice,
     additive: AdditiveVoice,
+    modal: ModalVoice,
     granular: GranularVoice,
     hoover: HooverVoice,
     pluck: PluckVoice,
@@ -295,6 +298,7 @@ impl DspState {
             pendulum: PendulumVoice::new(),
             fm_ops: FmOpsVoice::new(),
             additive: AdditiveVoice::new(),
+            modal: ModalVoice::new(),
             granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
             pluck: PluckVoice::new(),

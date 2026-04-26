@@ -36,6 +36,7 @@ const VOICE_POOL: &[ModuleKind] = &[
     ModuleKind::AmenSampler,
     ModuleKind::FmOpsVoice,
     ModuleKind::AdditiveVoice,
+    ModuleKind::ModalVoice,
 ];
 
 /// Curated pool of FX modules.  Includes both the cheap-and-cheerful

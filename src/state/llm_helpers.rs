@@ -739,6 +739,83 @@ pub(super) fn apply_additive_update(
     }
 }
 
+/// Apply Modal voice fields from an LLM JSON update object.
+/// Voice params + 8-element `levels` array + sequencer pattern +
+/// preset / brightness / decay-scale knobs.  `levels` semantics
+/// match the Additive helper: shorter arrays leave trailing
+/// modes alone, locks honoured per field.
+pub(super) fn apply_modal_update(
+    s: &mut AppState,
+    m: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("modal.enabled")
+        && let Some(v) = m.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.modal.enabled = v;
+    }
+    s.modal.volume = unlocked_f32_range(
+        s.modal.volume,
+        m,
+        "volume",
+        "modal.volume",
+        locked,
+        0.0,
+        1.5,
+    );
+    if !locked.contains("modal.pan")
+        && let Some(v) = m.get("pan").and_then(|v| v.as_f64())
+    {
+        s.modal.pan = (v as f32).clamp(-1.0, 1.0);
+    }
+    s.modal.brightness = unlocked_f32(
+        s.modal.brightness,
+        m,
+        "brightness",
+        "modal.brightness",
+        locked,
+    );
+    s.modal.decay_scale = unlocked_f32(
+        s.modal.decay_scale,
+        m,
+        "decay_scale",
+        "modal.decay_scale",
+        locked,
+    );
+    if !locked.contains("modal.ratio_preset")
+        && let Some(v) = m.get("ratio_preset").and_then(|v| v.as_u64())
+    {
+        s.modal.ratio_preset = (v as u8).min(crate::state::MODAL_RATIO_PRESETS - 1);
+    }
+    if !locked.contains("modal.levels")
+        && let Some(arr) = m.get("levels").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(crate::state::MODAL_MODES) {
+            if let Some(f) = val.as_f64() {
+                s.modal.levels[i] = (f as f32).clamp(0.0, 1.0);
+            }
+        }
+    }
+    if !locked.contains("sequencer.modal_steps")
+        && let Some(arr) = m.get("modal_steps").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(b) = val.as_bool() {
+                s.sequencer.modal_pattern[i].active = b;
+            }
+        }
+    }
+    if !locked.contains("sequencer.modal_notes")
+        && let Some(arr) = m.get("modal_notes").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.modal_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}
+
 /// Apply AN1X voice fields from an LLM JSON update object.
 pub(super) fn apply_an1x_update(
     s: &mut AppState,

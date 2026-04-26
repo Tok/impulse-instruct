@@ -58,6 +58,7 @@ mod midi_export_tests;
 mod midi_import_tests;
 mod midi_learn_tests;
 mod mod_cable_entry_tests;
+mod modal_tests;
 mod morph_tests;
 mod mpe_dsp_tests;
 mod mpe_tests;
