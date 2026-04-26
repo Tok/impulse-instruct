@@ -4,6 +4,97 @@ A detailed log of what's built.
 
 ---
 
+### CV-sequence visualiser (`CvSeqScope`)
+
+V2 polish — the existing `CvSequencer` panel already shows its 16
+step bars in-place, but a focused readout (visible at a glance,
+with a live playhead) reads better while performing.
+
+- New `ModuleKind::CvSeqScope` — 4×2 viz module sized to mirror
+  `LfoScope`, drops in alongside the LFO scope in the menu and
+  the rack-render order pool.
+- Stair-step trace of `(step - 0.5) * 2 * depth` — the actual
+  bipolar mod value the audio thread sends to the target, not
+  the raw 0..1 step.  Playhead column highlights the live step;
+  beat-major bars (every 4th) lift slightly.
+- Source-slot picking via the cable graph: a CV cable from any
+  `CvSequencer` to the scope selects that slot.  Unwired falls
+  back to the first enabled CV-seq slot — same idiom as
+  `LfoScope` so the two reads consistently.
+- Pure-state `cv_seq_slot_from_cables` helper + four unit tests
+  covering the no-cable / single-source / positional-rank /
+  ignore-non-source contracts.
+
+### Vinyl FX — start/stop transient
+
+V2 follow-up to the steady-state vinyl colour V1.  Adds a
+`TRANSIENT` knob (0..1) that drives a rate-modulated playback
+through the existing colour stage:
+
+- 0 = at full speed (V1 behaviour, no rate modulation —
+  bit-equal to the pre-V2 path at this value).
+- 1 = deck stopped (rate=0, output silenced).
+- Curve is `(1 - t)^2` — same perceptual log slow-down used by
+  `FxTapeStop`, so a linear knob sweep feels natural.
+
+Differentiated from `FxTapeStop` by always layering the vinyl
+colour (warmth shelves + surface noise) on top of the rate ramp;
+TapeStop is transparent.  Users automate `transient` 0→1 for a
+brake transient or 1→0 for a spin-up; the steady-state colour
+applies once the ramp completes.
+
+Internal: 24 k-sample delay buffer (0.5 s @ 48 kHz), fractional
+read head with linear interp.  Read head re-anchors when
+transient drops to 0 so the V1 path is preserved bit-equal.
+
+### Shimmer mode on `FxConvReverb`
+
+V2 follow-up — adds a `SHIMMER` knob (0..1) that pitch-shifts the
+wet output +12 semitones (one octave up) and folds it back into
+the convolution input on the next sample.  Classic ambient-shimmer
+ladder: each pass through the IR feeds a higher octave of the
+previous tail, building a cathedral of overtones.
+
+- Internal `PitchShift` instance dedicated to the shimmer path,
+  fixed at +12 ST (V1 of the shimmer flag is one ladder, not
+  chord stacking).
+- One-sample delay via `last_wet_for_shimmer` breaks the
+  algebraic loop.
+- Stash point is the post-tone-shaping mid (after damp / lowcut)
+  so the shimmer ladder inherits the user's filter cuts —
+  prevents harsh build-up in already-attenuated bands.
+- Feedback path falls back to a no-op pitch-shifter call when
+  shimmer=0 to keep the ring buffer current; the V1 path is
+  bit-equal at depth 0.
+
+Two new unit tests: shimmer=0 matches V1 output bit-exactly, and
+shimmer=0.7 measurably boosts the +12 ST FFT bin over the
+no-shimmer baseline.
+
+### MIDI granuliser — file-to-file mode
+
+V2 follow-up to absurd-queue feature #8.  V1 scattered triggers
+inside the running sequencer pattern; this adds a
+`granulise_smf_bytes` wrapper so users can pre-process MIDI clips
+offline:
+
+- New `granulise_smf_bytes(bytes, opts) -> Result<Vec<u8>, String>`
+  — parses the SMF, runs the granuliser over every melodic lane
+  the exporter writes (bass / hoover / an1x), re-emits SMF bytes.
+- Bridges the import/export round-trip lossiness by mirroring
+  `bass_patterns[1]` → `hoover_pattern` after import, so a
+  2-track source survives (RH stays on bass; LH ends up on
+  hoover).
+- `POST /api/midi/granulise` grows an `in_path` / `out_path`
+  shape — when `in_path` is provided, the handler reads SMF
+  bytes from disk, granulises, writes to `out_path` (defaulting
+  to `in_path` for in-place edits).  No live state is touched
+  on this path.
+
+Three round-trip tests: density=1 preserves the RH lane,
+density=0 produces an empty SMF that the importer rejects with
+the expected error, and garbage-input bubbles up as an Err.
+
 ### Hoover voice tuning — PWM + sub + pitch dip
 
 Closes the long-standing "doesn't sound like a hoover" known issue

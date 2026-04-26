@@ -8,18 +8,17 @@ This file lists **future work only** — completed items get moved into
 
 ## Next session — kickoff queue
 
-This session shipped three of the previous queue (Hoover tuning, GRAN
-pitch-tracking, AI patch morph dialog — see `features.md`).  Remaining
-small / focused queue:
+This session also closed the deferred V2 sweep — Vinyl start/stop
+transient, MIDI granuliser file-to-file, Shimmer mode on
+`FxConvReverb`, and the CV-sequence visualiser all shipped (see
+`features.md`).  Remaining queue:
 
 1. **Demo recording — pick one scene**.  Multiple scenarios queued
    (acid re-record, MC singer, preecho, LFO assignment, parameter
    ramp, event stream, D&B re-record).  All are non-coding — just
    capturing audio against the existing scene scripts.
-2. **Deferred V2 sweep** — pick from the `## Deferred V2 follow-ups`
-   list below: Vinyl start/stop transient (small), MIDI granuliser
-   file-to-file (small), Shimmer mode on `FxConvReverb` (medium),
-   Spectral gate STFT version (large, blocked on FFT machinery).
+2. **Spectral gate — true STFT version**.  Still deferred; needs
+   FFT machinery to land first.  Multi-session prerequisite chain.
 
 ---
 
@@ -36,12 +35,6 @@ per-zone inspector all wired (see features.md).  Remaining slice:
 
 ## FX — still open
 
-- [-] **Shimmer mode flag on `FxConvReverb`** — *deferred*.
-  Pitch-shift (+12 / +7) in the feedback loop is doable but needs
-  careful integration with `ConvReverb`'s data flow + an extra
-  `PitchShift` instance inside the convolver — bigger than a flag,
-  smaller than a new module.  Pick up when ConvReverb gets
-  attention next.
 - [-] **Phase correlation strip (`CorrMeter`)** — *not separately
   shipped*; the existing `StereoMeter` already shows correlation +
   L/R balance as a horizontal strip, which covers the same use
@@ -55,6 +48,8 @@ per-zone inspector all wired (see features.md).  Remaining slice:
   parallel-BPF approximation (per-band envelope + gate, subtractive
   recombination).  The textbook STFT version is deferred until FFT
   machinery lands in the codebase.
+
+(Shimmer mode on `FxConvReverb` shipped — see `features.md`.)
 
 ## Integration — open
 
@@ -115,14 +110,8 @@ follow-ups carried per-feature in features.md:
 
 ## Visualizations — wishlist
 
-- [ ] **CV sequence visualiser** — focused waveform / value-bar
-  view of an assigned CV-seq slot's per-step output.  The CV
-  sequencer module is shipped; this is the dedicated visualiser
-  companion (the existing CV-seq panel already shows its 16 step
-  bars in-place, so this is V2 polish rather than an unmet need).
-
-(GRAN pitch-tracking trigger mode + AI patch morph UI dialog
-shipped — see `features.md`.)
+(CV sequence visualiser, GRAN pitch-tracking trigger mode, and AI
+patch morph UI dialog all shipped — see `features.md`.)
 
 ## Modulation — wishlist
 
@@ -143,16 +132,9 @@ re-open here if any of them grow legs.
 
 ## Deferred V2 follow-ups (from the absurd-queue ship)
 
-- [ ] **MIDI granuliser — file-to-file mode**.  V1 scatters the
-  running sequencer pattern in place; a `granulise_smf_bytes`
-  wrapper would let users pre-process MIDI clips offline.
-- [ ] **Vinyl FX — start / stop transient**.  V1 covers the
-  steady-state colour; the ramp-up / brake transient was
-  deliberately deferred (FxTapeStop overlap).  Could come back
-  as a dedicated knob if users want both.
-
-(AI patch morph UI dialog + GRAN pitch-tracking trigger mode
-shipped — see `features.md`.)
+(All shipped — MIDI granuliser file-to-file, Vinyl FX start/stop
+transient, AI patch morph UI dialog, and GRAN pitch-tracking
+trigger mode all landed.  See `features.md`.)
 
 ## Demo recording
 
