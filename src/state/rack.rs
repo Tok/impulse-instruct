@@ -643,6 +643,9 @@ impl RackState {
                 // Pattern heatmap groups with the activity / event
                 // viz cluster — all sequencer-state readouts.
                 ModuleKind::PatternHeatmap => 50,
+                // Onset grid groups with the heatmap — both
+                // sequencer-relative analysis tools.
+                ModuleKind::OnsetGrid => 51,
             }
         }
         let cols = GRID_COLS as usize;

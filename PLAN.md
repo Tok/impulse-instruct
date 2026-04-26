@@ -105,9 +105,6 @@ deferred (re-open if it grows legs).
 
 ## Visualizations — wishlist
 
-- [ ] **Onset / beat-grid overlay** — detected onsets vs sequencer
-  grid (already have `audio/onset.rs`).  Debug tool for groove /
-  late-strike discussions.
 - [ ] **CV sequence visualiser** — paired with the
   modulation-wishlist CV sequencer below if shipped.
 

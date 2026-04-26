@@ -194,6 +194,9 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "patternheatmap" | "patternmap" | "heatmap" | "patterndensity" | "patterns" => {
             Some(PatternHeatmap)
         }
+        "onsetgrid" | "onset_grid" | "onsetoverlay" | "groove" | "groovecheck" | "onsets" => {
+            Some(OnsetGrid)
+        }
         "neutts" | "tts" | "voice" | "mc" => Some(NeuTts),
         _ => None,
     }
@@ -394,6 +397,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::PatternHeatmap => matches!(
             n.as_str(),
             "patternheatmap" | "patternmap" | "heatmap" | "patterndensity" | "patterns"
+        ),
+        ModuleKind::OnsetGrid => matches!(
+            n.as_str(),
+            "onsetgrid" | "onset_grid" | "groove" | "groovecheck" | "onsets"
         ),
     }
 }

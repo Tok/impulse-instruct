@@ -247,6 +247,14 @@ pub enum ModuleKind {
     /// voices in the current pattern; complementary to the focused
     /// per-voice sequencer panels.  Pure UI; no DSP, no audio I/O.
     PatternHeatmap,
+    /// Onset / beat-grid overlay — rolling envelope of the master
+    /// audio for the last bar with the 16 sequencer step-tick
+    /// vertical lines drawn through it.  Glanceable groove drift
+    /// indicator: peaks aligned with ticks = on grid, peaks
+    /// drifting before / after = early / late strikes.  Pure UI;
+    /// reads `granular_tap` (already maintained for the CAPTURE
+    /// path) so no new DSP plumbing.
+    OnsetGrid,
     // ── Modulation ────────────────────────────────────────────────────────────
     LfoModule,
     LlmAgent,
@@ -337,6 +345,7 @@ impl ModuleKind {
             Self::PhaseWheel => "PHASE",
             Self::EventStream => "EVENT STREAM",
             Self::PatternHeatmap => "PATTERN MAP",
+            Self::OnsetGrid => "ONSET GRID",
             Self::LfoModule => "LFO",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
@@ -453,6 +462,8 @@ impl ModuleKind {
             // Pattern heatmap — 16 step columns + a left label column;
             // tall enough to show several voice rows comfortably.
             Self::PatternHeatmap => (5, 3),
+            // Onset grid — wide envelope strip; one row tall is enough.
+            Self::OnsetGrid => (5, 2),
             Self::LfoModule => (2, 2),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
@@ -604,6 +615,7 @@ impl ModuleKind {
             | Self::PhaseWheel
             | Self::EventStream
             | Self::PatternHeatmap
+            | Self::OnsetGrid
             | Self::LfoModule => Zone::FxMod,
         }
     }

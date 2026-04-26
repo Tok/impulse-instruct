@@ -179,7 +179,7 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         MasterOutput | LfoModule | LlmAgent | LlmConsole | SpectrumAnalyzer | StereoMeter
         | ActivityTimeline | BarOscilloscope | StereoVectorscope | LfoScope | PitchTracker
         | ChordDisplay | Spectrogram | LoudnessMeter | PhaseWheel | EventStream
-        | PatternHeatmap => &[],
+        | PatternHeatmap | OnsetGrid => &[],
     }
 }
 

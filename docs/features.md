@@ -4,6 +4,45 @@ A detailed log of what's built.
 
 ---
 
+### Onset / beat-grid overlay viz (`OnsetGrid`)
+
+Second entry from the Visualizations wishlist.  Glanceable
+groove-drift indicator: a rolling RMS envelope of the master
+audio for the last bar, overlaid with 16 vertical step-tick
+marks.  Peaks aligned with ticks = on grid; peaks drifting
+before / after = early / late strikes.
+
+**DSP shape.**  Reads `granular_tap` (already maintained for
+the CAPTURE path — 3 s mono ring buffer of the master output)
+under the existing UI lock-free constraint, so no new audio-
+thread plumbing.  Walks the most recent `bar_samples` of the
+ring buffer (derived from live BPM × 4 beats), bucketed into
+4 ms RMS windows.  Cheap energy-rise peak picker marks
+buckets above 40 % of the window peak as onsets.  Falls back
+gracefully when the ring is empty (renders "no audio yet").
+
+**Layout.**  One row of 16 step ticks (every 1/16 of the bar);
+4 of them (the beats) drawn brighter so the user reads bar
+structure at a glance.  Envelope rendered as filled grey bars
+below; onset markers as bright dots above.  Live playhead
+cursor cuts across both for a "where are we right now" read.
+BPM readout in the corner.
+
+**Wiring.**  `ModuleKind::OnsetGrid` ("ONSET GRID" label, 5×2
+grid, FxMod zone, sort-group 51 next to PatternHeatmap).
+Aliases onsetgrid / onset_grid / groove / groovecheck /
+onsets.  Pure UI — no DSP, no audio I/O, no LLM apply path.
+
+**Tests.**  +3 DSP-side (envelope tracks a single transient,
+peak picking returns local maxima above threshold, empty
+buffer guarded), +3 state-side (label, zone + no-audio-IO,
+alias parsing).  Suite **2122 → 2128**.
+
+Files: new `src/ui/panels/onset_grid.rs`, new
+`src/tests/onset_grid_tests.rs`.
+
+---
+
 ### Pattern density heatmap viz (`PatternHeatmap`)
 
 First entry from the Visualizations wishlist.  Glanceable

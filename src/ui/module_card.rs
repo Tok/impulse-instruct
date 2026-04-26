@@ -112,7 +112,8 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::LoudnessMeter
         | ModuleKind::PhaseWheel
         | ModuleKind::EventStream
-        | ModuleKind::PatternHeatmap => 20,
+        | ModuleKind::PatternHeatmap
+        | ModuleKind::OnsetGrid => 20,
         ModuleKind::LfoModule => 18,
         ModuleKind::LlmAgent => 30,
         ModuleKind::LlmConsole => 28,
