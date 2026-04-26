@@ -186,3 +186,15 @@ pub(super) fn default_tape_echo_age() -> f32 {
 pub(super) fn default_mb_thresh() -> f32 {
     1.0 // No compression until the user pulls a band threshold below the signal peak.
 }
+
+pub(super) fn default_grain_delay() -> f32 {
+    0.4 // ~200 ms — comfortable cloud-of-grains feel without long latency.
+}
+
+pub(super) fn default_grain_size() -> f32 {
+    0.4 // ~90 ms — chorus-y, not too smear-y.
+}
+
+pub(super) fn default_grain_scatter() -> f32 {
+    0.4 // Audible jitter on first engagement without going seasick.
+}

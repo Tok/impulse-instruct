@@ -214,6 +214,10 @@ impl AudioParams {
             mb_mid_thresh: s.fx.mb_mid_thresh.clamp(0.0, 1.5),
             mb_high_thresh: s.fx.mb_high_thresh.clamp(0.0, 1.5),
             mb_mix: s.fx.mb_mix.clamp(0.0, 1.0),
+            grain_delay: s.fx.grain_delay.clamp(0.0, 1.0),
+            grain_size: s.fx.grain_size.clamp(0.0, 1.0),
+            grain_scatter: s.fx.grain_scatter.clamp(0.0, 1.0),
+            grain_mix: s.fx.grain_mix.clamp(0.0, 1.0),
             param_eq_ms_mode: s.fx.param_eq_ms_mode,
             conv_reverb_mix: s.fx.conv_reverb_mix.clamp(0.0, 1.0),
             // Cabinet mode caps the IR length at 10 % of the loaded

@@ -14,6 +14,7 @@ pub mod fx_djfilter;
 pub mod fx_extras;
 pub mod fx_freq_shift;
 pub mod fx_glitch;
+pub mod fx_grain_delay;
 pub mod fx_iso_eq;
 pub mod fx_math;
 pub mod fx_mb_comp;
@@ -63,6 +64,7 @@ use vocal::VocalVoice;
 // sidechain_envelope_step, gated_reverb_envelope_step) are only used
 // inside the extracted `process_block.rs`; pulled in there directly.
 use fx_deesser::DeEsserFx;
+use fx_grain_delay::GrainDelayFx;
 use fx_iso_eq::IsoEqFx;
 use fx_mb_comp::MultibandCompFx;
 use fx_resbank::ResBankFx;
@@ -160,6 +162,7 @@ pub struct DspState {
     resbank: ResBankFx,
     tape_echo: TapeEchoFx,
     mb_comp: MultibandCompFx,
+    grain_delay: GrainDelayFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -320,6 +323,7 @@ impl DspState {
             resbank: ResBankFx::new(),
             tape_echo: TapeEchoFx::new(),
             mb_comp: MultibandCompFx::new(),
+            grain_delay: GrainDelayFx::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

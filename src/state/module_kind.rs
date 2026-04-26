@@ -163,6 +163,12 @@ pub enum ModuleKind {
     /// preset knob, with pitch governed by the root knob rather
     /// than tracking the input.
     FxResBank,
+    /// Grain Delay — granular feedback path.  Distinct from
+    /// `FxMultitap` (rhythmic taps), `FxFreeze` (held buffer),
+    /// and `FxDelay` (single tap).  Reads short Hann-windowed
+    /// grains scattered in time + pitch around a baseline delay,
+    /// producing a chorused, smeared echo cloud.
+    FxGrainDelay,
     /// Multiband compressor — 3-band split + 3 independent
     /// downward compressors.  Distinct from `FxCompressor`
     /// (broadband single-band): each band has its own threshold,
@@ -301,6 +307,7 @@ impl ModuleKind {
             Self::FxResBank => "RES BANK",
             Self::FxTapeEcho => "TAPE ECHO",
             Self::FxMultibandComp => "MB COMP",
+            Self::FxGrainDelay => "GRAIN DEL",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -484,7 +491,8 @@ impl ModuleKind {
             | Self::FxDeEsser
             | Self::FxResBank
             | Self::FxTapeEcho
-            | Self::FxMultibandComp => (2, 1),
+            | Self::FxMultibandComp
+            | Self::FxGrainDelay => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -560,6 +568,7 @@ impl ModuleKind {
             | Self::FxResBank
             | Self::FxTapeEcho
             | Self::FxMultibandComp
+            | Self::FxGrainDelay
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -644,6 +653,7 @@ impl ModuleKind {
                 | Self::FxResBank
                 | Self::FxTapeEcho
                 | Self::FxMultibandComp
+                | Self::FxGrainDelay
         )
     }
 
@@ -703,6 +713,7 @@ impl ModuleKind {
                 | Self::FxResBank
                 | Self::FxTapeEcho
                 | Self::FxMultibandComp
+                | Self::FxGrainDelay
         )
     }
 

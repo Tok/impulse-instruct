@@ -4,6 +4,56 @@ A detailed log of what's built.
 
 ---
 
+### Grain Delay FX (`FxGrainDelay`)
+
+Granular feedback path from the FX wishlist.  Distinct from
+`FxMultitap` (rhythmic taps), `FxFreeze` (held buffer), and
+`FxDelay` (single tap): reads short Hann-windowed grains
+scattered in time + pitch around a baseline delay, producing
+a chorused, smeared, frequency-shifted echo cloud rather
+than a clean delay tap.
+
+**DSP shape.**  216 000-sample heap-allocated delay buffer
+(2.25 s at 96 kHz, sized for max delay + grain length + 50 %
+position scatter).  4 overlapping grains, each running an
+independent fractional read at its own pitch_ratio with a
+Hann window.  Trigger phase staggered by 1/N of the grain
+length so the four grains always overlap in different
+window stages.  On retrigger each grain picks a fresh random
+position offset (±50 % of base delay × scatter) and pitch
+ratio (±1 octave × scatter).  Output is windowed-sum / N for
+roughly unity perceived gain.  Allocation-free; uses an LCG
+(no rand crate dep) so two FX instances are deterministic
+when scatter=0.
+
+**Knobs.**
+- `grain_delay` 0..1 → 50..1000 ms log-mapped (centre of the
+  grain cloud).
+- `grain_size` 0..1 → 20..200 ms grain length (short = chorus
+  / verb cloud, long = smeared delay tap).
+- `grain_scatter` 0..1.  0 = grains aligned (chorus around
+  the baseline); 1 = wide pitch jitter + position scatter.
+- `grain_mix` 0..1 with cheap-bypass fast path.
+
+**Wiring.**  Standard FX add ritual — `FxStep::GrainDelay`
+(idx 41, `FX_STEP_COUNT` bumped to 42),
+`ModuleKind::FxGrainDelay` ("GRAIN DEL" label, 2×1 grid,
+sort-group 11 alongside FxDelay / FxMultitap / FxRevDelay /
+FxTapeEcho).  Aliases graindelay / grain_delay / fxgraindelay /
+granulardelay / graincloud.  4 × Selector modulation jacks —
+LFO on scatter gives a slowly-evolving jitter floor.
+
+**Tests.**  +4 DSP (mix=0 bypass, audible output from steady
+sine, output bounded, scatter=0 deterministic across two FX
+instances), +6 state-side (defaults, llm-apply all 4 knobs,
+lock honoured, FxStep mapping, label, alias).  Suite **2098
+→ 2108**.
+
+Files: new `src/audio/dsp/fx_grain_delay.rs`, new
+`src/tests/fx_grain_delay_tests.rs`.
+
+---
+
 ### Multiband compressor FX (`FxMultibandComp`)
 
 Mastering-grade dynamics from the FX wishlist — 3-band split

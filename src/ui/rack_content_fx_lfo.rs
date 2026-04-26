@@ -36,7 +36,8 @@ pub(super) fn try_draw_fx_lfo_content(
         | ModuleKind::FxDeEsser
         | ModuleKind::FxResBank
         | ModuleKind::FxTapeEcho
-        | ModuleKind::FxMultibandComp => {}
+        | ModuleKind::FxMultibandComp
+        | ModuleKind::FxGrainDelay => {}
         _ => return None,
     }
 
@@ -340,6 +341,54 @@ pub(super) fn try_draw_fx_lfo_content(
                 st.fx.mb_mid_thresh = m;
                 st.fx.mb_high_thresh = h;
                 st.fx.mb_mix = mx;
+            }
+        }
+        ModuleKind::FxGrainDelay => {
+            // DELAY / SIZE / SCATTER / MIX — same compact 4-knob
+            // shape as the other delay-line FX.  At scatter=0 the
+            // four grains lock to a unison chorus around the
+            // baseline; cranking scatter scrambles their pitch
+            // and position into a granular cloud.
+            let (mut d, mut g, mut s, mut m) = {
+                let st = app.state.read();
+                (
+                    st.fx.grain_delay,
+                    st.fx.grain_size,
+                    st.fx.grain_scatter,
+                    st.fx.grain_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("DELAY", &mut d, pm("fx.grain_delay")),
+                ("SIZE", &mut g, pm("fx.grain_size")),
+                ("SCATTER", &mut s, pm("fx.grain_scatter")),
+                ("MIX", &mut m, pm("fx.grain_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("grain_delay_xy_{module_id}"),
+                    ["DELAY", "SIZE", "SCATTER"],
+                    &mut pad_pair,
+                    (&mut d, &mut g, &mut s),
+                    [
+                        user_owned("fx.grain_delay"),
+                        user_owned("fx.grain_size"),
+                        user_owned("fx.grain_scatter"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || d != app.state.read().fx.grain_delay {
+                let mut st = app.state.write();
+                st.fx.grain_delay = d;
+                st.fx.grain_size = g;
+                st.fx.grain_scatter = s;
+                st.fx.grain_mix = m;
             }
         }
         _ => unreachable!("guarded by the early return above"),

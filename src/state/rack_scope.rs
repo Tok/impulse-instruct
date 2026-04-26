@@ -92,7 +92,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxDeEsser
         | ModuleKind::FxResBank
         | ModuleKind::FxTapeEcho
-        | ModuleKind::FxMultibandComp => Some("fx".to_string()),
+        | ModuleKind::FxMultibandComp
+        | ModuleKind::FxGrainDelay => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         _ => None,
     }
@@ -171,6 +172,9 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxtapeecho" | "tapeecho" | "dubecho" | "spaceecho" | "echotape" => Some(FxTapeEcho),
         "fxmultibandcomp" | "multiband" | "mbcomp" | "mastercomp" | "mastercompressor" => {
             Some(FxMultibandComp)
+        }
+        "fxgraindelay" | "graindelay" | "grain_delay" | "granulardelay" | "graincloud" => {
+            Some(FxGrainDelay)
         }
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
@@ -283,6 +287,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxMultibandComp => matches!(
             n.as_str(),
             "multiband" | "mbcomp" | "mb_comp" | "mb comp" | "mastercomp" | "fx"
+        ),
+        ModuleKind::FxGrainDelay => matches!(
+            n.as_str(),
+            "graindelay" | "grain_delay" | "grain delay" | "granulardelay" | "graincloud" | "fx"
         ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),

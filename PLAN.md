@@ -96,8 +96,6 @@ new gap turns up.
 
 ## FX — wishlist
 
-- [ ] **Grain delay** — granular feedback path; distinct from
-  `FxMultitap` (rhythmic taps) and `FxFreeze` (held buffer).
 - [ ] **Spectral gate** — per-bin gate on STFT magnitude (not a
   global threshold).  Pairs with `FxFreeze`'s spectral path.
 - [ ] **Shimmer mode flag on `FxConvReverb`** (already deferred

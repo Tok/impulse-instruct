@@ -375,6 +375,14 @@ impl DspState {
                 p.mb_mix,
                 sr,
             ),
+            FxStep::GrainDelay => self.grain_delay.process(
+                sig,
+                p.grain_delay,
+                p.grain_size,
+                p.grain_scatter,
+                p.grain_mix,
+                sr,
+            ),
         }
     }
 

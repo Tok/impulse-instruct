@@ -32,6 +32,7 @@ mod formant_shifter_tests;
 mod fx_deesser_tests;
 mod fx_djfilter_tests;
 mod fx_freq_shift_tests;
+mod fx_grain_delay_tests;
 mod fx_iso_eq_tests;
 mod fx_math_tests;
 mod fx_mb_comp_tests;

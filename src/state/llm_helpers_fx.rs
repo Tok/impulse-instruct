@@ -301,6 +301,10 @@ pub(super) fn apply_fx_update(
     u!(s.fx.mb_mid_thresh, "mb_mid_thresh", "fx.mb_mid_thresh");
     u!(s.fx.mb_high_thresh, "mb_high_thresh", "fx.mb_high_thresh");
     u!(s.fx.mb_mix, "mb_mix", "fx.mb_mix");
+    u!(s.fx.grain_delay, "grain_delay", "fx.grain_delay");
+    u!(s.fx.grain_size, "grain_size", "fx.grain_size");
+    u!(s.fx.grain_scatter, "grain_scatter", "fx.grain_scatter");
+    u!(s.fx.grain_mix, "grain_mix", "fx.grain_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {

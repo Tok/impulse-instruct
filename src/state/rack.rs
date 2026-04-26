@@ -311,6 +311,7 @@ impl RackState {
                 | ModuleKind::FxResBank
                 | ModuleKind::FxTapeEcho
                 | ModuleKind::FxMultibandComp
+                | ModuleKind::FxGrainDelay
         );
         if !has_audio_out {
             return true;
@@ -605,6 +606,9 @@ impl RackState {
                 // Multiband compressor sits with the dynamics
                 // tools (single-band comp, gate, vocoder).
                 ModuleKind::FxMultibandComp => 28,
+                // Grain delay groups with the delay-line cluster
+                // (delay / multitap / revdelay / tape echo).
+                ModuleKind::FxGrainDelay => 11,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

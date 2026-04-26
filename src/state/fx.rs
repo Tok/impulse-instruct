@@ -488,6 +488,23 @@ pub struct FxState {
     /// Wet/dry mix 0..1 (0 = bypass).
     #[serde(default)]
     pub resbank_mix: f32,
+    // ── Grain Delay ─────────────────────────────────────────────────────
+    /// Base delay 0..1 → 50..1000 ms log-mapped — centre of the
+    /// grain cloud's read position.
+    #[serde(default = "default_grain_delay")]
+    pub grain_delay: f32,
+    /// Grain length 0..1 → 20..200 ms.  Short = chorus / verb
+    /// cloud, long = smeared delay tap.
+    #[serde(default = "default_grain_size")]
+    pub grain_size: f32,
+    /// Scatter 0..1 — 0 = grains aligned in time + pitch (chorus
+    /// around the baseline); 1 = wide pitch jitter (±1 octave) +
+    /// position scatter (±50 % of base delay).
+    #[serde(default = "default_grain_scatter")]
+    pub grain_scatter: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).
+    #[serde(default)]
+    pub grain_mix: f32,
     // ── Multiband compressor ────────────────────────────────────────────
     /// Low-band threshold 0..1 — linear amplitude.  When the band's
     /// envelope rises above this level, downward compression
@@ -823,6 +840,10 @@ impl Default for FxState {
             mb_mid_thresh: default_mb_thresh(),
             mb_high_thresh: default_mb_thresh(),
             mb_mix: 0.0,
+            grain_delay: default_grain_delay(),
+            grain_size: default_grain_size(),
+            grain_scatter: default_grain_scatter(),
+            grain_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

@@ -693,6 +693,11 @@ pub struct AudioParams {
     pub mb_mid_thresh: f32,
     pub mb_high_thresh: f32,
     pub mb_mix: f32,
+    // Grain delay — granular feedback path (4 overlapping grains).
+    pub grain_delay: f32,
+    pub grain_size: f32,
+    pub grain_scatter: f32,
+    pub grain_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,
