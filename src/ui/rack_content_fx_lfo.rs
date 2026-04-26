@@ -35,7 +35,8 @@ pub(super) fn try_draw_fx_lfo_content(
         | ModuleKind::FxVibrato
         | ModuleKind::FxDeEsser
         | ModuleKind::FxResBank
-        | ModuleKind::FxTapeEcho => {}
+        | ModuleKind::FxTapeEcho
+        | ModuleKind::FxMultibandComp => {}
         _ => return None,
     }
 
@@ -290,6 +291,55 @@ pub(super) fn try_draw_fx_lfo_content(
                 st.fx.tape_echo_feedback = fb;
                 st.fx.tape_echo_age = a;
                 st.fx.tape_echo_mix = m;
+            }
+        }
+        ModuleKind::FxMultibandComp => {
+            // LOW / MID / HIGH thresholds + MIX — fixed shared
+            // ratio (≈4:1) inside the DSP keeps the surface to
+            // four knobs.  Defaults are 1.0 for every threshold,
+            // so engaging the FX with default knobs is no-op
+            // until the user dials a band's threshold below the
+            // signal peak.
+            let (mut l, mut m, mut h, mut mx) = {
+                let st = app.state.read();
+                (
+                    st.fx.mb_low_thresh,
+                    st.fx.mb_mid_thresh,
+                    st.fx.mb_high_thresh,
+                    st.fx.mb_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("LOW", &mut l, pm("fx.mb_low_thresh")),
+                ("MID", &mut m, pm("fx.mb_mid_thresh")),
+                ("HIGH", &mut h, pm("fx.mb_high_thresh")),
+                ("MIX", &mut mx, pm("fx.mb_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("mb_comp_xy_{module_id}"),
+                    ["LOW", "MID", "HIGH"],
+                    &mut pad_pair,
+                    (&mut l, &mut m, &mut h),
+                    [
+                        user_owned("fx.mb_low_thresh"),
+                        user_owned("fx.mb_mid_thresh"),
+                        user_owned("fx.mb_high_thresh"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || l != app.state.read().fx.mb_low_thresh {
+                let mut st = app.state.write();
+                st.fx.mb_low_thresh = l;
+                st.fx.mb_mid_thresh = m;
+                st.fx.mb_high_thresh = h;
+                st.fx.mb_mix = mx;
             }
         }
         _ => unreachable!("guarded by the early return above"),

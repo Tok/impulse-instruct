@@ -94,6 +94,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // selectors — LFO on time gives a "warbling pitch" patch
         // when paired with low feedback.
         FxTapeEcho => &[Selector, Selector, Selector, Selector],
+        // Multiband compressor: 4 knobs (low/mid/high thresh + mix);
+        // selectors so an LFO can ride a single band's threshold
+        // for "ducking the bass on every other bar"-style patches.
+        FxMultibandComp => &[Selector, Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],

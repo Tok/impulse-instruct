@@ -488,6 +488,24 @@ pub struct FxState {
     /// Wet/dry mix 0..1 (0 = bypass).
     #[serde(default)]
     pub resbank_mix: f32,
+    // ── Multiband compressor ────────────────────────────────────────────
+    /// Low-band threshold 0..1 — linear amplitude.  When the band's
+    /// envelope rises above this level, downward compression
+    /// engages.  Lower = more aggressive.  Default 1.0 (above the
+    /// signal's peak, so the band is uncompressed until the user
+    /// dials it down).
+    #[serde(default = "default_mb_thresh")]
+    pub mb_low_thresh: f32,
+    /// Mid-band threshold 0..1.  Subtractive mid (band that's
+    /// `LP_2500(input) - LP_250(input)`) follows the same shape.
+    #[serde(default = "default_mb_thresh")]
+    pub mb_mid_thresh: f32,
+    /// High-band threshold 0..1.  Band above ~2.5 kHz.
+    #[serde(default = "default_mb_thresh")]
+    pub mb_high_thresh: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).
+    #[serde(default)]
+    pub mb_mix: f32,
     // ── Tape Echo ───────────────────────────────────────────────────────
     /// Delay time 0..1 → 25..1500 ms log-mapped.  Covers slap-back
     /// at the short end through dub-rhythm at the long end.  Free-
@@ -801,6 +819,10 @@ impl Default for FxState {
             tape_echo_feedback: default_tape_echo_feedback(),
             tape_echo_age: default_tape_echo_age(),
             tape_echo_mix: 0.0,
+            mb_low_thresh: default_mb_thresh(),
+            mb_mid_thresh: default_mb_thresh(),
+            mb_high_thresh: default_mb_thresh(),
+            mb_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

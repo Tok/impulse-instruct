@@ -96,9 +96,6 @@ new gap turns up.
 
 ## FX — wishlist
 
-- [ ] **Multiband compressor** (3-band split with per-band
-  ratio/threshold).  Mastering-grade dynamics that the single-band
-  `FxCompressor` can't shape.
 - [ ] **Grain delay** — granular feedback path; distinct from
   `FxMultitap` (rhythmic taps) and `FxFreeze` (held buffer).
 - [ ] **Spectral gate** — per-bin gate on STFT magnitude (not a

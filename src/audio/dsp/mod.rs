@@ -16,6 +16,7 @@ pub mod fx_freq_shift;
 pub mod fx_glitch;
 pub mod fx_iso_eq;
 pub mod fx_math;
+pub mod fx_mb_comp;
 pub mod fx_resbank;
 pub mod fx_sidechain;
 mod fx_step;
@@ -63,6 +64,7 @@ use vocal::VocalVoice;
 // inside the extracted `process_block.rs`; pulled in there directly.
 use fx_deesser::DeEsserFx;
 use fx_iso_eq::IsoEqFx;
+use fx_mb_comp::MultibandCompFx;
 use fx_resbank::ResBankFx;
 use fx_sidechain::{Gate, Vocoder};
 use fx_tape_echo::TapeEchoFx;
@@ -157,6 +159,7 @@ pub struct DspState {
     deesser: DeEsserFx,
     resbank: ResBankFx,
     tape_echo: TapeEchoFx,
+    mb_comp: MultibandCompFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -316,6 +319,7 @@ impl DspState {
             deesser: DeEsserFx::new(),
             resbank: ResBankFx::new(),
             tape_echo: TapeEchoFx::new(),
+            mb_comp: MultibandCompFx::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

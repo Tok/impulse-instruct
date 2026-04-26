@@ -4,6 +4,54 @@ A detailed log of what's built.
 
 ---
 
+### Multiband compressor FX (`FxMultibandComp`)
+
+Mastering-grade dynamics from the FX wishlist — 3-band split
++ 3 independent downward compressors.  Distinct from
+`FxCompressor` (broadband single-band): each band has its own
+threshold, so the user can tame a boomy low end without
+flattening the air or vice versa.
+
+**DSP shape.**  Two LP biquads (250 Hz, 2.5 kHz) split the
+input into low / mid / high subtractively:
+`low_band = LP_250(input)`,
+`low_plus_mid = LP_2500(input)`,
+`mid_band = low_plus_mid - low_band`,
+`high_band = input - low_plus_mid`.  Sum of bands == input
+exactly when no compression engages.  Each band runs through
+its own peak-style envelope follower (~3 ms attack / ~80 ms
+release) and a soft-knee compressor:
+`gain = (env / thr)^(-AMOUNT)` clamped to (0, 1] when env >
+thr.  AMOUNT is fixed at 0.6 (≈ 4:1 compression) for V1 so
+the four UI knobs stay tight.  Allocation-free.
+
+**Knobs.**
+- `mb_low_thresh` 0..1 — low-band threshold (linear amplitude).
+  Default 1.0 (above the signal's peak, so the band is
+  uncompressed until the user dials it down).
+- `mb_mid_thresh` 0..1.
+- `mb_high_thresh` 0..1.
+- `mb_mix` 0..1 wet/dry with cheap-bypass fast path.
+
+**Wiring.**  Standard FX add ritual — `FxStep::MultibandComp`
+(idx 40, `FX_STEP_COUNT` bumped to 41),
+`ModuleKind::FxMultibandComp` ("MB COMP" label, 2×1 grid,
+sort-group 28 next to the gate / single-band compressor /
+vocoder dynamics cluster).  Aliases multiband / mbcomp /
+mb_comp / mastercomp / mastercompressor / fxmultibandcomp.
+
+**Tests.**  +5 DSP (mix=0 bypass, exact passthrough at unity
+thresholds after warmup, bass compression independent of high
+band, loud low band gets ducked under low threshold, output
+bounded under full drive), +6 state-side (defaults are unity
+passthrough, llm-apply all 4 knobs, lock honoured, FxStep
+mapping, label, alias).  Suite **2087 → 2098**.
+
+Files: new `src/audio/dsp/fx_mb_comp.rs`, new
+`src/tests/fx_mb_comp_tests.rs`.
+
+---
+
 ### Tape Echo FX (`FxTapeEcho`)
 
 Dub-style delay with wow / flutter / saturation baked into

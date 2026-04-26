@@ -34,6 +34,7 @@ mod fx_djfilter_tests;
 mod fx_freq_shift_tests;
 mod fx_iso_eq_tests;
 mod fx_math_tests;
+mod fx_mb_comp_tests;
 mod fx_plan_tests;
 mod fx_resbank_tests;
 mod fx_sidechain_tests;

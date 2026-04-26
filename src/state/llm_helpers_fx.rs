@@ -297,6 +297,10 @@ pub(super) fn apply_fx_update(
     );
     u!(s.fx.tape_echo_age, "tape_echo_age", "fx.tape_echo_age");
     u!(s.fx.tape_echo_mix, "tape_echo_mix", "fx.tape_echo_mix");
+    u!(s.fx.mb_low_thresh, "mb_low_thresh", "fx.mb_low_thresh");
+    u!(s.fx.mb_mid_thresh, "mb_mid_thresh", "fx.mb_mid_thresh");
+    u!(s.fx.mb_high_thresh, "mb_high_thresh", "fx.mb_high_thresh");
+    u!(s.fx.mb_mix, "mb_mix", "fx.mb_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {

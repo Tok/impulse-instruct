@@ -91,7 +91,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxIsoEq
         | ModuleKind::FxDeEsser
         | ModuleKind::FxResBank
-        | ModuleKind::FxTapeEcho => Some("fx".to_string()),
+        | ModuleKind::FxTapeEcho
+        | ModuleKind::FxMultibandComp => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         _ => None,
     }
@@ -168,6 +169,9 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxresbank" | "resbank" | "resonatorbank" | "resonators" | "chordres"
         | "chordresonator" => Some(FxResBank),
         "fxtapeecho" | "tapeecho" | "dubecho" | "spaceecho" | "echotape" => Some(FxTapeEcho),
+        "fxmultibandcomp" | "multiband" | "mbcomp" | "mastercomp" | "mastercompressor" => {
+            Some(FxMultibandComp)
+        }
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
@@ -275,6 +279,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxTapeEcho => matches!(
             n.as_str(),
             "tapeecho" | "tape_echo" | "tape echo" | "dubecho" | "spaceecho" | "fx"
+        ),
+        ModuleKind::FxMultibandComp => matches!(
+            n.as_str(),
+            "multiband" | "mbcomp" | "mb_comp" | "mb comp" | "mastercomp" | "fx"
         ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),

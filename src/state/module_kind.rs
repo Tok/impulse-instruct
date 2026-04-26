@@ -163,6 +163,12 @@ pub enum ModuleKind {
     /// preset knob, with pitch governed by the root knob rather
     /// than tracking the input.
     FxResBank,
+    /// Multiband compressor — 3-band split + 3 independent
+    /// downward compressors.  Distinct from `FxCompressor`
+    /// (broadband single-band): each band has its own threshold,
+    /// so the user can tame a boomy low end without flattening
+    /// the air or vice versa.  Mastering-grade dynamics.
+    FxMultibandComp,
     /// Tape Echo — dub-style delay with wow / flutter / saturation
     /// baked into the feedback path.  Distinct from `FxDelay`
     /// (clean digital with character knobs that have to be dialed
@@ -294,6 +300,7 @@ impl ModuleKind {
             Self::FxDeEsser => "DE-ESSER",
             Self::FxResBank => "RES BANK",
             Self::FxTapeEcho => "TAPE ECHO",
+            Self::FxMultibandComp => "MB COMP",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -476,7 +483,8 @@ impl ModuleKind {
             | Self::FxIsoEq
             | Self::FxDeEsser
             | Self::FxResBank
-            | Self::FxTapeEcho => (2, 1),
+            | Self::FxTapeEcho
+            | Self::FxMultibandComp => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -551,6 +559,7 @@ impl ModuleKind {
             | Self::FxDeEsser
             | Self::FxResBank
             | Self::FxTapeEcho
+            | Self::FxMultibandComp
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -634,6 +643,7 @@ impl ModuleKind {
                 | Self::FxDeEsser
                 | Self::FxResBank
                 | Self::FxTapeEcho
+                | Self::FxMultibandComp
         )
     }
 
@@ -692,6 +702,7 @@ impl ModuleKind {
                 | Self::FxDeEsser
                 | Self::FxResBank
                 | Self::FxTapeEcho
+                | Self::FxMultibandComp
         )
     }
 

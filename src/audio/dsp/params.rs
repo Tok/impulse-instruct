@@ -688,6 +688,11 @@ pub struct AudioParams {
     pub tape_echo_feedback: f32,
     pub tape_echo_age: f32,
     pub tape_echo_mix: f32,
+    // Multiband compressor — 3-band split + 3 independent dynamics.
+    pub mb_low_thresh: f32,
+    pub mb_mid_thresh: f32,
+    pub mb_high_thresh: f32,
+    pub mb_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,

@@ -182,3 +182,7 @@ pub(super) fn default_tape_echo_feedback() -> f32 {
 pub(super) fn default_tape_echo_age() -> f32 {
     0.5 // Audible analog character on first engagement.
 }
+
+pub(super) fn default_mb_thresh() -> f32 {
+    1.0 // No compression until the user pulls a band threshold below the signal peak.
+}

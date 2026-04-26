@@ -50,6 +50,7 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxDeEsser => Some(FxStep::DeEsser),
         ModuleKind::FxResBank => Some(FxStep::ResBank),
         ModuleKind::FxTapeEcho => Some(FxStep::TapeEcho),
+        ModuleKind::FxMultibandComp => Some(FxStep::MultibandComp),
         _ => None,
     }
 }

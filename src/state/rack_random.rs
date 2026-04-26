@@ -79,6 +79,7 @@ const FX_POOL: &[ModuleKind] = &[
     ModuleKind::FxDeEsser,
     ModuleKind::FxResBank,
     ModuleKind::FxTapeEcho,
+    ModuleKind::FxMultibandComp,
 ];
 
 /// Result of `random_layout` — a recipe the caller applies to its

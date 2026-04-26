@@ -367,6 +367,14 @@ impl DspState {
                 p.tape_echo_mix,
                 sr,
             ),
+            FxStep::MultibandComp => self.mb_comp.process(
+                sig,
+                p.mb_low_thresh,
+                p.mb_mid_thresh,
+                p.mb_high_thresh,
+                p.mb_mix,
+                sr,
+            ),
         }
     }
 
