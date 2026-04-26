@@ -4,6 +4,51 @@ A detailed log of what's built.
 
 ---
 
+### SampleInstrument — `.sf2` SoundFont parsing (V1)
+
+Hand-rolled SF2 parser — no new deps, lives entirely in
+`src/audio/sf2_loader.rs`.  Parses the RIFF chunk hierarchy
+(sfbk → INFO / sdta / pdta), walks the
+preset → instrument → sample chain, and converts each playable
+region into the existing `SfzRegionRuntime` shape so the
+SampleInstrument's SFZ trigger path handles SF2 content with
+zero changes.
+
+V1 scope:
+- RIFF walker for the sfbk container; sub-chunk extractor
+  shared across `pdta` records.
+- Generator opcodes honoured: `keyRange` (43), `velRange` (44),
+  `instrument` link (41), `sampleID` link (53),
+  `overridingRootKey` (58), `coarseTune` (51), `fineTune` (52),
+  `pan` (17), `initialAttenuation` (48).
+- Generator chain layered preset-zone → instrument-zone via
+  clone + absorb, matching the SF2 spec's "global zone applies
+  to subsequent zones until overridden" idiom.
+- Sample data decoded from the `smpl` chunk (16-bit signed PCM,
+  big banks share the buffer via index slicing) and resampled
+  per-sample to the engine rate.  Per-sample cache so multi-zone
+  SF2s only decode each sample once.
+- `.sf2` added to the SampleInstrument file picker;
+  `load_sample_instrument_path` routes by extension to the
+  matching loader.
+- Loads only the first preset.  Most SF2 files pack many
+  presets (drum kit, piano, organ, etc.) — V1 = "audition the
+  first preset", future V2 adds a preset picker.
+
+Deferred to V2:
+- Envelopes, filters, modulators, LFOs, sample modes — the
+  per-note shaping falls back to SfzRegion defaults; the audio
+  still plays, the per-note attack / release just isn't shaped
+  by SF2 generators.
+- Preset selection (V1 = first preset only).
+- Disk streaming for huge banks (carried forward).
+
+4 unit tests with a synthesised in-memory SF2: round-trip
+through the parser yields one region with the expected key
+range / root note / sample buffer; rejects bad magic and
+truncated input; generator absorption handles keyRange + tune
++ root-key sentinels.
+
 ### SampleInstrument — multi-mic / multi-position SFZ blends
 
 V2 SampleInstrument follow-up.  V1 SFZ honoured one sample per
