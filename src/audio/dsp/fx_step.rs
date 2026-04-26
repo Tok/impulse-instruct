@@ -390,6 +390,7 @@ impl DspState {
             ),
             FxStep::SpectralGate => self.spectral_gate.process(
                 sig,
+                p.spec_stft,
                 p.spec_thresh,
                 p.spec_release,
                 p.spec_tilt,

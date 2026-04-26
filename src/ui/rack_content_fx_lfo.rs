@@ -396,14 +396,18 @@ pub(super) fn try_draw_fx_lfo_content(
             // THRESH / RELEASE / TILT / MIX — same compact 4-knob
             // shape.  Default knobs are a transparent passthrough
             // (thresh=0); engaging the FX at default mix is no-op
-            // until the user pulls the threshold knob up.
-            let (mut t, mut r, mut tl, mut m) = {
+            // until the user pulls the threshold knob up.  The
+            // BPF/STFT mode toggle sits on its own row so the V2
+            // STFT path is discoverable but doesn't crowd the
+            // knob bank.
+            let (mut t, mut r, mut tl, mut m, mut stft) = {
                 let st = app.state.read();
                 (
                     st.fx.spec_thresh,
                     st.fx.spec_release,
                     st.fx.spec_tilt,
                     st.fx.spec_mix,
+                    st.fx.spec_stft,
                 )
             };
             hk!(
@@ -413,6 +417,13 @@ pub(super) fn try_draw_fx_lfo_content(
                 ("TILT", &mut tl, pm("fx.spec_tilt")),
                 ("MIX", &mut m, pm("fx.spec_mix"))
             );
+            ui.horizontal(|ui| {
+                let prev = stft;
+                widgets::toggle_button(ui, if stft { "STFT" } else { "BPF" }, &mut stft);
+                if stft != prev {
+                    changed = true;
+                }
+            });
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
                 let (vc, _) = render_three_pad(
@@ -437,6 +448,7 @@ pub(super) fn try_draw_fx_lfo_content(
                 st.fx.spec_release = r;
                 st.fx.spec_tilt = tl;
                 st.fx.spec_mix = m;
+                st.fx.spec_stft = stft;
             }
         }
         _ => unreachable!("guarded by the early return above"),

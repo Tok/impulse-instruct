@@ -222,6 +222,7 @@ impl AudioParams {
             grain_size: s.fx.grain_size.clamp(0.0, 1.0),
             grain_scatter: s.fx.grain_scatter.clamp(0.0, 1.0),
             grain_mix: s.fx.grain_mix.clamp(0.0, 1.0),
+            spec_stft: s.fx.spec_stft,
             spec_thresh: s.fx.spec_thresh.clamp(0.0, 1.0),
             spec_release: s.fx.spec_release.clamp(0.0, 1.0),
             spec_tilt: s.fx.spec_tilt.clamp(0.0, 1.0),

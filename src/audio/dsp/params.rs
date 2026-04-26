@@ -670,6 +670,7 @@ pub struct AudioParams {
     pub grain_scatter: f32,
     pub grain_mix: f32,
     // Spectral gate — per-band amplitude gating across an 8-band BPF bank.
+    pub spec_stft: bool,
     pub spec_thresh: f32,
     pub spec_release: f32,
     pub spec_tilt: f32,

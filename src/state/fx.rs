@@ -496,9 +496,20 @@ pub struct FxState {
     #[serde(default)]
     pub resbank_mix: f32,
     // ── Spectral Gate ───────────────────────────────────────────────────
+    /// True STFT mode flag.  V1 ships an 8-band parallel-BPF
+    /// approximation (per-band envelope + gate, subtractive
+    /// recombination); V2 adds an STFT-based path that does the
+    /// textbook windowed-FFT → per-bin gate → IFFT → overlap-add.
+    /// Default false so existing presets and sessions keep their
+    /// V1 sound; flip to true for the higher-resolution textbook
+    /// version.
+    #[serde(default)]
+    pub spec_stft: bool,
     /// Per-band threshold 0..1 — linear amplitude.  Any band
     /// whose envelope falls below this level gets gated toward
-    /// silence; bands above stay open.
+    /// silence; bands above stay open.  In STFT mode this is the
+    /// per-bin amplitude threshold (still 0..1) — the bin's
+    /// linear magnitude after the forward FFT.
     #[serde(default = "default_spec_thresh")]
     pub spec_thresh: f32,
     /// Gate release 0..1 → 10..2000 ms log-mapped.  Long values
@@ -880,6 +891,7 @@ impl Default for FxState {
             grain_size: default_grain_size(),
             grain_scatter: default_grain_scatter(),
             grain_mix: 0.0,
+            spec_stft: false,
             spec_thresh: default_spec_thresh(),
             spec_release: default_spec_release(),
             spec_tilt: default_spec_tilt(),

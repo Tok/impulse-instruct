@@ -1,26 +1,31 @@
 // ─── audio/dsp/fx_spectral_gate.rs ────────────────────────────────────────────
-// Spectral Gate FX — per-band amplitude gating across a log-
-// spaced filter bank.  V1 takes the pragmatic route: 8 RBJ
-// constant-0-dB-peak-gain BPF biquads spanning ~80 Hz to ~16 kHz,
-// each with its own envelope follower + gate.  When a band's
-// envelope falls below threshold, it's smoothly decayed toward
-// silence; when it rises above, it attacks back toward unity.
+// Spectral Gate FX — per-band amplitude gating across either an
+// 8-band parallel BPF bank (V1, fast pragmatic approximation) or a
+// true STFT pipeline (V2 — textbook windowed-FFT → per-bin gate →
+// IFFT → overlap-add).  The `stft` flag picks the path.
 //
-// Output uses the *subtractive* recombination idiom:
-//   output = input - sum_i((1 - gate_i) * band_i)
-// This guarantees an exact passthrough when every gate is 1.0,
-// regardless of the BPF bank's reconstruction accuracy — a real
-// STFT spectral gate would be the textbook answer, but the
-// codebase doesn't have FFT machinery yet, so this approximation
-// gets the spectrally-selective character without the new
-// infrastructure.
+// V1 (BPF mode, default): 8 RBJ constant-0-dB-peak-gain BPF
+// biquads spanning ~80 Hz to ~16 kHz, each with its own envelope
+// follower + gate.  Subtractive recombination
+// `output = input - Σ (1 - gate_i) * band_i` keeps reconstruction
+// exact when every gate is open.
+//
+// V2 (STFT mode): 1024-point Hann-windowed FFT, hop 256 (75 %
+// overlap, COLA-compliant for Hann), per-bin amplitude gate on
+// the magnitude spectrum, IFFT, synthesis-windowed overlap-add
+// into the output ring.  Higher freq resolution (~47 Hz / bin
+// at 48 kHz) at the cost of ~21 ms latency.
 //
 // Distinct from `FxGate` (broadband single-band envelope gate)
 // and `FxFreeze` (held buffer / spectral freeze of the entire
-// signal).  Allocation-free; coefficients refresh lazily on
-// sample-rate change.
+// signal).  Allocation-free in the audio callback; FFT plans +
+// scratch sized at construction.
 
 use std::f32::consts::TAU;
+use std::sync::Arc;
+
+use rustfft::num_complex::Complex;
+use rustfft::{Fft, FftPlanner};
 
 const NUM_BANDS: usize = 8;
 /// Per-band Q.  ≈4 gives reasonable spectral selectivity while
@@ -95,17 +100,77 @@ impl Biquad {
     }
 }
 
+// ─── STFT path constants ─────────────────────────────────────────────────────
+//
+// FFT size 1024 + hop 256 → 75 % overlap.  Hann window is COLA at
+// 50 % and 75 % overlap (a constant-1 sum), so weighting input ×
+// Hann + output × Hann + 4-frame overlap-add reconstructs unity
+// in the absence of any per-bin attenuation.  At 48 kHz this is
+// ~21 ms / frame, ~5 ms / hop, ~47 Hz / bin.
+
+const FFT_SIZE: usize = 1024;
+const HOP_SIZE: usize = 256;
+const N_BINS: usize = FFT_SIZE / 2 + 1;
+/// `4 = FFT_SIZE / HOP_SIZE`.  Per-frame Hann-square sum is
+/// constant; dividing by this normalisation factor keeps the
+/// reconstructed amplitude at unity.  Encoded explicitly because
+/// the `(window * window).sum() / HOP_SIZE` value depends on
+/// both the analysis and synthesis windows being Hann.
+const COLA_NORM: f32 = 1.5;
+
 pub(crate) struct SpectralGateFx {
+    // ── BPF path (V1) ───────────────────────────────────────────────────
     bands: [Biquad; NUM_BANDS],
     env: [f32; NUM_BANDS],
     /// Per-band gate state — smoothed toward 1 (open) or 0
     /// (closed) at the configured attack / release rates.
     gate: [f32; NUM_BANDS],
     cached_sr: f32,
+
+    // ── STFT path (V2) ──────────────────────────────────────────────────
+    /// Forward + inverse FFT plans, allocated once.
+    fft_fwd: Arc<dyn Fft<f32>>,
+    fft_inv: Arc<dyn Fft<f32>>,
+    /// Hann window — used as both analysis and synthesis (the
+    /// standard square-window scheme; `Hann²` is COLA at 75 %
+    /// overlap).
+    hann: [f32; FFT_SIZE],
+    /// Input ring — newest sample at `in_pos`.
+    in_buf: [f32; FFT_SIZE],
+    in_pos: usize,
+    /// Samples since the last FFT frame fired.  When this hits
+    /// `HOP_SIZE`, run a frame and reset.
+    hop_counter: usize,
+    /// Output ring — overlap-add target.  Sized FFT_SIZE so a
+    /// fresh frame's contribution fully decays before the slot
+    /// is re-read.
+    out_buf: [f32; FFT_SIZE],
+    out_pos: usize,
+    /// Per-bin gate envelope state — smoothed gate value, 0..1,
+    /// per positive-frequency bin (DC + Nyquist included).
+    bin_gate: [f32; N_BINS],
+    /// Scratch + working buffers for FFT.  Owned by the struct
+    /// so `process` doesn't allocate.
+    fft_scratch: Vec<Complex<f32>>,
+    fft_buf: Vec<Complex<f32>>,
 }
 
 impl SpectralGateFx {
     pub(crate) fn new() -> Self {
+        let mut planner = FftPlanner::new();
+        let fft_fwd = planner.plan_fft_forward(FFT_SIZE);
+        let fft_inv = planner.plan_fft_inverse(FFT_SIZE);
+        let scratch_len = fft_fwd
+            .get_inplace_scratch_len()
+            .max(fft_inv.get_inplace_scratch_len());
+        let mut hann = [0.0_f32; FFT_SIZE];
+        for (i, w) in hann.iter_mut().enumerate() {
+            // Standard Hann: 0.5 (1 - cos(2π i / (N - 1))).  Using
+            // (N - 1) in the denominator keeps the window
+            // symmetric — first and last samples are exactly 0.
+            let t = i as f32 / (FFT_SIZE - 1) as f32;
+            *w = 0.5 * (1.0 - (TAU * t).cos());
+        }
         Self {
             bands: [Biquad::new(); NUM_BANDS],
             env: [0.0; NUM_BANDS],
@@ -113,12 +178,27 @@ impl SpectralGateFx {
             // is transparent until the user dials threshold up.
             gate: [1.0; NUM_BANDS],
             cached_sr: f32::NAN,
+            fft_fwd,
+            fft_inv,
+            hann,
+            in_buf: [0.0; FFT_SIZE],
+            in_pos: 0,
+            hop_counter: 0,
+            out_buf: [0.0; FFT_SIZE],
+            out_pos: 0,
+            bin_gate: [1.0; N_BINS],
+            fft_scratch: vec![Complex::new(0.0, 0.0); scratch_len],
+            fft_buf: vec![Complex::new(0.0, 0.0); FFT_SIZE],
         }
     }
 
-    /// `thresh`:  0..1 — linear amplitude threshold.  Bands whose
-    ///            envelope sits above this stay open; below, they
-    ///            decay toward closed.
+    /// `stft`:    false = 8-band BPF approximation (V1, fast),
+    ///            true = true STFT path (windowed FFT, per-bin
+    ///            gate, overlap-add).  STFT adds ~21 ms latency
+    ///            but resolves down to ~47 Hz/bin at 48 kHz.
+    /// `thresh`:  0..1 — linear amplitude threshold.  Bands/bins
+    ///            whose envelope sits above this stay open; below,
+    ///            they decay toward closed.
     /// `release`: 0..1 → 10..2000 ms.  Long = "freeze low-level
     ///            resonance" feel where bands that fired stay
     ///            open longer; short = quick spectral gating.
@@ -126,9 +206,11 @@ impl SpectralGateFx {
     ///            0.5 = uniform; <0.5 = highs gate more easily;
     ///            >0.5 = lows gate more easily.
     /// `mix`:     0..1 — wet/dry blend (0 = bypass).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn process(
         &mut self,
         input: f32,
+        stft: bool,
         thresh: f32,
         release: f32,
         tilt: f32,
@@ -137,6 +219,10 @@ impl SpectralGateFx {
     ) -> f32 {
         if mix < 0.001 {
             return input;
+        }
+
+        if stft {
+            return self.process_stft(input, thresh, release, tilt, mix, sr);
         }
 
         // Lazy biquad refresh on sample-rate change.  NaN-safe via
@@ -209,6 +295,123 @@ impl SpectralGateFx {
         let wet = input - killed;
         input * (1.0 - mix) + wet * mix
     }
+
+    /// STFT path — windowed-FFT analysis, per-bin amplitude gate,
+    /// IFFT, synthesis-windowed overlap-add.  Per-sample API; the
+    /// frame fires every `HOP_SIZE` samples internally.  Latency
+    /// is roughly `FFT_SIZE - HOP_SIZE` samples (~16 ms at 48 k).
+    fn process_stft(
+        &mut self,
+        input: f32,
+        thresh: f32,
+        release: f32,
+        tilt: f32,
+        mix: f32,
+        sr: f32,
+    ) -> f32 {
+        // Capture the input sample.
+        self.in_buf[self.in_pos] = input;
+        self.in_pos = (self.in_pos + 1) % FFT_SIZE;
+
+        // Read this sample's wet output (consumed before the
+        // overlap-add stomps it on the next frame).
+        let wet = self.out_buf[self.out_pos];
+        self.out_buf[self.out_pos] = 0.0; // clear so OLA can accumulate fresh
+        self.out_pos = (self.out_pos + 1) % FFT_SIZE;
+
+        // Frame-fire on hop boundary.
+        self.hop_counter += 1;
+        if self.hop_counter >= HOP_SIZE {
+            self.hop_counter = 0;
+            self.run_stft_frame(thresh, release, tilt, sr);
+        }
+
+        input * (1.0 - mix) + wet * mix
+    }
+
+    /// Run one analysis-process-synthesis cycle.  Reads the most
+    /// recent FFT_SIZE input samples, gates the magnitude
+    /// spectrum against threshold (with tilt skew), then OLAs the
+    /// reconstructed time-domain frame into `out_buf`.
+    fn run_stft_frame(&mut self, thresh: f32, release: f32, tilt: f32, sr: f32) {
+        // Pack the windowed input into the FFT buffer.  Walk the
+        // ring starting `FFT_SIZE` samples behind in_pos so the
+        // most recent sample lands at index FFT_SIZE - 1.
+        for k in 0..FFT_SIZE {
+            let ring_idx = (self.in_pos + k) % FFT_SIZE;
+            let s = self.in_buf[ring_idx] * self.hann[k];
+            self.fft_buf[k] = Complex::new(s, 0.0);
+        }
+        self.fft_fwd
+            .process_with_scratch(&mut self.fft_buf, &mut self.fft_scratch);
+
+        // Gate envelope smoothing.  Per-frame attack/release
+        // works on `bin_gate`; release is configurable, attack is
+        // fixed-fast (~one frame).
+        let release_ms = 10.0 * 200.0_f32.powf(release.clamp(0.0, 1.0));
+        // Frame-rate release coefficient — convert ms to frames.
+        let frame_dt_s = HOP_SIZE as f32 / sr;
+        let release_coef = (-frame_dt_s / (release_ms * 0.001)).exp();
+        let attack_coef = (-frame_dt_s / 0.005).exp(); // ~5 ms attack
+        let base_thr = thresh.clamp(0.0, 1.0);
+
+        // Gate each positive-frequency bin (DC..Nyquist) against
+        // a threshold; mirror to the conjugate-symmetric bin so
+        // the IFFT stays real.
+        for k in 0..N_BINS {
+            // Linear magnitude — bin is complex; rustfft is
+            // unnormalised so an FFT of a unity Hann frame has
+            // peak magnitude of `Σ hann ≈ FFT_SIZE/2`.  Scale
+            // back to a 0..1-ish range for the threshold knob.
+            let mag = self.fft_buf[k].norm() / (FFT_SIZE as f32 * 0.5);
+            // Tilt skew across the bin range.  band_t goes 0
+            // (DC) → 1 (Nyquist).  Same gentle ±2× shape as the
+            // BPF path so the knob feels consistent across modes.
+            let band_t = k as f32 / (N_BINS - 1) as f32;
+            let tilt_factor = if tilt < 0.5 {
+                1.0 + (1.0 - 2.0 * tilt) * band_t
+            } else {
+                1.0 + (2.0 * tilt - 1.0) * (1.0 - band_t)
+            };
+            let band_thr = (base_thr * tilt_factor).clamp(0.0, 2.0);
+            let target = if mag >= band_thr { 1.0 } else { 0.0 };
+            let coef = if target > self.bin_gate[k] {
+                attack_coef
+            } else {
+                release_coef
+            };
+            self.bin_gate[k] = target + (self.bin_gate[k] - target) * coef;
+            // Apply gate to the bin and its conjugate twin.
+            self.fft_buf[k] *= self.bin_gate[k];
+            // Mirror for k > 0 && k < N_BINS-1; the boundary bins
+            // (DC + Nyquist) are real-valued and don't need a
+            // partner.
+            if k > 0 && k < N_BINS - 1 {
+                let mirror = FFT_SIZE - k;
+                // Conjugate: real same sign, imag flipped.
+                self.fft_buf[mirror] = Complex::new(self.fft_buf[k].re, -self.fft_buf[k].im);
+            }
+        }
+
+        // IFFT — rustfft inverse is unnormalised; scale by
+        // 1/FFT_SIZE.  The synthesis window (Hann again) +
+        // 75 % overlap-add reconstructs to a constant sum;
+        // dividing by COLA_NORM normalises to unity.
+        self.fft_inv
+            .process_with_scratch(&mut self.fft_buf, &mut self.fft_scratch);
+        let scale = 1.0 / (FFT_SIZE as f32 * COLA_NORM);
+        // OLA: walk forward from `out_pos` by FFT_SIZE samples,
+        // adding `windowed * scale` into the ring.  Note: we
+        // already advanced out_pos one slot at the top of
+        // process_stft, so the frame's first sample lands one
+        // slot AHEAD of the read head — guarantees the freshly-
+        // gated frame contributes to future reads, not the
+        // sample we already returned.
+        for k in 0..FFT_SIZE {
+            let ola_idx = (self.out_pos + k) % FFT_SIZE;
+            self.out_buf[ola_idx] += self.fft_buf[k].re * self.hann[k] * scale;
+        }
+    }
 }
 
 impl Default for SpectralGateFx {
@@ -224,7 +427,7 @@ mod tests {
     #[test]
     fn dry_when_mix_zero() {
         let mut fx = SpectralGateFx::new();
-        let out = fx.process(0.5, 0.5, 0.5, 0.5, 0.0, 48_000.0);
+        let out = fx.process(0.5, false, 0.5, 0.5, 0.5, 0.0, 48_000.0);
         assert_eq!(out, 0.5, "mix=0 should bypass");
     }
 
@@ -235,10 +438,10 @@ mod tests {
         // input.  Allow tiny numerical slack for the smoothing.
         let mut fx = SpectralGateFx::new();
         for _ in 0..1_000 {
-            fx.process(0.5, 0.0, 0.5, 0.5, 1.0, 48_000.0);
+            fx.process(0.5, false, 0.0, 0.5, 0.5, 1.0, 48_000.0);
         }
         let dry = 0.7_f32;
-        let out = fx.process(dry, 0.0, 0.5, 0.5, 1.0, 48_000.0);
+        let out = fx.process(dry, false, 0.0, 0.5, 0.5, 1.0, 48_000.0);
         assert!(
             (out - dry).abs() < 1e-3,
             "threshold=0 transparent (got {out})"
@@ -255,7 +458,7 @@ mod tests {
         for i in 0..6_000 {
             // 1 kHz sine at amplitude 0.05.
             let sig = (i as f32 * TAU * 1_000.0 / 48_000.0).sin() * 0.05;
-            let out = fx.process(sig, 0.5, 0.0, 0.5, 1.0, 48_000.0);
+            let out = fx.process(sig, false, 0.5, 0.0, 0.5, 1.0, 48_000.0);
             // Skip warmup window where bands haven't gated yet.
             if i >= 4_000 {
                 peak = peak.max(out.abs());
@@ -277,7 +480,7 @@ mod tests {
         let mut peak_out = 0.0_f32;
         for i in 0..6_000 {
             let sig = (i as f32 * TAU * 1_000.0 / 48_000.0).sin();
-            let out = fx.process(sig, 0.05, 0.0, 0.5, 1.0, 48_000.0);
+            let out = fx.process(sig, false, 0.05, 0.0, 0.5, 1.0, 48_000.0);
             if i >= 1_000 {
                 peak_in = peak_in.max(sig.abs());
                 peak_out = peak_out.max(out.abs());
@@ -295,10 +498,74 @@ mod tests {
         let mut peak = 0.0_f32;
         for i in 0..16_000 {
             let sig = (i as f32 * 0.05).sin();
-            let out = fx.process(sig, 0.5, 1.0, 0.5, 1.0, 48_000.0);
+            let out = fx.process(sig, false, 0.5, 1.0, 0.5, 1.0, 48_000.0);
             assert!(out.is_finite());
             peak = peak.max(out.abs());
         }
         assert!(peak <= 2.0, "spec gate bounded at full drive (peak {peak})");
+    }
+
+    // ── STFT-mode tests ─────────────────────────────────────────────────
+    //
+    // The STFT path adds ~16 ms of latency (FFT_SIZE - HOP_SIZE
+    // samples), so transparency assertions allow a longer warmup
+    // and looser tolerances than the BPF path.
+
+    #[test]
+    fn stft_passthrough_when_threshold_zero() {
+        // Threshold = 0 → every bin's gate stays at 1 → output
+        // tracks the input after the STFT pipeline's latency.
+        // Drive a 1 kHz sine through and confirm the output peak
+        // approaches the input peak after enough hops.
+        let mut fx = SpectralGateFx::new();
+        let mut peak_late = 0.0_f32;
+        for i in 0..16_000 {
+            let sig = (i as f32 * TAU * 1_000.0 / 48_000.0).sin();
+            let out = fx.process(sig, true, 0.0, 0.5, 0.5, 1.0, 48_000.0);
+            assert!(out.is_finite());
+            // Skip the first half — STFT latency + gate envelope
+            // ramp.  After that the output should track unity.
+            if i >= 8_000 {
+                peak_late = peak_late.max(out.abs());
+            }
+        }
+        assert!(
+            peak_late > 0.7,
+            "STFT threshold=0 should preserve signal (peak {peak_late})"
+        );
+    }
+
+    #[test]
+    fn stft_silences_quiet_signal_above_threshold() {
+        // Quiet input + high threshold → all bins gate closed →
+        // output decays to silence.
+        let mut fx = SpectralGateFx::new();
+        let mut peak_late = 0.0_f32;
+        for i in 0..16_000 {
+            // 1 kHz sine at amplitude 0.05 — every bin's
+            // magnitude lands well below thresh=0.5.
+            let sig = (i as f32 * TAU * 1_000.0 / 48_000.0).sin() * 0.05;
+            let out = fx.process(sig, true, 0.5, 0.0, 0.5, 1.0, 48_000.0);
+            if i >= 12_000 {
+                peak_late = peak_late.max(out.abs());
+            }
+        }
+        assert!(
+            peak_late < 0.05,
+            "STFT high threshold silences quiet signal (peak {peak_late})"
+        );
+    }
+
+    #[test]
+    fn stft_output_bounded_under_full_drive() {
+        let mut fx = SpectralGateFx::new();
+        let mut peak = 0.0_f32;
+        for i in 0..16_000 {
+            let sig = (i as f32 * 0.05).sin();
+            let out = fx.process(sig, true, 0.5, 1.0, 0.5, 1.0, 48_000.0);
+            assert!(out.is_finite());
+            peak = peak.max(out.abs());
+        }
+        assert!(peak <= 2.0, "STFT bounded at full drive (peak {peak})");
     }
 }
