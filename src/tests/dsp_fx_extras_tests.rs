@@ -54,7 +54,7 @@ mod rev_delay_tests {
 
 #[cfg(test)]
 mod tape_stop_tests {
-    use crate::audio::dsp::fx_extras::TapeStop;
+    use crate::audio::dsp::fx_glitch::TapeStop;
 
     #[test]
     fn mix_zero_returns_dry() {
@@ -78,7 +78,7 @@ mod tape_stop_tests {
 
 #[cfg(test)]
 mod freeze_tests {
-    use crate::audio::dsp::fx_extras::Freeze;
+    use crate::audio::dsp::fx_glitch::Freeze;
 
     #[test]
     fn mix_zero_returns_dry() {
@@ -129,7 +129,7 @@ mod freeze_tests {
 
 #[cfg(test)]
 mod stutter_tests {
-    use crate::audio::dsp::fx_extras::Stutter;
+    use crate::audio::dsp::fx_glitch::Stutter;
 
     #[test]
     fn mix_zero_returns_dry() {

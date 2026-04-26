@@ -10,6 +10,7 @@ pub mod fx;
 pub mod fx_djfilter;
 pub mod fx_extras;
 pub mod fx_freq_shift;
+pub mod fx_glitch;
 pub mod fx_math;
 pub mod fx_sidechain;
 mod fx_step;
@@ -42,6 +43,7 @@ use fx::*;
 use fx_djfilter::DjFilter;
 use fx_extras::*;
 use fx_freq_shift::FreqShift;
+use fx_glitch::*;
 // fx_math symbols (free_eg_value_at, lfo_value_at, sidechain_duck,
 // sidechain_envelope_step, gated_reverb_envelope_step) are only used
 // inside the extracted `process_block.rs`; pulled in there directly.

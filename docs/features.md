@@ -4,6 +4,31 @@ A detailed log of what's built.
 
 ---
 
+### Refactor: split `fx_extras.rs` glitch family into a sibling
+
+`src/audio/dsp/fx_extras.rs` was at 989 lines — 11 from the
+1000-line cap, with the next FX add guaranteed to push it
+over.  Extracted the glitch / time-domain performance family
+(`TapeStop`, `Stutter`, `Freeze`) into a new
+`src/audio/dsp/fx_glitch.rs` sibling.  Pure no-behaviour
+refactor: `mod.rs` declares the new module + `use
+fx_glitch::*;` so existing call sites keep working
+unchanged.  Test imports updated from `fx_extras::TapeStop`
+etc. to `fx_glitch::TapeStop`.
+
+Before: `fx_extras.rs` 989 / `fx_glitch.rs` (does not
+exist).  After: `fx_extras.rs` 628 / `fx_glitch.rs` 379.
+1962 tests pass identically; cargo clippy clean.
+
+The 7 surviving structs (Flanger, Limiter, Svf, CombRes,
+Tilt, Transient, Exciter) plus Multitap + RevDelay all
+remain in `fx_extras.rs` — both because they're shorter
+than the glitch trio and because `Svf` is referenced by
+`audio/dsp/sample_instrument.rs` as `super::fx_extras::Svf`,
+so keeping it in place avoids touching unrelated code.
+
+---
+
 ### Continuous Link bar-phase drift correction (V2.1)
 
 V2 shipped the off→on bar-phase snap.  Even after that initial

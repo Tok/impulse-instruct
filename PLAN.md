@@ -69,23 +69,25 @@ features.md.  No remaining items in this section.)
 - [ ] **Glass group helpers** — `glass_label(ui, text)` still to do
   (the inline pattern varies too much across panels for a single
   helper).
-- [ ] **Large-file watch list** (none over the 1000-line cap; just
-  noting the largest ones in case a future change pushes one
-  over).  Current top after the absurd-queue session:
-  `src/audio/dsp/fx_extras.rs` (989 — closest to the cap; one
-  more FX struct lands it over),
+- [ ] **Large-file watch list** (none over the 1000-line cap;
+  just noting the largest ones in case a future change pushes
+  one over).  Current top after the post-kickoff session:
   `src/tests/dsp_fx_tests.rs` (966),
   `src/llm/lanes.rs` (962),
   `src/ui/panels/sequencer.rs` (944),
-  `src/ui/rack_content.rs` (931 — picked up Theremin / Pendulum /
-  Vinyl dispatch this session),
   `src/state/transitions.rs` (925),
-  `src/llm/mod.rs` (921).  Cleanest split candidate is
-  `fx_extras.rs` (per-FX struct → sibling per family —
-  saturation / EQ / dynamics).  `audio/dsp/mod.rs` and
-  `src/state/rack.rs` were split out in earlier sessions
-  (`process_block.rs` and `rack_wiring.rs` siblings); both now
-  sit comfortably under the cap.
+  `src/audio/analysis.rs` (924),
+  `src/llm/mod.rs` (921),
+  `src/ui/rack_content_fx_extras.rs` (918 — picked up DJ
+  filter + dispatches for the previously-empty card group),
+  `src/state/rack.rs` (916).  `src/audio/dsp/fx_extras.rs`
+  was split this session — extracted the glitch family
+  (TapeStop / Stutter / Freeze) into a sibling
+  `fx_glitch.rs`; the parent dropped 989 → 628 lines, no
+  behaviour change.  `audio/dsp/mod.rs`, `src/state/rack.rs`,
+  and `src/ui/rack_content.rs` were split in earlier
+  sessions (`process_block.rs`, `rack_wiring.rs`,
+  `rack_content_conv_reverb.rs` siblings).
 
 ## Voices — wishlist
 
