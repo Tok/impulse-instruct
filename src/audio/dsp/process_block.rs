@@ -34,7 +34,10 @@ impl DspState {
         }
         self.prev_running = p_base.sequencer_running;
 
-        // Advance LFO phases once per block and apply modulation to a working params copy
+        // Advance LFO phases once per block and stage their values
+        // into `cv_buf[0..4]`.  Cable-routed mods read from the buf
+        // after this stage, so populating it first is required for
+        // routes to see live values.
         let mut p = p_base;
         for i in 0..4 {
             let lp = p_base.lfo[i];
@@ -44,7 +47,7 @@ impl DspState {
                 .mod_routes
                 .iter()
                 .take(p_base.mod_route_count as usize)
-                .any(|r| r.lfo_slot as usize == i);
+                .any(|r| (r.source_buf_idx as usize) == super::params::MOD_BUF_LFO_BASE + i);
             if !lp.enabled && !has_route {
                 continue;
             }
@@ -61,39 +64,53 @@ impl DspState {
                 self.lfo_sh_held[i] = self.lfo_noise.next();
             }
             let lfo_val = lfo_value_at(phase, lp.waveform, self.lfo_sh_held[i]);
+            // Stage the raw value into the modulation source buf
+            // so cable-routed mods (and future utility modules)
+            // can read it.
+            p.cv_buf[super::params::MOD_BUF_LFO_BASE + i] = lfo_val;
 
             // Slot's built-in target only fires when the slot is enabled.
-            // Cable-routed mods always fire — that's the user's intent when
-            // they patched a cable from this slot.
+            // The slot depth is a separate multiplier applied here, kept
+            // out of the cv_buf value so cables can apply their own depth.
             if lp.enabled {
                 let mod_val = lfo_val * lp.depth;
                 apply_mod_target(&mut p, lp.target, mod_val);
-            }
-            for r in p_base
-                .mod_routes
-                .iter()
-                .take(p_base.mod_route_count as usize)
-            {
-                if r.lfo_slot as usize == i {
-                    apply_mod_target(&mut p, r.target_u8, lfo_val * r.depth);
-                }
             }
         }
 
         // ── CV sequencer ──────────────────────────────────────────────────────
         // Step-based modulation: each enabled slot reads the
-        // sequencer's `current_step % 16` and applies the
-        // bipolar-centered step value (× depth) to its target
-        // opcode.  Walks in lock-step with the audio pattern.
+        // sequencer's `current_step % 16`, stages the bipolar value
+        // into `cv_buf[4..8]`, and applies the slot's built-in
+        // target.  Cable routes read the staged value below.
         let cv_step = (p_base.sequencer_current_step as usize) % crate::state::CV_SEQ_STEPS;
-        for slot in p_base.cv_seq.iter() {
+        for (i, slot) in p_base.cv_seq.iter().enumerate() {
+            // Bipolar swing — 0.5 step value = 0 mod (no effect).
+            let bipolar = (slot.step_values[cv_step] - 0.5) * 2.0;
+            // Stage even when disabled = false: the value is what
+            // it would be if cable-routed; the slot's `enabled`
+            // flag only gates the built-in target below.
+            p.cv_buf[super::params::MOD_BUF_CV_SEQ_BASE + i] =
+                if slot.enabled { bipolar } else { 0.0 };
             if !slot.enabled || slot.target == 0 {
                 continue;
             }
-            // Bipolar swing — 0.5 step value = 0 mod (no effect).
-            let bipolar = (slot.step_values[cv_step] - 0.5) * 2.0;
             let mod_val = bipolar * slot.depth.clamp(0.0, 1.0);
             apply_mod_target(&mut p, slot.target, mod_val);
+        }
+
+        // ── Apply cable-routed modulation ─────────────────────────────────────
+        // All sources have been staged into `cv_buf` by the
+        // preceding stages.  Now walk the compiled route list and
+        // apply each route's value × cable depth to its target
+        // opcode.  Order-independent within this stage.
+        for r in p_base
+            .mod_routes
+            .iter()
+            .take(p_base.mod_route_count as usize)
+        {
+            let val = p.cv_buf[r.source_buf_idx as usize];
+            apply_mod_target(&mut p, r.target_u8, val * r.depth);
         }
 
         // ── Free EG ───────────────────────────────────────────────────────────

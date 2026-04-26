@@ -8,9 +8,8 @@
 
 use crate::state::{AppState, BPM_MAX, BPM_MIN, LfoWaveform, ModuleKind};
 
-use super::params::{
-    AudioParams, BassVoiceParams, LfoParamsCopy, compile_mod_routes, lfo_target_to_u8,
-};
+use super::lfo_target_opcode::lfo_target_to_u8;
+use super::params::{AudioParams, BassVoiceParams, LfoParamsCopy, compile_mod_routes};
 
 impl AudioParams {
     pub fn from_app_state(s: &AppState) -> Self {
@@ -304,6 +303,10 @@ impl AudioParams {
             },
             mod_routes,
             mod_route_count,
+            // cv_buf is filled per block by `process_block` from
+            // LFO / CvSeq / utility evaluations.  Initialise to
+            // zeros so no stale values leak between blocks.
+            cv_buf: [0.0; super::params::MOD_BUF_SIZE],
             sequencer_running: s.sequencer.running,
             sequencer_current_step: s.sequencer.current_step as u32,
             // MPE expression — bend folded as ±2 semitones (GM

@@ -2,6 +2,7 @@
 // AudioParams snapshot — copied from AppState for the audio thread.
 // This module has no side effects; all types are Copy/Clone.
 
+use super::lfo_target_opcode::lfo_target_to_u8;
 use crate::state::{AppState, LfoTarget};
 
 /// Walk the rack's Mod cables and emit a fixed-size array of compiled mod
@@ -22,6 +23,13 @@ pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) 
         .filter(|m| m.kind == ModuleKind::LfoModule)
         .map(|m| m.id)
         .collect();
+    let cv_seq_ids: Vec<u32> = s
+        .rack
+        .modules
+        .iter()
+        .filter(|m| m.kind == ModuleKind::CvSequencer)
+        .map(|m| m.id)
+        .collect();
     for cable in &s.rack.cables {
         if count >= MAX_MOD_ROUTES {
             break;
@@ -29,12 +37,26 @@ pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) 
         if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
             continue;
         }
-        let Some(slot_idx) = lfo_ids.iter().position(|id| *id == cable.from.module_id) else {
+        // Resolve the source — LFO module first, then CV sequencer.
+        // Each kind owns a 4-slot range in `cv_buf`; resolve to a
+        // flat buf index so the audio thread reads the value
+        // without re-checking the source kind.
+        let source_buf_idx: u8 = if let Some(slot_idx) =
+            lfo_ids.iter().position(|id| *id == cable.from.module_id)
+        {
+            if slot_idx >= s.lfo.len() {
+                continue;
+            }
+            (MOD_BUF_LFO_BASE + slot_idx) as u8
+        } else if let Some(slot_idx) = cv_seq_ids.iter().position(|id| *id == cable.from.module_id)
+        {
+            if slot_idx >= crate::state::CV_SEQ_SLOTS {
+                continue;
+            }
+            (MOD_BUF_CV_SEQ_BASE + slot_idx) as u8
+        } else {
             continue;
         };
-        if slot_idx >= s.lfo.len() {
-            continue;
-        }
         let Some(target_module) = s.rack.modules.iter().find(|m| m.id == cable.to.module_id) else {
             continue;
         };
@@ -71,7 +93,7 @@ pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) 
                 continue;
             }
             routes[count] = ModRouteCopy {
-                lfo_slot: slot_idx as u8,
+                source_buf_idx,
                 target_u8: lfo_target_to_u8(t),
                 depth,
             };
@@ -81,161 +103,38 @@ pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) 
     (routes, count as u8)
 }
 
-/// Encode an `LfoTarget` into a compact u8 opcode consumed by the audio
-/// thread.  Stable IDs — adding new targets requires adding new codes here
-/// AND a matching arm in `apply_mod_target` (src/audio/dsp/mod.rs).
-pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
-    use LfoTarget::*;
-    match t {
-        None => 0,
-        // Legacy (1..16) — drive the existing LFO-module path.
-        BassCutoff => 1,
-        BassResonance => 2,
-        BassPitch => 3,
-        BassVolume => 4,
-        ReverbMix => 5,
-        DelayTime => 6,
-        DelayFeedback => 7,
-        ChorusMix => 8,
-        ChorusRate => 9,
-        Kick808Pitch => 10,
-        PhaserRate => 11,
-        PhaserDepth => 12,
-        DistortionDrive => 13,
-        MasterVolume => 14,
-        An1xCutoff => 15,
-        An1xPitch => 16,
-        // Pan family.
-        BassPan => 17,
-        HooverPan => 18,
-        NoisePan => 19,
-        Kick808Pan => 20,
-        Snare808Pan => 21,
-        Hihat808Pan => 22,
-        Kick909Pan => 23,
-        Snare909Pan => 24,
-        Hihat909Pan => 25,
-        Clap909Pan => 26,
-        An1xPan => 27,
-        // FX knob expansion.
-        ReverbSize => 28,
-        ReverbDamp => 29,
-        DelayMix => 30,
-        ChorusDepth => 31,
-        PhaserMix => 32,
-        WaveshaperDrive => 33,
-        WaveshaperMix => 34,
-        DistortionMix => 35,
-        BitcrushBits => 36,
-        BitcrushRate => 37,
-        BitcrushMix => 38,
-        RingModFreq => 39,
-        RingModMix => 40,
-        EqLow => 41,
-        EqMid => 42,
-        EqHigh => 43,
-        CompThresh => 44,
-        CompRatio => 45,
-        CompMix => 46,
-        TapeDrive => 47,
-        TapeMix => 48,
-        TapeFlutter => 49,
-        AutotuneAmount => 50,
-        AutotuneMix => 51,
-        // Drum extras (52..62) and sampler/granular (63..69).
-        Kick808Decay => 52,
-        Snare808Tone => 53,
-        Snare808Decay => 54,
-        Kick909Pitch => 55,
-        Kick909Decay => 56,
-        Snare909Tone => 57,
-        Snare909Decay => 58,
-        Clap909Decay => 59,
-        AmenVolume => 60,
-        AmenStart => 61,
-        AmenGate => 62,
-        GranularVolume => 63,
-        GranularDensity => 64,
-        GranularGrain => 65,
-        GranularPos => 66,
-        StereoWidth => 67,
-        GabberKickPitch => 68,
-        GabberKickDecay => 69,
-        GabberKickClip => 70,
-        GabberKickPan => 71,
-        NeuTtsVolume => 72,
-        FlangerRate => 73,
-        FlangerDepth => 74,
-        FlangerFeedback => 75,
-        FlangerMix => 76,
-        LimiterThreshold => 77,
-        LimiterCeiling => 78,
-        LimiterRelease => 79,
-        LimiterLookahead => 80,
-        SvfCutoff => 81,
-        SvfResonance => 82,
-        SvfDrive => 83,
-        SvfMix => 84,
-        CombPitch => 85,
-        CombFeedback => 86,
-        CombDamp => 87,
-        CombMix => 88,
-        TiltTilt => 89,
-        TiltPivot => 90,
-        TiltMix => 91,
-        TransientAttack => 92,
-        TransientSustain => 93,
-        TransientMix => 94,
-        ExciterAmount => 95,
-        ExciterFreq => 96,
-        ExciterMix => 97,
-        MultitapTime => 98,
-        MultitapSpread => 99,
-        MultitapFeedback => 100,
-        MultitapMix => 101,
-        RevDelayTime => 102,
-        RevDelayFeedback => 103,
-        RevDelayMix => 104,
-        TapeStopMix => 105,
-        StutterRate => 106,
-        StutterSlice => 107,
-        StutterMix => 108,
-        FreezeMix => 109,
-        GateThreshold => 110,
-        GateAttack => 111,
-        GateRelease => 112,
-        GateDepth => 113,
-        GateMix => 114,
-        VocoderBands => 115,
-        VocoderCarrierMix => 116,
-        VocoderSense => 117,
-        VocoderMix => 118,
-        WidenHaas => 119,
-        WidenSide => 120,
-        WidenMix => 121,
-        FreqShiftAmount => 122,
-        FreqShiftFeedback => 123,
-        FreqShiftMix => 124,
-        SampleVolume => 125,
-        SamplePan => 126,
-        SamplePitch => 127,
-        SampleCutoff => 128,
-    }
-}
-
 /// Maximum number of cable-declared modulation routes the audio thread
 /// will process per block.  Bounded so the array stays Copy-friendly.
 pub const MAX_MOD_ROUTES: usize = 32;
 
-/// Cable-declared modulation route (Copy).  Says: "LFO slot N's value drives
-/// target opcode T at depth D".  Compiled from rack Mod cables in
+/// Cable-declared modulation route (Copy).  Says: "the modulation
+/// value at `cv_buf[source_buf_idx]` drives target opcode T at
+/// depth D".  Compiled from rack Mod cables in
 /// `AudioParams::from_app_state`.
+///
+/// `source_buf_idx` is allocated per-source-kind by the compile
+/// pass.  Layout (see `MOD_BUF_SIZE`):
+///   * 0..4 = LFO slots (in rack order)
+///   * 4..8 = CV sequencer slots (in rack order)
+///   * 8.. = utility module outputs (slew / quantizer / …) once
+///     the V2 utility modules ship.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ModRouteCopy {
-    pub lfo_slot: u8,  // index into AudioParams.lfo (0..3)
+    /// Index into `AudioParams.cv_buf` of the source modulation
+    /// value.  See module-layout doc on the field above.
+    pub source_buf_idx: u8,
     pub target_u8: u8, // opcode from `lfo_target_to_u8`
     pub depth: f32,    // bipolar depth multiplier
 }
+
+/// Size of the per-block modulation source buffer.  Indices 0..4
+/// hold LFO slot values; 4..8 hold CV sequencer values; 8..32 are
+/// reserved for future utility modules (slew / quantizer / etc.).
+pub const MOD_BUF_SIZE: usize = 32;
+/// Buf index where the LFO source range starts.
+pub const MOD_BUF_LFO_BASE: usize = 0;
+/// Buf index where the CV sequencer source range starts.
+pub const MOD_BUF_CV_SEQ_BASE: usize = 4;
 
 /// Per-slot LFO configuration passed to the audio thread (Copy-safe).
 #[derive(Clone, Copy, Debug)]
@@ -625,6 +524,12 @@ pub struct AudioParams {
     // `step_values[current_step % 16]` is read per-block and
     // applied to its target opcode at the configured depth.
     pub cv_seq: [CvSeqParamsCopy; crate::state::CV_SEQ_SLOTS],
+    /// Per-block modulation source buffer.  The audio thread fills
+    /// the LFO range (0..4), CV-seq range (4..8), and utility
+    /// module ranges (8..32) before applying `mod_routes`.
+    /// Allocated as `Default::default()` (zeros) on each block;
+    /// stages overwrite their slots before any route reads.
+    pub cv_buf: [f32; MOD_BUF_SIZE],
     /// Cable-declared modulation routes — populated from rack Mod cables.
     /// Each route says: "LFO slot N drives target T at depth D".
     pub mod_routes: [ModRouteCopy; MAX_MOD_ROUTES],

@@ -28,6 +28,7 @@ pub mod fx_vibrato;
 pub mod fx_vinyl;
 pub mod gabber_kick;
 pub mod granular_voice;
+mod lfo_target_opcode;
 pub mod mod_apply;
 pub mod modal;
 pub mod ms_master;
@@ -77,9 +78,13 @@ use fx_vibrato::VibratoFx;
 use fx_vinyl::VinylFx;
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
+pub use lfo_target_opcode::lfo_target_to_u8;
 use ms_master::MsMaster;
 use param_eq::ParamEq;
-pub use params::{AudioParams, MAX_MOD_ROUTES, compile_mod_routes, lfo_target_to_u8};
+pub use params::{
+    AudioParams, MAX_MOD_ROUTES, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE, MOD_BUF_SIZE,
+    compile_mod_routes,
+};
 use pendulum::PendulumVoice;
 use pitch_shift::PitchShift;
 use pluck::PluckVoice;
