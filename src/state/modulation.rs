@@ -102,6 +102,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // selectors so an LFO on scatter gives a slowly-evolving
         // jitter floor.
         FxGrainDelay => &[Selector, Selector, Selector, Selector],
+        // Spectral gate: 4 knobs (thresh / release / tilt / mix);
+        // selectors so users can sequence threshold opens for
+        // gate-and-release patches.
+        FxSpectralGate => &[Selector, Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],

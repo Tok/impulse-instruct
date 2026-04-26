@@ -198,3 +198,15 @@ pub(super) fn default_grain_size() -> f32 {
 pub(super) fn default_grain_scatter() -> f32 {
     0.4 // Audible jitter on first engagement without going seasick.
 }
+
+pub(super) fn default_spec_thresh() -> f32 {
+    0.0 // Below any normal signal envelope → bands stay open until the user dials threshold up.
+}
+
+pub(super) fn default_spec_release() -> f32 {
+    0.4 // ~250 ms — comfortable spectral fade without freezing the signal.
+}
+
+pub(super) fn default_spec_tilt() -> f32 {
+    0.5 // Uniform threshold across all 8 bands.
+}

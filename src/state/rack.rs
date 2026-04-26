@@ -312,6 +312,7 @@ impl RackState {
                 | ModuleKind::FxTapeEcho
                 | ModuleKind::FxMultibandComp
                 | ModuleKind::FxGrainDelay
+                | ModuleKind::FxSpectralGate
         );
         if !has_audio_out {
             return true;
@@ -609,6 +610,10 @@ impl RackState {
                 // Grain delay groups with the delay-line cluster
                 // (delay / multitap / revdelay / tape echo).
                 ModuleKind::FxGrainDelay => 11,
+                // Spectral gate groups with FxFreeze — both
+                // spectral-domain effects, both V1 approximations
+                // pending FFT machinery.
+                ModuleKind::FxSpectralGate => 24,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

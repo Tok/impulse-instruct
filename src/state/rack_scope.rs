@@ -93,7 +93,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxResBank
         | ModuleKind::FxTapeEcho
         | ModuleKind::FxMultibandComp
-        | ModuleKind::FxGrainDelay => Some("fx".to_string()),
+        | ModuleKind::FxGrainDelay
+        | ModuleKind::FxSpectralGate => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         _ => None,
     }
@@ -175,6 +176,9 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         }
         "fxgraindelay" | "graindelay" | "grain_delay" | "granulardelay" | "graincloud" => {
             Some(FxGrainDelay)
+        }
+        "fxspectralgate" | "spectralgate" | "specgate" | "spectral_gate" | "specgte" => {
+            Some(FxSpectralGate)
         }
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
@@ -291,6 +295,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxGrainDelay => matches!(
             n.as_str(),
             "graindelay" | "grain_delay" | "grain delay" | "granulardelay" | "graincloud" | "fx"
+        ),
+        ModuleKind::FxSpectralGate => matches!(
+            n.as_str(),
+            "spectralgate" | "spectral_gate" | "spectral gate" | "specgate" | "fx"
         ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),

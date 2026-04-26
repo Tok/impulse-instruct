@@ -57,6 +57,7 @@ const ALL_FX_STEPS: &[FxStep] = &[
     FxStep::TapeEcho,
     FxStep::MultibandComp,
     FxStep::GrainDelay,
+    FxStep::SpectralGate,
 ];
 
 #[test]

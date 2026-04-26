@@ -39,6 +39,7 @@ mod fx_mb_comp_tests;
 mod fx_plan_tests;
 mod fx_resbank_tests;
 mod fx_sidechain_tests;
+mod fx_spectral_gate_tests;
 mod fx_step_idx_tests;
 mod fx_stereo_tests;
 mod fx_tape_echo_tests;

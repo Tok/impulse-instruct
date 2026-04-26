@@ -57,6 +57,7 @@ mod fx_step_idx_tests {
             FxStep::TapeEcho,
             FxStep::MultibandComp,
             FxStep::GrainDelay,
+            FxStep::SpectralGate,
         ];
         assert_eq!(variants.len(), FX_STEP_COUNT);
         let mut seen = [false; FX_STEP_COUNT];

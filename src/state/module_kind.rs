@@ -163,6 +163,15 @@ pub enum ModuleKind {
     /// preset knob, with pitch governed by the root knob rather
     /// than tracking the input.
     FxResBank,
+    /// Spectral Gate — per-band amplitude gating across an
+    /// 8-band log-spaced filter bank (~80 Hz to ~16 kHz).
+    /// Distinct from `FxGate` (broadband single-band) and
+    /// `FxFreeze` (held buffer / spectral freeze of the entire
+    /// signal): each band has its own envelope follower, so a
+    /// loud kick can pass while quiet ambient air is gated.
+    /// V1 uses parallel BPFs; the textbook STFT version is
+    /// deferred until FFT machinery lands.
+    FxSpectralGate,
     /// Grain Delay — granular feedback path.  Distinct from
     /// `FxMultitap` (rhythmic taps), `FxFreeze` (held buffer),
     /// and `FxDelay` (single tap).  Reads short Hann-windowed
@@ -308,6 +317,7 @@ impl ModuleKind {
             Self::FxTapeEcho => "TAPE ECHO",
             Self::FxMultibandComp => "MB COMP",
             Self::FxGrainDelay => "GRAIN DEL",
+            Self::FxSpectralGate => "SPEC GATE",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -492,7 +502,8 @@ impl ModuleKind {
             | Self::FxResBank
             | Self::FxTapeEcho
             | Self::FxMultibandComp
-            | Self::FxGrainDelay => (2, 1),
+            | Self::FxGrainDelay
+            | Self::FxSpectralGate => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -569,6 +580,7 @@ impl ModuleKind {
             | Self::FxTapeEcho
             | Self::FxMultibandComp
             | Self::FxGrainDelay
+            | Self::FxSpectralGate
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -654,6 +666,7 @@ impl ModuleKind {
                 | Self::FxTapeEcho
                 | Self::FxMultibandComp
                 | Self::FxGrainDelay
+                | Self::FxSpectralGate
         )
     }
 
@@ -714,6 +727,7 @@ impl ModuleKind {
                 | Self::FxTapeEcho
                 | Self::FxMultibandComp
                 | Self::FxGrainDelay
+                | Self::FxSpectralGate
         )
     }
 

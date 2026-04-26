@@ -20,6 +20,7 @@ pub mod fx_math;
 pub mod fx_mb_comp;
 pub mod fx_resbank;
 pub mod fx_sidechain;
+pub mod fx_spectral_gate;
 mod fx_step;
 pub mod fx_tape_echo;
 pub mod fx_tremolo;
@@ -69,6 +70,7 @@ use fx_iso_eq::IsoEqFx;
 use fx_mb_comp::MultibandCompFx;
 use fx_resbank::ResBankFx;
 use fx_sidechain::{Gate, Vocoder};
+use fx_spectral_gate::SpectralGateFx;
 use fx_tape_echo::TapeEchoFx;
 use fx_tremolo::TremoloFx;
 use fx_vibrato::VibratoFx;
@@ -163,6 +165,7 @@ pub struct DspState {
     tape_echo: TapeEchoFx,
     mb_comp: MultibandCompFx,
     grain_delay: GrainDelayFx,
+    spectral_gate: SpectralGateFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -324,6 +327,7 @@ impl DspState {
             tape_echo: TapeEchoFx::new(),
             mb_comp: MultibandCompFx::new(),
             grain_delay: GrainDelayFx::new(),
+            spectral_gate: SpectralGateFx::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

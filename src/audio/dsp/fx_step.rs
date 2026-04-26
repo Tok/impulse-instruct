@@ -383,6 +383,14 @@ impl DspState {
                 p.grain_mix,
                 sr,
             ),
+            FxStep::SpectralGate => self.spectral_gate.process(
+                sig,
+                p.spec_thresh,
+                p.spec_release,
+                p.spec_tilt,
+                p.spec_mix,
+                sr,
+            ),
         }
     }
 

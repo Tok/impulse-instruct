@@ -99,6 +99,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxTapeEcho
         | ModuleKind::FxMultibandComp
         | ModuleKind::FxGrainDelay
+        | ModuleKind::FxSpectralGate
         | ModuleKind::SpectrumAnalyzer
         | ModuleKind::StereoMeter
         | ModuleKind::ActivityTimeline

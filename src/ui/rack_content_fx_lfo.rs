@@ -37,7 +37,8 @@ pub(super) fn try_draw_fx_lfo_content(
         | ModuleKind::FxResBank
         | ModuleKind::FxTapeEcho
         | ModuleKind::FxMultibandComp
-        | ModuleKind::FxGrainDelay => {}
+        | ModuleKind::FxGrainDelay
+        | ModuleKind::FxSpectralGate => {}
         _ => return None,
     }
 
@@ -389,6 +390,53 @@ pub(super) fn try_draw_fx_lfo_content(
                 st.fx.grain_size = g;
                 st.fx.grain_scatter = s;
                 st.fx.grain_mix = m;
+            }
+        }
+        ModuleKind::FxSpectralGate => {
+            // THRESH / RELEASE / TILT / MIX — same compact 4-knob
+            // shape.  Default knobs are a transparent passthrough
+            // (thresh=0); engaging the FX at default mix is no-op
+            // until the user pulls the threshold knob up.
+            let (mut t, mut r, mut tl, mut m) = {
+                let st = app.state.read();
+                (
+                    st.fx.spec_thresh,
+                    st.fx.spec_release,
+                    st.fx.spec_tilt,
+                    st.fx.spec_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("THRESH", &mut t, pm("fx.spec_thresh")),
+                ("RELEASE", &mut r, pm("fx.spec_release")),
+                ("TILT", &mut tl, pm("fx.spec_tilt")),
+                ("MIX", &mut m, pm("fx.spec_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("spec_gate_xy_{module_id}"),
+                    ["THRESH", "RELEASE", "TILT"],
+                    &mut pad_pair,
+                    (&mut t, &mut r, &mut tl),
+                    [
+                        user_owned("fx.spec_thresh"),
+                        user_owned("fx.spec_release"),
+                        user_owned("fx.spec_tilt"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || t != app.state.read().fx.spec_thresh {
+                let mut st = app.state.write();
+                st.fx.spec_thresh = t;
+                st.fx.spec_release = r;
+                st.fx.spec_tilt = tl;
+                st.fx.spec_mix = m;
             }
         }
         _ => unreachable!("guarded by the early return above"),

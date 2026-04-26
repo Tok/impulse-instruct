@@ -53,13 +53,14 @@ pub enum FxStep {
     TapeEcho,
     MultibandComp,
     GrainDelay,
+    SpectralGate,
 }
 
 /// Total FxStep variants — sized to pack dense per-FX audio-thread
 /// caches (e.g. previous-sample outputs for feedback routes) without
 /// allocating a HashMap every block.  Bump this when adding a new
 /// `FxStep` variant so its `idx()` value has a slot in the cache.
-pub const FX_STEP_COUNT: usize = 42;
+pub const FX_STEP_COUNT: usize = 43;
 
 impl FxStep {
     /// Dense 0..`FX_STEP_COUNT` index — stable; keep in lock-step with
@@ -109,6 +110,7 @@ impl FxStep {
             FxStep::TapeEcho => 39,
             FxStep::MultibandComp => 40,
             FxStep::GrainDelay => 41,
+            FxStep::SpectralGate => 42,
         }
     }
 }

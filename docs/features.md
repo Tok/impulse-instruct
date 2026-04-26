@@ -4,6 +4,67 @@ A detailed log of what's built.
 
 ---
 
+### Spectral Gate FX (`FxSpectralGate`)
+
+Last item on the FX wishlist — per-band amplitude gating
+across an 8-band log-spaced filter bank (~80 Hz to ~16 kHz).
+Distinct from `FxGate` (broadband single-band envelope gate)
+and `FxFreeze` (held buffer / spectral freeze of the entire
+signal): each band has its own envelope follower, so a loud
+kick can pass while quiet ambient air is gated.
+
+V1 takes the **pragmatic route**: 8 RBJ constant-0-dB-peak-gain
+BPFs in parallel rather than a textbook STFT.  The codebase
+doesn't have FFT machinery yet, so this approximation gets
+the spectrally-selective character without the new
+infrastructure.  V2 follow-up = real STFT-based gate once
+FFT lands.
+
+**DSP shape.**  8 BPFs at log-spaced centres.  Per-band peak
+envelope follower (~3 ms attack, user-controlled release
+10..2000 ms).  Per-band smoothed gate state target = 1 when
+env > thr, else 0; smoothing uses fast attack (~5 ms) and
+the user release.  Output uses subtractive recombination —
+`output = input - sum_i((1 - gate_i) * band_i)` — which
+guarantees an exact passthrough when every gate is 1.0,
+regardless of the BPF bank's reconstruction accuracy.
+
+**Knobs.**
+- `spec_thresh` 0..1 — linear amplitude threshold.  Default
+  0 (every band stays open; FX is transparent).
+- `spec_release` 0..1 → 10..2000 ms log-mapped.  Long
+  values freeze low-level resonance after a transient hits
+  (the "spectral hold" effect); short values give quick
+  spectral gating.
+- `spec_tilt` 0..1 — threshold skew across the spectrum.
+  0.5 = uniform; <0.5 = high bands gate more aggressively;
+  >0.5 = low bands gate more aggressively.  Skew is gentle
+  (max ±2× of base) so the knob feels musical.
+- `spec_mix` 0..1 with cheap-bypass fast path.
+
+**Wiring.**  Standard FX add ritual — `FxStep::SpectralGate`
+(idx 42, `FX_STEP_COUNT` bumped to 43),
+`ModuleKind::FxSpectralGate` ("SPEC GATE" label, 2×1 grid,
+sort-group 24 alongside `FxFreeze` — both spectral-domain
+effects, both V1 approximations pending FFT machinery).
+Aliases spectralgate / spectral_gate / specgate /
+fxspectralgate.
+
+**Tests.**  +5 DSP (mix=0 bypass, threshold=0 transparency
+after warmup, high threshold silences a low-level signal,
+loud signal passes when threshold is below the envelope,
+output bounded), +6 state-side (defaults are transparent,
+llm-apply all 4 knobs, lock honoured, FxStep mapping, label,
+alias).  Suite **2108 → 2119**.
+
+This entry closes out the FX wishlist; remaining wishlist
+sections in PLAN.md are visualizations + modulation.
+
+Files: new `src/audio/dsp/fx_spectral_gate.rs`, new
+`src/tests/fx_spectral_gate_tests.rs`.
+
+---
+
 ### Grain Delay FX (`FxGrainDelay`)
 
 Granular feedback path from the FX wishlist.  Distinct from

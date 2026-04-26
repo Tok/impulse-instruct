@@ -698,6 +698,11 @@ pub struct AudioParams {
     pub grain_size: f32,
     pub grain_scatter: f32,
     pub grain_mix: f32,
+    // Spectral gate — per-band amplitude gating across an 8-band BPF bank.
+    pub spec_thresh: f32,
+    pub spec_release: f32,
+    pub spec_tilt: f32,
+    pub spec_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,

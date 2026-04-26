@@ -96,10 +96,12 @@ new gap turns up.
 
 ## FX — wishlist
 
-- [ ] **Spectral gate** — per-bin gate on STFT magnitude (not a
-  global threshold).  Pairs with `FxFreeze`'s spectral path.
-- [ ] **Shimmer mode flag on `FxConvReverb`** (already deferred
-  above — repeated here so the FX wishlist scans complete).
+All previously-listed FX wishlist items have shipped.  V2
+follow-ups carried per-feature in features.md:
+`FxSpectralGate` ships as an 8-band parallel-BPF
+approximation; the textbook STFT version is deferred until
+FFT machinery lands.  Shimmer mode on `FxConvReverb` remains
+deferred (re-open if it grows legs).
 
 ## Visualizations — wishlist
 

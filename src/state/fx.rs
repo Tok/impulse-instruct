@@ -488,6 +488,27 @@ pub struct FxState {
     /// Wet/dry mix 0..1 (0 = bypass).
     #[serde(default)]
     pub resbank_mix: f32,
+    // ── Spectral Gate ───────────────────────────────────────────────────
+    /// Per-band threshold 0..1 — linear amplitude.  Any band
+    /// whose envelope falls below this level gets gated toward
+    /// silence; bands above stay open.
+    #[serde(default = "default_spec_thresh")]
+    pub spec_thresh: f32,
+    /// Gate release 0..1 → 10..2000 ms log-mapped.  Long values
+    /// freeze low-level resonance after a transient hits — the
+    /// "spectral hold" effect.  Short = quick spectral gating.
+    #[serde(default = "default_spec_release")]
+    pub spec_release: f32,
+    /// Threshold tilt 0..1 across the spectrum.  0.5 = uniform;
+    /// <0.5 = high bands gate more aggressively; >0.5 = low bands
+    /// gate more aggressively.  Skew is gentle (max ±2× of base)
+    /// so the knob feels musical rather than clipping bands into
+    /// silence.
+    #[serde(default = "default_spec_tilt")]
+    pub spec_tilt: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).
+    #[serde(default)]
+    pub spec_mix: f32,
     // ── Grain Delay ─────────────────────────────────────────────────────
     /// Base delay 0..1 → 50..1000 ms log-mapped — centre of the
     /// grain cloud's read position.
@@ -844,6 +865,10 @@ impl Default for FxState {
             grain_size: default_grain_size(),
             grain_scatter: default_grain_scatter(),
             grain_mix: 0.0,
+            spec_thresh: default_spec_thresh(),
+            spec_release: default_spec_release(),
+            spec_tilt: default_spec_tilt(),
+            spec_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

@@ -328,7 +328,8 @@ pub(super) fn draw_fx_content(
         | ModuleKind::FxResBank
         | ModuleKind::FxTapeEcho
         | ModuleKind::FxMultibandComp
-        | ModuleKind::FxGrainDelay => {
+        | ModuleKind::FxGrainDelay
+        | ModuleKind::FxSpectralGate => {
             // Internal-LFO modulation cluster lives in
             // `rack_content_fx_lfo.rs` — same split-for-LOC
             // pattern as the bigger fx_extras file.
