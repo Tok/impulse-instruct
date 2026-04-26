@@ -60,6 +60,7 @@ const ALL_FX_STEPS: &[FxStep] = &[
     FxStep::SpectralGate,
     FxStep::Plate,
     FxStep::TranceGate,
+    FxStep::WaveFolder,
 ];
 
 #[test]
@@ -144,6 +145,7 @@ fn kind_to_fx_step_maps_every_fx_kind_to_its_matching_step() {
         (ModuleKind::FxPitchShift, FxStep::PitchShift),
         (ModuleKind::FxPlate, FxStep::Plate),
         (ModuleKind::FxTranceGate, FxStep::TranceGate),
+        (ModuleKind::FxWaveFolder, FxStep::WaveFolder),
     ] {
         assert_eq!(
             fx_plan::kind_to_fx_step(kind),

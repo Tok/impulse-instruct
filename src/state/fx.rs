@@ -773,6 +773,25 @@ pub struct FxState {
     /// Wet/dry mix 0..1 (0 = bypass).
     #[serde(default)]
     pub tg_mix: f32,
+    // ── Wavefolder ───────────────────────────────────────────────────────
+    /// Pre-fold input gain 0..1 → 1..10×.  Drive is what pushes the
+    /// signal above the fold threshold; without drive the FX is
+    /// essentially a passthrough.
+    #[serde(default = "default_wf_drive")]
+    pub wf_drive: f32,
+    /// DC offset 0..1 (0.5 = centred / symmetric fold).  Off-centre
+    /// values produce asymmetric folding with a different harmonic
+    /// content (more even-order energy).
+    #[serde(default = "default_wf_bias")]
+    pub wf_bias: f32,
+    /// Fold-curve blend 0..1 — 0 = pure sine fold (Buchla character),
+    /// 1 = pure triangle fold (Serge character).  Mid values cross-
+    /// fade between the two curves for hybrid harmonics.
+    #[serde(default = "default_wf_symmetry")]
+    pub wf_symmetry: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).
+    #[serde(default)]
+    pub wf_mix: f32,
 }
 
 impl Default for FxState {
@@ -964,6 +983,10 @@ impl Default for FxState {
             tg_rate: default_tg_rate(),
             tg_smooth: default_tg_smooth(),
             tg_mix: 0.0,
+            wf_drive: default_wf_drive(),
+            wf_bias: default_wf_bias(),
+            wf_symmetry: default_wf_symmetry(),
+            wf_mix: 0.0,
         }
     }
 }

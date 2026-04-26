@@ -56,13 +56,14 @@ pub enum FxStep {
     SpectralGate,
     Plate,
     TranceGate,
+    WaveFolder,
 }
 
 /// Total FxStep variants — sized to pack dense per-FX audio-thread
 /// caches (e.g. previous-sample outputs for feedback routes) without
 /// allocating a HashMap every block.  Bump this when adding a new
 /// `FxStep` variant so its `idx()` value has a slot in the cache.
-pub const FX_STEP_COUNT: usize = 45;
+pub const FX_STEP_COUNT: usize = 46;
 
 impl FxStep {
     /// Dense 0..`FX_STEP_COUNT` index — stable; keep in lock-step with
@@ -115,6 +116,7 @@ impl FxStep {
             FxStep::SpectralGate => 42,
             FxStep::Plate => 43,
             FxStep::TranceGate => 44,
+            FxStep::WaveFolder => 45,
         }
     }
 }

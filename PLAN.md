@@ -11,14 +11,6 @@ ship, not held here as history.
 Concrete additions to fill genuine gaps in the current inventory.
 Pick from the top down; each row is one focused commit.
 
-### FX — new modules
-
-- [ ] **Wavefolder** (`FxWaveFolder`) — West Coast fold
-  distortion.  Sine input → multiple harmonics by reflecting the
-  signal back when it crosses ±threshold.  Distinct character
-  from the clip / drive / saturation / waveshaper bank already
-  in place.
-
 ### Visualizations — new modules
 
 - [ ] **Voice meter strip** (`VoiceMeterStrip`) — one mini-meter

@@ -315,6 +315,7 @@ impl RackState {
                 | ModuleKind::FxSpectralGate
                 | ModuleKind::FxPlate
                 | ModuleKind::FxTranceGate
+                | ModuleKind::FxWaveFolder
         );
         if !has_audio_out {
             return true;

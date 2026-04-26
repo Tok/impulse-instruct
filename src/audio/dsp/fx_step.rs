@@ -415,6 +415,10 @@ impl DspState {
                 p.sequencer_bpm,
                 sr,
             ),
+            FxStep::WaveFolder => {
+                self.wavefolder
+                    .process(sig, p.wf_drive, p.wf_bias, p.wf_symmetry, p.wf_mix)
+            }
         }
     }
 

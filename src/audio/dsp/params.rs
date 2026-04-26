@@ -685,6 +685,11 @@ pub struct AudioParams {
     pub tg_rate: u8,
     pub tg_smooth: f32,
     pub tg_mix: f32,
+    // Wavefolder — West Coast triangle / sine fold distortion.
+    pub wf_drive: f32,
+    pub wf_bias: f32,
+    pub wf_symmetry: f32,
+    pub wf_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,

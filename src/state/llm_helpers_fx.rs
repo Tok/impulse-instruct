@@ -339,6 +339,10 @@ pub(super) fn apply_fx_update(
     }
     u!(s.fx.tg_smooth, "tg_smooth", "fx.tg_smooth");
     u!(s.fx.tg_mix, "tg_mix", "fx.tg_mix");
+    u!(s.fx.wf_drive, "wf_drive", "fx.wf_drive");
+    u!(s.fx.wf_bias, "wf_bias", "fx.wf_bias");
+    u!(s.fx.wf_symmetry, "wf_symmetry", "fx.wf_symmetry");
+    u!(s.fx.wf_mix, "wf_mix", "fx.wf_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {

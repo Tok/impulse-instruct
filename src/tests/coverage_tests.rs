@@ -60,6 +60,7 @@ mod fx_step_idx_tests {
             FxStep::SpectralGate,
             FxStep::Plate,
             FxStep::TranceGate,
+            FxStep::WaveFolder,
         ];
         assert_eq!(variants.len(), FX_STEP_COUNT);
         let mut seen = [false; FX_STEP_COUNT];

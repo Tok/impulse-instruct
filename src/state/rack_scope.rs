@@ -96,7 +96,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxGrainDelay
         | ModuleKind::FxSpectralGate
         | ModuleKind::FxPlate
-        | ModuleKind::FxTranceGate => Some("fx".to_string()),
+        | ModuleKind::FxTranceGate
+        | ModuleKind::FxWaveFolder => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         ModuleKind::CvSequencer => Some("cv_seq".to_string()),
         ModuleKind::Slew => Some("slew".to_string()),
@@ -192,6 +193,8 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxtrancegate" | "trancegate" | "trance_gate" | "trance" | "patterngate" | "stepgate" => {
             Some(FxTranceGate)
         }
+        "fxwavefolder" | "wavefolder" | "wave_folder" | "fold" | "westcoast" | "buchla"
+        | "serge" => Some(FxWaveFolder),
         "lfomodule" | "lfo" => Some(LfoModule),
         "cvsequencer" | "cvseq" | "cv_seq" | "stepcv" | "cv" => Some(CvSequencer),
         "slew" | "glide" | "portacv" | "lag" => Some(Slew),
@@ -337,6 +340,17 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
                 | "trance"
                 | "patterngate"
                 | "stepgate"
+                | "fx"
+        ),
+        ModuleKind::FxWaveFolder => matches!(
+            n.as_str(),
+            "wavefolder"
+                | "wave_folder"
+                | "wave folder"
+                | "fold"
+                | "westcoast"
+                | "buchla"
+                | "serge"
                 | "fx"
         ),
         ModuleKind::FxConvReverb => matches!(

@@ -40,7 +40,8 @@ pub(super) fn try_draw_fx_lfo_content(
         | ModuleKind::FxGrainDelay
         | ModuleKind::FxSpectralGate
         | ModuleKind::FxPlate
-        | ModuleKind::FxTranceGate => {}
+        | ModuleKind::FxTranceGate
+        | ModuleKind::FxWaveFolder => {}
         _ => return None,
     }
 
@@ -544,6 +545,54 @@ pub(super) fn try_draw_fx_lfo_content(
                 st.fx.tg_rate = rate;
                 st.fx.tg_smooth = sm;
                 st.fx.tg_mix = m;
+            }
+        }
+        ModuleKind::FxWaveFolder => {
+            // DRIVE / BIAS / SYMMETRY / MIX — same compact 4-knob
+            // shape.  Defaults engage a moderate fold immediately
+            // when the user dials mix > 0; bias=0.5 is symmetric,
+            // symmetry=0.5 splits the sine and triangle fold curves
+            // evenly.
+            let (mut d, mut b, mut sym, mut m) = {
+                let st = app.state.read();
+                (
+                    st.fx.wf_drive,
+                    st.fx.wf_bias,
+                    st.fx.wf_symmetry,
+                    st.fx.wf_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("DRIVE", &mut d, pm("fx.wf_drive")),
+                ("BIAS", &mut b, pm("fx.wf_bias")),
+                ("SYMMETRY", &mut sym, pm("fx.wf_symmetry")),
+                ("MIX", &mut m, pm("fx.wf_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("wavefolder_xy_{module_id}"),
+                    ["DRIVE", "BIAS", "MIX"],
+                    &mut pad_pair,
+                    (&mut d, &mut b, &mut m),
+                    [
+                        user_owned("fx.wf_drive"),
+                        user_owned("fx.wf_bias"),
+                        user_owned("fx.wf_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || d != app.state.read().fx.wf_drive {
+                let mut st = app.state.write();
+                st.fx.wf_drive = d;
+                st.fx.wf_bias = b;
+                st.fx.wf_symmetry = sym;
+                st.fx.wf_mix = m;
             }
         }
         ModuleKind::FxPlate => {

@@ -55,6 +55,7 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxSpectralGate => Some(FxStep::SpectralGate),
         ModuleKind::FxPlate => Some(FxStep::Plate),
         ModuleKind::FxTranceGate => Some(FxStep::TranceGate),
+        ModuleKind::FxWaveFolder => Some(FxStep::WaveFolder),
         _ => None,
     }
 }

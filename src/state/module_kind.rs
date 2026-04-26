@@ -205,6 +205,13 @@ pub enum ModuleKind {
     /// rather than amplitude-triggered, with a per-cell-edge ramp
     /// to suppress clicks.  Classic trance / EDM "chopped pad" FX.
     FxTranceGate,
+    /// Wavefolder — West Coast (Buchla / Serge / Make Noise) fold
+    /// distortion.  Distinct from the clip / drive / saturation /
+    /// waveshaper bank: those compress signal into a soft / hard
+    /// ceiling, the fold reflects it, multiplying harmonics into
+    /// the bright timbres these West Coast modules are known for.
+    /// Two fold curves (sine + triangle) blend via the symmetry knob.
+    FxWaveFolder,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -390,6 +397,7 @@ impl ModuleKind {
             Self::FxSpectralGate => "SPEC GATE",
             Self::FxPlate => "PLATE",
             Self::FxTranceGate => "TRANCE GATE",
+            Self::FxWaveFolder => "WAVEFOLDER",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -605,7 +613,8 @@ impl ModuleKind {
             | Self::FxMultibandComp
             | Self::FxGrainDelay
             | Self::FxSpectralGate
-            | Self::FxPlate => (2, 1),
+            | Self::FxPlate
+            | Self::FxWaveFolder => (2, 1),
             // Trance gate — 16 step toggles need horizontal room
             // (4 cols), plus a control row with rate + smooth + mix.
             Self::FxTranceGate => (4, 2),
@@ -688,6 +697,7 @@ impl ModuleKind {
             | Self::FxSpectralGate
             | Self::FxPlate
             | Self::FxTranceGate
+            | Self::FxWaveFolder
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -785,6 +795,7 @@ impl ModuleKind {
                 | Self::FxSpectralGate
                 | Self::FxPlate
                 | Self::FxTranceGate
+                | Self::FxWaveFolder
         )
     }
 
@@ -847,6 +858,7 @@ impl ModuleKind {
                 | Self::FxGrainDelay
                 | Self::FxSpectralGate
                 | Self::FxPlate
+                | Self::FxWaveFolder
         )
     }
 
@@ -890,6 +902,7 @@ impl ModuleKind {
                 | Self::FxDjFilter
                 | Self::FxPlate
                 | Self::FxTranceGate
+                | Self::FxWaveFolder
                 | Self::LfoModule
                 | Self::CvSequencer
                 | Self::CvSeqScope

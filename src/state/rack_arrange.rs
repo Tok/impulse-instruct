@@ -187,6 +187,10 @@ impl RackState {
                 // Stutter and TapeStop, both also pattern / time-domain
                 // chopping FX.
                 ModuleKind::FxTranceGate => 23,
+                // Wavefolder clusters with the saturation / drive /
+                // waveshaper / vinyl colour family — all distortion-
+                // class FX.  Sort key 29 puts it next to FxTapeSat.
+                ModuleKind::FxWaveFolder => 29,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

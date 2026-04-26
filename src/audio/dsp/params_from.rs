@@ -238,6 +238,10 @@ impl AudioParams {
                 .min(crate::audio::dsp::fx_trance_gate::TG_RATE_COUNT - 1),
             tg_smooth: s.fx.tg_smooth.clamp(0.0, 1.0),
             tg_mix: s.fx.tg_mix.clamp(0.0, 1.0),
+            wf_drive: s.fx.wf_drive.clamp(0.0, 1.0),
+            wf_bias: s.fx.wf_bias.clamp(0.0, 1.0),
+            wf_symmetry: s.fx.wf_symmetry.clamp(0.0, 1.0),
+            wf_mix: s.fx.wf_mix.clamp(0.0, 1.0),
             param_eq_ms_mode: s.fx.param_eq_ms_mode,
             conv_reverb_mix: s.fx.conv_reverb_mix.clamp(0.0, 1.0),
             // Cabinet mode caps the IR length at 10 % of the loaded

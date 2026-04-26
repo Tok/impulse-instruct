@@ -115,6 +115,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // suited to LFO modulation.  Two selectors lets the user
         // automate the smooth ramp + wet/dry blend.
         FxTranceGate => &[Selector, Selector],
+        // Wavefolder: 4 continuous knobs (drive / bias / symmetry /
+        // mix); selectors so an LFO on drive sweeps through the fold
+        // count, producing the classic "wavefolder pitch sweep" sound.
+        FxWaveFolder => &[Selector, Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],

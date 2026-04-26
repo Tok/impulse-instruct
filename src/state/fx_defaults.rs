@@ -238,3 +238,15 @@ pub(super) fn default_tg_smooth() -> f32 {
 pub(super) fn default_tg_rate() -> u8 {
     1 // 1/8 — common trance / EDM cell rate; pairs cleanly with 4/4 grids.
 }
+
+pub(super) fn default_wf_drive() -> f32 {
+    0.4 // ~4× input gain — engages the fold immediately on a typical ±0.5 source.
+}
+
+pub(super) fn default_wf_bias() -> f32 {
+    0.5 // Centred bias = symmetric fold (no DC offset).
+}
+
+pub(super) fn default_wf_symmetry() -> f32 {
+    0.5 // 50/50 sine + triangle blend — middle of the Buchla / Serge spectrum.
+}

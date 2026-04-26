@@ -4,6 +4,61 @@ A detailed log of what's built.
 
 ---
 
+### Wavefolder FX (`FxWaveFolder`)
+
+West Coast (Buchla / Serge / Make Noise) fold distortion.
+Distinct from the clip / drive / saturation / waveshaper bank
+already in place: those compress signal into a soft / hard
+ceiling, the fold instead reflects it when it crosses
+±threshold, multiplying harmonics into the bright complex
+timbres these West Coast modules are known for.
+
+**DSP shape.**  Closed-form fold curves — no iteration,
+allocation-free, cheap-bypass when `wf_mix < 0.001`.  Two
+fold curves are computed every sample and blended via the
+SYMMETRY knob:
+- **Triangle fold** (symmetry = 1) — sharp Serge-style
+  reflections around ±FOLD_THRESHOLD.  Closed form via
+  `(x + t) / 2t` normalisation + parity-based ramp; produces
+  pure triangle waves at high drive.
+- **Sine fold** (symmetry = 0) — `sin(x · π / 2t) · t` —
+  Buchla-style smoother fold curve, more even-order energy.
+
+DRIVE pre-multiplies the input (1..10×); BIAS adds a DC
+offset (centre 0.5 = symmetric fold); SYMMETRY blends the
+two curves; MIX is the standard wet/dry.  Both fold curves
+are bounded by ±FOLD_THRESHOLD (1.0), so the wet output is
+loudness-controlled regardless of drive.
+
+**Knobs.**  4 knobs, all 0..1:
+- `wf_drive` 0..1 → 1..10× pre-fold gain.  Default 0.4
+  (~4×) so the fold engages immediately on a typical ±0.5
+  input.
+- `wf_bias` 0..1 (knob centre 0.5 = no offset).  Off-centre
+  values shift the fold asymmetrically, producing more
+  even-order harmonics.  Default 0.5.
+- `wf_symmetry` 0..1 — sine ↔ triangle blend.  Default 0.5
+  (50/50).
+- `wf_mix` 0..1 wet/dry.  Default 0.
+
+**Wiring.**  Standard FX add ritual — `FxStep::WaveFolder`
+(idx 45, `FX_STEP_COUNT` bumped to 46), `ModuleKind::FxWaveFolder`
+("WAVEFOLDER" label, 2×1 grid, sort-group 29 next to
+`FxTapeSat` / `FxDrive` — the saturation / colour family).
+Aliases wavefolder / wave_folder / fxwavefolder / fold /
+westcoast / buchla / serge.
+
+**Tests.**  +5 DSP (mix=0 bypass, output bounded by threshold,
+high drive sweeps wide range, low-drive zero-bias passthrough,
+bias offset changes output), +6 state-side (defaults engaged
+with mix=0, llm-apply all 4 knobs, lock honoured, FxStep
+mapping, label, alias).  Suite **2238 → 2249**.
+
+Files: new `src/audio/dsp/fx_wavefolder.rs`, new
+`src/tests/fx_wavefolder_tests.rs`.
+
+---
+
 ### Trance gate FX (`FxTranceGate`)
 
 Pattern-driven 16-cell gate synced to the sequencer clock.

@@ -331,7 +331,8 @@ pub(super) fn draw_fx_content(
         | ModuleKind::FxGrainDelay
         | ModuleKind::FxSpectralGate
         | ModuleKind::FxPlate
-        | ModuleKind::FxTranceGate => {
+        | ModuleKind::FxTranceGate
+        | ModuleKind::FxWaveFolder => {
             // Internal-LFO modulation cluster lives in
             // `rack_content_fx_lfo.rs` — same split-for-LOC
             // pattern as the bigger fx_extras file.

@@ -28,6 +28,7 @@ pub mod fx_trance_gate;
 pub mod fx_tremolo;
 pub mod fx_vibrato;
 pub mod fx_vinyl;
+pub mod fx_wavefolder;
 pub mod gabber_kick;
 pub mod granular_voice;
 mod lfo_target_opcode;
@@ -81,6 +82,7 @@ use fx_trance_gate::TranceGateFx;
 use fx_tremolo::TremoloFx;
 use fx_vibrato::VibratoFx;
 use fx_vinyl::VinylFx;
+use fx_wavefolder::WaveFolderFx;
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 pub use lfo_target_opcode::lfo_target_to_u8;
@@ -183,6 +185,7 @@ pub struct DspState {
     spectral_gate: SpectralGateFx,
     plate: PlateFx,
     trance_gate: TranceGateFx,
+    wavefolder: WaveFolderFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -356,6 +359,7 @@ impl DspState {
             spectral_gate: SpectralGateFx::new(),
             plate: PlateFx::new(sample_rate),
             trance_gate: TranceGateFx::new(),
+            wavefolder: WaveFolderFx::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),
