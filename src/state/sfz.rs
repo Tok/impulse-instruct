@@ -75,6 +75,22 @@ pub struct SfzRegion {
     /// Filter type — one of `Lpf2p` / `Hpf2p` / `Bpf2p`.  `None` for
     /// no filter (cutoff = 0 implies this).
     pub fil_type: Option<SfzFilType>,
+    /// CC#1 (mod wheel) crossfade-in lower bound, 0..127.  Below this
+    /// CC value the region is fully silent on CC1; between
+    /// `xfin_lo_cc1` and `xfin_hi_cc1` it ramps linearly to full
+    /// gain.  Default 0 means "fully present at CC1 = 0" (no
+    /// fade-in).
+    pub xfin_lo_cc1: u8,
+    /// CC#1 crossfade-in upper bound.  Above this CC value the
+    /// fade-in gain is 1.0.  Default 0 means the fade-in is a
+    /// no-op (lo == hi at 0 → gain = 1 for any CC).
+    pub xfin_hi_cc1: u8,
+    /// CC#1 crossfade-out lower bound.  Below this CC value the
+    /// fade-out gain is 1.0.  Default 127 means "no fade-out".
+    pub xfout_lo_cc1: u8,
+    /// CC#1 crossfade-out upper bound.  Above this CC value the
+    /// fade-out gain is 0.  Default 127 = no fade-out at any CC.
+    pub xfout_hi_cc1: u8,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -122,6 +138,15 @@ impl Default for SfzRegion {
             cutoff_hz: 0.0,
             resonance_db: 0.0,
             fil_type: None,
+            // Crossfade defaults represent "fully present at any CC":
+            // xfin range 0..0 → fade-in gain 1.0 from CC=0 onward;
+            // xfout range 127..127 → fade-out gain 1.0 up to CC=127.
+            // A region without xfin/xfout opcodes therefore reads as
+            // gain=1 regardless of CC1, preserving V1 behaviour.
+            xfin_lo_cc1: 0,
+            xfin_hi_cc1: 0,
+            xfout_lo_cc1: 127,
+            xfout_hi_cc1: 127,
         }
     }
 }
@@ -142,6 +167,54 @@ impl SfzRegion {
     /// True when `velocity` falls inside `lovel..=hivel`.
     pub fn matches_velocity(&self, velocity: u8) -> bool {
         velocity >= self.lovel && velocity <= self.hivel
+    }
+
+    /// Linear-blend gain for this region given the current CC#1 value
+    /// (mod wheel — the standard SFZ convention for multi-mic packs).
+    /// Returns 1.0 for regions without crossfade opcodes (defaults
+    /// resolve to "fully present at any CC value").  Composed of an
+    /// xfin ramp (0 → 1 across `xfin_lo..xfin_hi`) and an xfout ramp
+    /// (1 → 0 across `xfout_lo..xfout_hi`); the product is the
+    /// region's gain at this CC.
+    pub fn cc1_crossfade_gain(&self, cc: u8) -> f32 {
+        // The defaults (xfin 0..0, xfout 127..127) represent "no
+        // crossfade" — early-return gain=1 in both branches so
+        // regions without xfin/xfout opcodes pass through cleanly.
+        // A real crossfade always has hi > lo (SFZ semantics), so
+        // a parsed region with hi == lo also reads as "no fade"
+        // here, matching the convention that a 0-width ramp is a
+        // no-op rather than an instant gate.
+        let cc = cc.min(127) as f32;
+
+        let g_in = if self.xfin_hi_cc1 <= self.xfin_lo_cc1 {
+            1.0
+        } else {
+            let lo = self.xfin_lo_cc1 as f32;
+            let hi = self.xfin_hi_cc1 as f32;
+            if cc <= lo {
+                0.0
+            } else if cc >= hi {
+                1.0
+            } else {
+                (cc - lo) / (hi - lo)
+            }
+        };
+
+        let g_out = if self.xfout_hi_cc1 <= self.xfout_lo_cc1 {
+            1.0
+        } else {
+            let lo = self.xfout_lo_cc1 as f32;
+            let hi = self.xfout_hi_cc1 as f32;
+            if cc <= lo {
+                1.0
+            } else if cc >= hi {
+                0.0
+            } else {
+                1.0 - (cc - lo) / (hi - lo)
+            }
+        };
+
+        (g_in * g_out).clamp(0.0, 1.0)
     }
 }
 
@@ -551,6 +624,30 @@ fn apply_opcode(r: &mut SfzRegion, key: &str, value: &str, base_dir: &Path) {
                 "bpf_2p" => Some(SfzFilType::Bpf2p),
                 _ => r.fil_type,
             };
+        }
+        // Multi-mic / multi-position crossfade — CC#1 (mod wheel)
+        // is the standard SFZ convention for blending across mic
+        // positions (close / room / ambient).  V1 supports CC#1
+        // only; full multi-CC support is V2 work.
+        "xfin_locc1" => {
+            if let Ok(v) = value.parse::<u32>() {
+                r.xfin_lo_cc1 = v.min(127) as u8;
+            }
+        }
+        "xfin_hicc1" => {
+            if let Ok(v) = value.parse::<u32>() {
+                r.xfin_hi_cc1 = v.min(127) as u8;
+            }
+        }
+        "xfout_locc1" => {
+            if let Ok(v) = value.parse::<u32>() {
+                r.xfout_lo_cc1 = v.min(127) as u8;
+            }
+        }
+        "xfout_hicc1" => {
+            if let Ok(v) = value.parse::<u32>() {
+                r.xfout_hi_cc1 = v.min(127) as u8;
+            }
         }
         _ => {
             // Out-of-subset opcode — common ones we deliberately don't

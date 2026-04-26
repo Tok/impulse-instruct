@@ -561,6 +561,7 @@ impl AudioParams {
             sample_time_stretch: s.sample_instrument.time_stretch.clamp(0.25, 4.0),
             sample_mellotron_mode: s.sample_instrument.mellotron_mode,
             sample_mellotron_flutter: s.sample_instrument.mellotron_flutter.clamp(0.0, 1.0),
+            sample_mic_blend: s.sample_instrument.mic_blend.clamp(0.0, 1.0),
             hoover_enabled: s.hoover.enabled,
             hoover_filter_start: s.hoover.filter_start,
             hoover_sweep_time: s.hoover.sweep_time.clamp(0.1, 4.0),

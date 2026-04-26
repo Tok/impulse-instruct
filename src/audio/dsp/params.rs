@@ -837,6 +837,10 @@ pub struct AudioParams {
     /// `sample_mellotron_mode` is on.  1.0 → ±~40 cents at the
     /// LFO peak.
     pub sample_mellotron_flutter: f32,
+    /// Multi-mic blend 0..1 — mapped to a synthetic CC#1 value at
+    /// trigger time so SFZ regions with `xfin_*cc1` / `xfout_*cc1`
+    /// crossfade opcodes blend across mic positions.
+    pub sample_mic_blend: f32,
     // Hoover lead
     pub hoover_enabled: bool,
     pub hoover_filter_start: f32,

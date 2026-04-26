@@ -553,6 +553,11 @@ pub(super) fn apply_sample_instrument_update(
     {
         s.sample_instrument.mellotron_flutter = (v as f32).clamp(0.0, 1.0);
     }
+    if !locked.contains("sample.mic_blend")
+        && let Some(v) = w.get("mic_blend").and_then(|v| v.as_f64())
+    {
+        s.sample_instrument.mic_blend = (v as f32).clamp(0.0, 1.0);
+    }
     if !locked.contains("sequencer.sample_steps")
         && let Some(arr) = w.get("sample_steps").and_then(|v| v.as_array())
     {

@@ -275,6 +275,7 @@ impl SampleInstrumentVoice {
         accent: f32,
         slide: f32,
         pitch_offset_cents: f32,
+        mic_blend: f32,
     ) {
         let _ = slide;
 
@@ -300,6 +301,12 @@ impl SampleInstrumentVoice {
             let velocity = (64.0 + accent.clamp(0.0, 1.0) * 63.0).round() as u8;
             let rr = self.rr_counter;
             self.rr_counter = self.rr_counter.wrapping_add(1);
+            // Map the user's mic_blend knob to the synthetic CC#1
+            // value the crossfade math expects.  V1 multi-mic is
+            // pinned to CC#1 (mod wheel — the standard SFZ
+            // multi-mic convention); a future V2 can route the
+            // knob to other CC numbers.
+            let mic_cc1 = (mic_blend.clamp(0.0, 1.0) * 127.0).round() as u8;
             let mut pending: [Option<TriggerShape>; POLY_VOICES] = std::array::from_fn(|_| None);
             let mut count = 0usize;
             for idx in self.pick_regions(note, velocity, rr) {
@@ -307,6 +314,14 @@ impl SampleInstrumentVoice {
                     break;
                 }
                 let r = &self.regions[idx];
+                let cf_gain = r.region.cc1_crossfade_gain(mic_cc1);
+                // Skip silent regions — both the crossfade fully
+                // attenuating and a future degenerate xfin/xfout
+                // setup land here.  Saves a slot allocation when
+                // 6/8 mic positions in a stack are inactive.
+                if cf_gain < 1e-4 {
+                    continue;
+                }
                 let region_offset = r.region.transpose as f32 * 100.0 + r.region.tune_cents;
                 let cents_ratio = 2.0_f32.powf((pitch_offset_cents + region_offset) / 1200.0);
                 let v = r.region.volume_db.clamp(-60.0, 12.0);
@@ -314,7 +329,7 @@ impl SampleInstrumentVoice {
                     samples: r.samples.clone(),
                     root_freq: midi_to_hz_tuned(r.region.pitch_keycenter, tuning).max(20.0),
                     freq: (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0),
-                    region_gain: 10.0_f32.powf(v / 20.0),
+                    region_gain: 10.0_f32.powf(v / 20.0) * cf_gain,
                 });
                 count += 1;
             }

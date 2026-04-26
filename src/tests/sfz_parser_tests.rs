@@ -292,3 +292,89 @@ mod region_helpers_tests {
         assert!(r.is_playable());
     }
 }
+
+#[cfg(test)]
+mod multi_mic_crossfade_tests {
+    use crate::state::sfz::{SfzRegion, parse_sfz};
+    use std::path::Path;
+
+    #[test]
+    fn crossfade_default_is_unity_at_any_cc() {
+        // No xfin / xfout opcodes → defaults (xfin 0..0, xfout
+        // 127..127) → gain = 1 for any CC value.  Preserves V1
+        // behaviour for SFZs without multi-mic markup.
+        let r = SfzRegion::default();
+        assert!((r.cc1_crossfade_gain(0) - 1.0).abs() < 1e-6);
+        assert!((r.cc1_crossfade_gain(64) - 1.0).abs() < 1e-6);
+        assert!((r.cc1_crossfade_gain(127) - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn crossfade_xfin_ramps_in_across_range() {
+        // xfin 32..96: silent below 32, full above 96, linear in
+        // between.
+        let r = SfzRegion {
+            xfin_lo_cc1: 32,
+            xfin_hi_cc1: 96,
+            ..Default::default()
+        };
+        assert!(r.cc1_crossfade_gain(0) < 0.01);
+        assert!(r.cc1_crossfade_gain(32) < 0.01);
+        let mid = r.cc1_crossfade_gain(64);
+        assert!((mid - 0.5).abs() < 0.05, "midpoint ~0.5, got {mid}");
+        assert!((r.cc1_crossfade_gain(96) - 1.0).abs() < 0.01);
+        assert!((r.cc1_crossfade_gain(127) - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn crossfade_xfout_ramps_out_across_range() {
+        // xfout 32..96: full below 32, silent above 96.
+        let r = SfzRegion {
+            xfout_lo_cc1: 32,
+            xfout_hi_cc1: 96,
+            ..Default::default()
+        };
+        assert!((r.cc1_crossfade_gain(0) - 1.0).abs() < 0.01);
+        assert!((r.cc1_crossfade_gain(32) - 1.0).abs() < 0.01);
+        let mid = r.cc1_crossfade_gain(64);
+        assert!((mid - 0.5).abs() < 0.05, "midpoint ~0.5, got {mid}");
+        assert!(r.cc1_crossfade_gain(96) < 0.01);
+        assert!(r.cc1_crossfade_gain(127) < 0.01);
+    }
+
+    #[test]
+    fn crossfade_xfin_xfout_combined_creates_window() {
+        // Region active in CC range 32..96 only; peak at 64.
+        let r = SfzRegion {
+            xfin_lo_cc1: 32,
+            xfin_hi_cc1: 64,
+            xfout_lo_cc1: 64,
+            xfout_hi_cc1: 96,
+            ..Default::default()
+        };
+        assert!(r.cc1_crossfade_gain(0) < 0.01);
+        assert!(r.cc1_crossfade_gain(127) < 0.01);
+        assert!((r.cc1_crossfade_gain(64) - 1.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn crossfade_opcodes_parse_into_region() {
+        // Standard SFZ multi-mic markup: three regions, each
+        // tagged with its own CC#1 window — close (0..42), room
+        // (42..85), ambient (85..127).
+        let sfz = "<region> sample=close.wav xfin_locc1=0 xfin_hicc1=21 xfout_locc1=21 xfout_hicc1=42\n\
+                   <region> sample=room.wav  xfin_locc1=42 xfin_hicc1=64 xfout_locc1=64 xfout_hicc1=85\n\
+                   <region> sample=amb.wav   xfin_locc1=85 xfin_hicc1=100 xfout_locc1=100 xfout_hicc1=127\n";
+        let regions = parse_sfz(sfz, Path::new("/x"));
+        assert_eq!(regions.len(), 3);
+        assert_eq!(regions[0].xfin_lo_cc1, 0);
+        assert_eq!(regions[0].xfin_hi_cc1, 21);
+        assert_eq!(regions[0].xfout_lo_cc1, 21);
+        assert_eq!(regions[0].xfout_hi_cc1, 42);
+        assert_eq!(regions[1].xfin_lo_cc1, 42);
+        assert_eq!(regions[2].xfout_hi_cc1, 127);
+        // At CC=64 the room region peaks, close should be silent.
+        assert!((regions[1].cc1_crossfade_gain(64) - 1.0).abs() < 0.05);
+        assert!(regions[0].cc1_crossfade_gain(64) < 0.05);
+    }
+}

@@ -61,6 +61,7 @@ mod sample_instrument_dsp_tests {
             0.0,
             0.0,
             0.0,
+            0.0,
         );
         let p = make_params();
         let mut nonzero = false;
@@ -95,10 +96,12 @@ mod sample_instrument_dsp_tests {
             0.0,
             0.0,
             0.0,
+            0.0,
         );
         v_oct.trigger(
             72,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -126,6 +129,7 @@ mod sample_instrument_dsp_tests {
         v.trigger(
             60,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -167,10 +171,12 @@ mod sample_instrument_dsp_tests {
             0.0,
             0.0,
             0.0,
+            0.0,
         );
         b.trigger(
             60,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -209,6 +215,7 @@ mod sample_instrument_v11_tests {
             0.0,
             0.0,
             0.0,
+            0.0,
         );
         let p = make_params();
         for _ in 0..1024 {
@@ -240,6 +247,7 @@ mod sample_instrument_v11_tests {
         v.trigger(
             60,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -314,6 +322,7 @@ mod sample_instrument_sfz_mode_tests {
             0.0,
             0.0,
             0.0,
+            0.0,
         );
         // First sample after trigger — attack starts at 0 envelope, so
         // accumulate a few samples and check the running max.
@@ -324,6 +333,7 @@ mod sample_instrument_sfz_mode_tests {
         v.trigger(
             60,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -352,6 +362,7 @@ mod sample_instrument_sfz_mode_tests {
             0.0,
             0.0,
             0.0,
+            0.0,
         );
         let p = make_params();
         for _ in 0..200 {
@@ -372,6 +383,7 @@ mod sample_instrument_sfz_mode_tests {
         v.trigger(
             54,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -396,6 +408,7 @@ mod sample_instrument_sfz_mode_tests {
         v.trigger(
             56,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -426,6 +439,7 @@ mod sample_instrument_sfz_mode_tests {
         v.trigger(
             60,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -463,6 +477,7 @@ mod sample_instrument_sfz_mode_tests {
                 0.0,
                 0.0,
                 0.0,
+                0.0,
             );
         }
         // All three triggers fired separate slots — total active = 3.
@@ -486,6 +501,7 @@ mod sample_instrument_sfz_mode_tests {
         v.trigger(
             60,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -528,6 +544,7 @@ mod sample_instrument_poly_tests {
             0.0,
             0.0,
             0.0,
+            0.0,
         );
         // Run a few samples so the first slot is past its attack ramp.
         let p = make_params();
@@ -538,6 +555,7 @@ mod sample_instrument_poly_tests {
         v.trigger(
             67,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -567,6 +585,7 @@ mod sample_instrument_poly_tests {
                 0.0,
                 0.0,
                 0.0,
+                0.0,
             );
         }
         assert_eq!(
@@ -588,6 +607,7 @@ mod sample_instrument_poly_tests {
             0.0,
             0.0,
             0.0,
+            0.0,
         );
         v.trigger(
             64,
@@ -595,10 +615,12 @@ mod sample_instrument_poly_tests {
             0.0,
             0.0,
             0.0,
+            0.0,
         );
         v.trigger(
             67,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,
@@ -674,6 +696,7 @@ mod sample_instrument_filter_tests {
         v.trigger(
             60,
             crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
             0.0,
             0.0,
             0.0,

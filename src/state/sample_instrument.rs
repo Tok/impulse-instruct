@@ -114,6 +114,17 @@ pub struct SampleInstrumentState {
     /// off.  0..1 → ±0..40 cents at the LFO peak.
     #[serde(default = "default_mellotron_flutter")]
     pub mellotron_flutter: f32,
+    /// Multi-mic blend 0..1 — drives the standard SFZ CC#1 (mod
+    /// wheel) crossfade convention so multi-mic packs (close /
+    /// room / ambient) blend across positions on a single knob.
+    /// V1 multi-mic support: regions with `xfin_locc1`,
+    /// `xfin_hicc1`, `xfout_locc1`, `xfout_hicc1` opcodes get a
+    /// per-trigger gain factor based on the blend value × 127
+    /// (the synthetic CC#1 the engine sends).  Regions without
+    /// crossfade opcodes pass through at unity, so non-multi-mic
+    /// SFZs and single-WAV mode are bit-identical to V1.
+    #[serde(default)]
+    pub mic_blend: f32,
 }
 
 fn default_attack() -> f32 {
@@ -168,6 +179,7 @@ impl Default for SampleInstrumentState {
             time_stretch: default_time_stretch(),
             mellotron_mode: false,
             mellotron_flutter: default_mellotron_flutter(),
+            mic_blend: 0.0,
         }
     }
 }

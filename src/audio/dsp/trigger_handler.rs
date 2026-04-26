@@ -179,6 +179,7 @@ impl DspState {
                         *accent,
                         *slide,
                         self.params.sample_pitch_offset_cents,
+                        self.params.sample_mic_blend,
                     );
                 }
             }

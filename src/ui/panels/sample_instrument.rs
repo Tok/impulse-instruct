@@ -442,6 +442,20 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 }
             });
         });
+        // Multi-mic blend knob (V2 SFZ).  Drives a synthetic CC#1
+        // value that multi-mic packs use for `xfin_*cc1` /
+        // `xfout_*cc1` crossfades.  Always visible — regions
+        // without crossfade opcodes pass through at unity, so
+        // moving the knob has no effect on non-multi-mic SFZs.
+        ui.horizontal(|ui| {
+            let mut mb = app.state.read().sample_instrument.mic_blend;
+            let (changed, _) =
+                widgets::param_control(ui, "MIC BLEND", &mut mb, ParamMode::Free, ctrl);
+            if changed {
+                app.state.write().sample_instrument.mic_blend = mb.clamp(0.0, 1.0);
+                app.push_audio_params();
+            }
+        });
     });
 
     ui.add_space(2.0);
