@@ -261,6 +261,11 @@ pub(super) fn apply_fx_update(
     u!(s.fx.vinyl_noise, "vinyl_noise", "fx.vinyl_noise");
     u!(s.fx.vinyl_wear, "vinyl_wear", "fx.vinyl_wear");
     u!(s.fx.vinyl_mix, "vinyl_mix", "fx.vinyl_mix");
+    u!(
+        s.fx.vinyl_transient,
+        "vinyl_transient",
+        "fx.vinyl_transient"
+    );
     u!(s.fx.tremolo_rate, "tremolo_rate", "fx.tremolo_rate");
     u!(s.fx.tremolo_depth, "tremolo_depth", "fx.tremolo_depth");
     u!(s.fx.tremolo_shape, "tremolo_shape", "fx.tremolo_shape");
@@ -343,6 +348,11 @@ pub(super) fn apply_fx_update(
         s.fx.conv_reverb_width,
         "conv_reverb_width",
         "fx.conv_reverb_width"
+    );
+    u!(
+        s.fx.conv_reverb_shimmer,
+        "conv_reverb_shimmer",
+        "fx.conv_reverb_shimmer"
     );
     if !locked.contains("fx.conv_reverb_reverse")
         && let Some(v) = fx.get("conv_reverb_reverse").and_then(|v| v.as_bool())
@@ -670,6 +680,7 @@ fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32
         "conv_reverb_damp" => &mut fx.conv_reverb_damp,
         "conv_reverb_lowcut" => &mut fx.conv_reverb_lowcut,
         "conv_reverb_width" => &mut fx.conv_reverb_width,
+        "conv_reverb_shimmer" => &mut fx.conv_reverb_shimmer,
         "pitch_shift_semi" => &mut fx.pitch_shift_semi,
         "pitch_shift_fine" => &mut fx.pitch_shift_fine,
         "pitch_shift_mix" => &mut fx.pitch_shift_mix,

@@ -721,18 +721,29 @@ pub(super) fn try_draw_fx_extras_content(
             }
         }
         ModuleKind::FxVinyl => {
-            // NOISE / WEAR / MIX — same 3-knob shape as FreqShift,
-            // routed through `hk!` for the standard glass-row look.
-            let (mut n, mut w, mut m) = {
+            // NOISE / WEAR / MIX (V1) + TRANSIENT (V2 follow-up).
+            // The XY pad still hosts the original 3 knobs; transient
+            // gets its own row to keep the V2 follow-up visually
+            // distinct from the steady-state colour controls.
+            let (mut n, mut w, mut m, mut t) = {
                 let st = app.state.read();
-                (st.fx.vinyl_noise, st.fx.vinyl_wear, st.fx.vinyl_mix)
+                (
+                    st.fx.vinyl_noise,
+                    st.fx.vinyl_wear,
+                    st.fx.vinyl_mix,
+                    st.fx.vinyl_transient,
+                )
             };
             hk!(
                 ui,
                 ("NOISE", &mut n, pm("fx.vinyl_noise")),
                 ("WEAR", &mut w, pm("fx.vinyl_wear"))
             );
-            hk!(ui, ("MIX", &mut m, pm("fx.vinyl_mix")));
+            hk!(
+                ui,
+                ("MIX", &mut m, pm("fx.vinyl_mix")),
+                ("TRANSIENT", &mut t, pm("fx.vinyl_transient"))
+            );
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
                 let (vc, _) = render_three_pad(
@@ -756,6 +767,7 @@ pub(super) fn try_draw_fx_extras_content(
                 st.fx.vinyl_noise = n;
                 st.fx.vinyl_wear = w;
                 st.fx.vinyl_mix = m;
+                st.fx.vinyl_transient = t;
             }
         }
         ModuleKind::FxWiden => {

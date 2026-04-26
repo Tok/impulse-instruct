@@ -415,6 +415,13 @@ pub struct FxState {
     /// Wet/dry mix 0..1 (0 = bypass).
     #[serde(default)]
     pub vinyl_mix: f32,
+    /// Start / stop transient 0..1.  0 = at full speed (V1 steady-state
+    /// vinyl colour); 1 = deck stopped (rate=0, silent).  Automate 0→1
+    /// for a brake transient, 1→0 for a spin-up.  Layered on top of
+    /// the colour stage so the transient *is* the vinyl, not a
+    /// separate effect.
+    #[serde(default)]
+    pub vinyl_transient: f32,
     // ── DJ Filter ────────────────────────────────────────────────────────
     /// Single-knob morph 0..1 — 0 = LP heavy (cutoff low), 0.5 = BP
     /// at mid with the resonance peak, 1 = HP heavy (cutoff high).
@@ -650,6 +657,13 @@ pub struct FxState {
     /// short cabinet responses.
     #[serde(default)]
     pub conv_reverb_cabinet: bool,
+    /// Shimmer feedback depth 0..1.  When > 0 the wet output is pitch-
+    /// shifted +12 semitones (one octave up) and folded back into the
+    /// convolution input, producing the classic ambient-shimmer ladder.
+    /// 0 = off (V1 behaviour), 1 = full shimmer (high feedback risk —
+    /// internally clamped at the PitchShift module's safety cap).
+    #[serde(default)]
+    pub conv_reverb_shimmer: f32,
     /// 8-band parametric EQ — replaces the fixed 3-band EQ for the
     /// ParamEq FX module.  The existing `eq_low_gain` / `eq_mid_gain`
     /// / `eq_hi_gain` fields above stay live for `FxEq` (the legacy
@@ -830,6 +844,7 @@ impl Default for FxState {
             vinyl_noise: 0.5,
             vinyl_wear: 0.3,
             vinyl_mix: 0.0,
+            vinyl_transient: 0.0,
             dj_filter_morph: default_dj_filter_morph(),
             dj_filter_resonance: default_dj_filter_resonance(),
             dj_filter_mix: 0.0,
@@ -877,6 +892,7 @@ impl Default for FxState {
             conv_reverb_width: default_conv_reverb_width(),
             conv_reverb_reverse: false,
             conv_reverb_cabinet: false,
+            conv_reverb_shimmer: 0.0,
             conv_reverb_ir_path: String::new(),
             param_eq_bands: default_param_eq_bands(),
             param_eq_ms_mode: false,

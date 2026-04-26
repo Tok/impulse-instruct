@@ -254,6 +254,7 @@ impl DspState {
                 p.conv_reverb_lowcut,
                 p.conv_reverb_size,
                 p.conv_reverb_width,
+                p.conv_reverb_shimmer,
                 sr,
             ),
             FxStep::ParamEq => {
@@ -314,9 +315,13 @@ impl DspState {
                 p.freq_shift_mix,
                 sr,
             ),
-            FxStep::Vinyl => self
-                .vinyl
-                .process(sig, p.vinyl_noise, p.vinyl_wear, p.vinyl_mix),
+            FxStep::Vinyl => self.vinyl.process(
+                sig,
+                p.vinyl_noise,
+                p.vinyl_wear,
+                p.vinyl_mix,
+                p.vinyl_transient,
+            ),
             FxStep::DjFilter => self.dj_filter.process(
                 sig,
                 p.dj_filter_morph,

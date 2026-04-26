@@ -493,6 +493,7 @@ pub struct AudioParams {
     pub conv_reverb_lowcut: f32,
     pub conv_reverb_width: f32,
     pub conv_reverb_reverse: bool,
+    pub conv_reverb_shimmer: f32,
     // Parametric EQ (8-band cascade)
     pub param_eq_bands: [crate::state::ParamEqBand; 8],
     // Standalone pitch shifter
@@ -623,6 +624,7 @@ pub struct AudioParams {
     pub vinyl_noise: f32,
     pub vinyl_wear: f32,
     pub vinyl_mix: f32,
+    pub vinyl_transient: f32,
     // DJ filter — single-knob LP↔BP↔HP morph.
     pub dj_filter_morph: f32,
     pub dj_filter_resonance: f32,
