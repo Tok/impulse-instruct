@@ -277,6 +277,12 @@ const GEN_OVERRIDING_ROOT_KEY: u16 = 58;
 const GEN_COARSE_TUNE: u16 = 51;
 const GEN_FINE_TUNE: u16 = 52;
 const GEN_INITIAL_ATTENUATION: u16 = 48;
+// Volume envelope generators (timecents for times,
+// centibels of attenuation for sustain).
+const GEN_ATTACK_VOL_ENV: u16 = 34;
+const GEN_DECAY_VOL_ENV: u16 = 36;
+const GEN_SUSTAIN_VOL_ENV: u16 = 37;
+const GEN_RELEASE_VOL_ENV: u16 = 38;
 
 /// Generator accumulator — collects every relevant generator value as
 /// we walk a zone, then `materialise` builds the final SfzRegion at
@@ -294,6 +300,15 @@ struct Generators {
     fine_tune_cents: i16,
     pan_per_thousand: i16,       // SF2 pan is -500..+500 = -100..+100 %
     initial_attenuation_cb: i16, // 0.1 dB units; positive = attenuation
+    /// Volume envelope generators in their native SF2 units.  `None`
+    /// = generator absent (the spec default of -12000 timecents = ~1
+    /// ms = "instant" applies).  Times are timecents
+    /// (`secs = 2^(tc / 1200)`); sustain is centibels of attenuation
+    /// from peak (0 cB = full sustain, 1000 cB = 10 dB attenuation).
+    attack_vol_env_tc: Option<i16>,
+    decay_vol_env_tc: Option<i16>,
+    sustain_vol_env_cb: Option<i16>,
+    release_vol_env_tc: Option<i16>,
 }
 
 impl Default for Generators {
@@ -308,6 +323,10 @@ impl Default for Generators {
             fine_tune_cents: 0,
             pan_per_thousand: 0,
             initial_attenuation_cb: 0,
+            attack_vol_env_tc: None,
+            decay_vol_env_tc: None,
+            sustain_vol_env_cb: None,
+            release_vol_env_tc: None,
         }
     }
 }
@@ -350,6 +369,26 @@ impl Generators {
             GEN_INITIAL_ATTENUATION => {
                 if let Ok(b) = amount.try_into() {
                     self.initial_attenuation_cb = i16::from_le_bytes(b);
+                }
+            }
+            GEN_ATTACK_VOL_ENV => {
+                if let Ok(b) = amount.try_into() {
+                    self.attack_vol_env_tc = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_DECAY_VOL_ENV => {
+                if let Ok(b) = amount.try_into() {
+                    self.decay_vol_env_tc = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_SUSTAIN_VOL_ENV => {
+                if let Ok(b) = amount.try_into() {
+                    self.sustain_vol_env_cb = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_RELEASE_VOL_ENV => {
+                if let Ok(b) = amount.try_into() {
+                    self.release_vol_env_tc = Some(i16::from_le_bytes(b));
                 }
             }
             _ => {}
@@ -500,6 +539,23 @@ fn build_region(
     // Pick the root note: explicit override > sample's originalPitch.
     let root = gens.overriding_root.unwrap_or(original_pitch).min(127);
 
+    // Volume-envelope conversion.  SF2 stores times as timecents
+    // (`secs = 2^(tc / 1200)`) and sustain as centibels of
+    // attenuation from peak.  Spec defaults (-12000 tc → ~0.001 s,
+    // 0 cB → full sustain) read as "no envelope" so we treat them
+    // identically to "generator absent" — leaves SfzRegion at its
+    // own defaults (0 / 100 %), which the DSP overrides path
+    // interprets as "fall through to global knob".
+    let attack_s = sf2_timecents_to_secs(gens.attack_vol_env_tc);
+    let decay_s = sf2_timecents_to_secs(gens.decay_vol_env_tc);
+    let release_s = sf2_timecents_to_secs(gens.release_vol_env_tc);
+    let sustain_pct = match gens.sustain_vol_env_cb {
+        // Sustain attenuation in dB = cB / 10.  Amplitude ratio =
+        // 10^(-dB / 20) = 10^(-cB / 200).  Convert to 0..100 %.
+        Some(cb) if cb != 0 => (10.0_f32.powf(-(cb as f32) / 200.0) * 100.0).clamp(0.0, 100.0),
+        _ => 100.0, // generator absent or 0 cB → full sustain
+    };
+
     // Build the SfzRegion.  Loop fields are passed through so a
     // future loop-aware DSP path can use them; the current
     // SampleInstrument always loops, which matches the SF2 default
@@ -521,6 +577,10 @@ fn build_region(
         pan: (gens.pan_per_thousand as f32) * 0.2,
         tune_cents: (gens.fine_tune_cents as f32 + pitch_correction as f32).clamp(-100.0, 100.0),
         transpose: (gens.coarse_tune_st as i32).clamp(-127, 127) as i8,
+        ampeg_attack_s: attack_s,
+        ampeg_decay_s: decay_s,
+        ampeg_sustain_pct: sustain_pct,
+        ampeg_release_s: release_s,
         ..SfzRegion::default()
     };
     // Defensive clamps on the key range — degenerate SF2s sometimes
@@ -533,6 +593,18 @@ fn build_region(
         region,
         samples: arc,
     })
+}
+
+/// Convert an optional SF2 timecents value into seconds for the
+/// `ampeg_*_s` fields.  Returns 0.0 when the generator is absent or
+/// at its spec-default sentinel (-12000 ≈ 1 ms = "instant"), which
+/// the DSP-side override path interprets as "fall through to the
+/// global knob".  Real envelope values are always > -12000.
+fn sf2_timecents_to_secs(tc: Option<i16>) -> f32 {
+    match tc {
+        Some(v) if v > -12000 => 2.0_f32.powf(v as f32 / 1200.0),
+        _ => 0.0,
+    }
 }
 
 /// Linear-interp resample a mono buffer to the engine rate.  Same
@@ -801,5 +873,37 @@ mod tests {
         // bubbling up an error.
         let bytes = b"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
         assert_eq!(preset_name_from_bytes(bytes), "");
+    }
+
+    #[test]
+    fn timecents_default_returns_zero() {
+        // Generator absent → 0 (DSP falls through to global knob).
+        assert_eq!(sf2_timecents_to_secs(None), 0.0);
+        // Spec default sentinel (-12000) → 0 (no envelope).
+        assert_eq!(sf2_timecents_to_secs(Some(-12000)), 0.0);
+    }
+
+    #[test]
+    fn timecents_to_seconds_round_trips_known_values() {
+        // 0 timecents = 1 second.
+        assert!((sf2_timecents_to_secs(Some(0)) - 1.0).abs() < 1e-4);
+        // 1200 timecents = 2 seconds.
+        assert!((sf2_timecents_to_secs(Some(1200)) - 2.0).abs() < 1e-4);
+        // -1200 timecents = 0.5 seconds.
+        assert!((sf2_timecents_to_secs(Some(-1200)) - 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn generators_absorb_volume_envelope() {
+        let mut g = Generators::default();
+        // Attack 100 ms ≈ 2^(tc/1200) = 0.1 → tc = 1200 * log2(0.1) ≈ -3986.
+        g.absorb(GEN_ATTACK_VOL_ENV, &(-3986_i16).to_le_bytes());
+        g.absorb(GEN_DECAY_VOL_ENV, &(-2400_i16).to_le_bytes());
+        g.absorb(GEN_SUSTAIN_VOL_ENV, &200_i16.to_le_bytes()); // 20 dB attenuation
+        g.absorb(GEN_RELEASE_VOL_ENV, &0_i16.to_le_bytes()); // 1 second
+        assert_eq!(g.attack_vol_env_tc, Some(-3986));
+        assert_eq!(g.decay_vol_env_tc, Some(-2400));
+        assert_eq!(g.sustain_vol_env_cb, Some(200));
+        assert_eq!(g.release_vol_env_tc, Some(0));
     }
 }
