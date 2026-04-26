@@ -53,6 +53,35 @@ impl PatchMorphState {
         self.active && self.calls_done < self.total_calls
     }
 
+    /// Start a fresh morph from validated inputs.  Pure — same inputs
+    /// always produce the same `PatchMorphState`, so both the API
+    /// (`POST /api/morph`) and the UI dialog can call this without
+    /// duplicating the bar-interval math + initial `last_step_fired`
+    /// seed convention.  The `prompt` is taken verbatim; clamping +
+    /// trimming is the caller's responsibility (the API surface
+    /// rejects empty prompts before getting here).
+    pub fn start(
+        prompt: String,
+        bars: u32,
+        total_calls: u32,
+        step_division: u8,
+        now_step: u64,
+    ) -> Self {
+        let interval =
+            crate::ui::patch_morph_handler::compute_step_interval(bars, step_division, total_calls);
+        Self {
+            active: true,
+            prompt,
+            total_calls,
+            calls_done: 0,
+            start_global_step: now_step,
+            // Seed `last_step_fired` so the first nudge fires on the
+            // next tick — see `tick_patch_morph` for the invariant.
+            last_step_fired: now_step.saturating_sub(interval),
+            step_interval: interval,
+        }
+    }
+
     /// Format the next morph nudge prompt with progress context so
     /// the LLM knows where in the arc it is.  Pure — same inputs
     /// always produce the same output, makes the formatting
@@ -127,5 +156,29 @@ mod tests {
         };
         let s = m.next_nudge_prompt();
         assert!(s.contains("step 1 of 1"), "got: {s}");
+    }
+
+    #[test]
+    fn start_seeds_in_progress_morph() {
+        // Standard 8-bar / 8-call morph at 16ths from step 100:
+        // step_interval = 16, so last_step_fired = 100 - 16 = 84.
+        let m = PatchMorphState::start("evolve".into(), 8, 8, 4, 100);
+        assert!(m.active);
+        assert!(m.in_progress());
+        assert_eq!(m.prompt, "evolve");
+        assert_eq!(m.total_calls, 8);
+        assert_eq!(m.calls_done, 0);
+        assert_eq!(m.start_global_step, 100);
+        assert_eq!(m.step_interval, 16);
+        assert_eq!(m.last_step_fired, 84);
+    }
+
+    #[test]
+    fn start_when_now_below_interval_saturates_to_zero() {
+        // start at step 5 with a 16-step interval — the sub would
+        // wrap if we used plain subtraction; saturating_sub anchors
+        // the seed at 0 so the first nudge fires on the next tick.
+        let m = PatchMorphState::start("x".into(), 8, 8, 4, 5);
+        assert_eq!(m.last_step_fired, 0);
     }
 }

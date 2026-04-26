@@ -447,6 +447,29 @@ impl ImpulseApp {
                             self.session_dirty = true;
                             ui.close_menu();
                         }
+                        if ui
+                            .button(
+                                egui::RichText::new("AI Patch Morph...")
+                                    .monospace()
+                                    .size(10.0),
+                            )
+                            .on_hover_text(
+                                "Schedule a sequence of LLM nudges that evolve the \
+                                 patch toward a target prompt across N bars.",
+                            )
+                            .clicked()
+                        {
+                            // Default the call-count to bars on first open (one
+                            // nudge per bar) so the form starts at the API
+                            // default.  Subsequent opens preserve the user's
+                            // last choice.
+                            if self.patch_morph_input_calls == 0 {
+                                self.patch_morph_input_calls =
+                                    self.patch_morph_input_bars.max(1);
+                            }
+                            self.show_patch_morph = true;
+                            ui.close_menu();
+                        }
                     });
 
                     ui.menu_button(egui::RichText::new("View").monospace().size(10.0), |ui| {

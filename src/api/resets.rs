@@ -49,8 +49,6 @@ pub async fn post_patch_morph(
     AxumState(api): AxumState<ApiState>,
     Json(req): Json<serde_json::Value>,
 ) -> Json<OkResponse> {
-    use crate::ui::patch_morph_handler::compute_step_interval;
-
     let prompt = req
         .get("prompt")
         .and_then(|v| v.as_str())
@@ -77,22 +75,8 @@ pub async fn post_patch_morph(
     let mut s = api.app_state.write();
     let step_division = s.sequencer.step_division;
     let now = s.global_step_count;
-    s.patch_morph = crate::state::PatchMorphState {
-        active: true,
-        prompt: prompt.clone(),
-        total_calls,
-        calls_done: 0,
-        start_global_step: now,
-        // Seed `last_step_fired` so the first nudge fires
-        // immediately on the next tick (no waiting one bar before
-        // the morph starts to act).
-        last_step_fired: now.saturating_sub(compute_step_interval(
-            bars,
-            step_division,
-            total_calls,
-        )),
-        step_interval: compute_step_interval(bars, step_division, total_calls),
-    };
+    s.patch_morph =
+        crate::state::PatchMorphState::start(prompt.clone(), bars, total_calls, step_division, now);
     drop(s);
     api_log(
         &api,

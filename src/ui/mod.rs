@@ -47,6 +47,7 @@ mod prefs_controls;
 mod windows;
 mod windows_about;
 mod windows_lane_diff;
+mod windows_patch_morph;
 mod windows_prefs;
 mod windows_sysinfo;
 mod windows_undo_timeline;
@@ -393,6 +394,21 @@ pub struct ImpulseApp {
     /// of recent state changes.  Off by default; opened from the
     /// header's view menu.
     pub(crate) show_undo_timeline: bool,
+    /// Toggle for the AI patch-morph dialog.  Modal — the user types a
+    /// target prompt and picks bars/calls; submit configures
+    /// `state.patch_morph` (same path as `POST /api/morph`).  Off by
+    /// default; opened from the Edit menu.
+    pub(crate) show_patch_morph: bool,
+    /// Buffered prompt for the AI patch-morph dialog.  Lives on the
+    /// app instead of in state so an aborted dialog leaves no residue.
+    pub(crate) patch_morph_input_prompt: String,
+    /// Buffered bar-count for the AI patch-morph dialog.  Range 1–64
+    /// (matches the API clamp).  Default 8 — one nudge per bar.
+    pub(crate) patch_morph_input_bars: u32,
+    /// Buffered call-count for the AI patch-morph dialog.  Range
+    /// 1..=bars*4 (the API soft cap).  Default tracks `bars` so users
+    /// who don't change it land on one nudge per bar.
+    pub(crate) patch_morph_input_calls: u32,
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
@@ -610,6 +626,10 @@ impl ImpulseApp {
             show_shortcuts: false,
             show_lane_diff: false,
             show_undo_timeline: false,
+            show_patch_morph: false,
+            patch_morph_input_prompt: String::new(),
+            patch_morph_input_bars: 8,
+            patch_morph_input_calls: 8,
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,
