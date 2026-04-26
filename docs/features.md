@@ -4,6 +4,75 @@ A detailed log of what's built.
 
 ---
 
+### Hoover voice tuning — PWM + sub + pitch dip
+
+Closes the long-standing "doesn't sound like a hoover" known issue
+in PLAN.md.  The voice was a clean supersaw → resonant LP/BP mix —
+clinically correct, but missing the Alpha Juno character.  Three
+internal tweaks land the canonical Human Resource "Dominator" /
+"What The" patch sound without changing the external param surface:
+
+- **PWM pulse blended with the saw stack.**  A separate pulse
+  oscillator at the fundamental, with PW sweeping ±0.35 around 0.5
+  driven by the same slow LFO that already modulated pitch (one LFO
+  doing both, like the original analog).  This is the missing vowel
+  / formant character that defines the hoover sound.
+- **Sub-octave sine.**  One octave below at ~0.18 amplitude — adds
+  body without aliasing.  Sine, not square, so it stays clean
+  through the resonant filter.
+- **Pitch-dip envelope on attack.**  Brief downward swoop (~30 ms
+  decay, –0.6 ST depth) that gives the hoover its characteristic
+  "wow" transient.  Internal envelope, no new parameter — this
+  shape is part of the hoover identity, not a knob the user
+  needs.
+
+All three changes are confined to `HooverVoice::process`; the
+`HooverState` surface is unchanged so existing presets and the LLM
+schema keep working bit-identically.
+
+### GRAN pitch-tracking trigger mode (deferred V2 from absurd queue)
+
+V1 of the granular voice (absurd queue) shipped with fixed-pitch
+grains driven by `pitch_scatter` only.  The deferred V2
+follow-up adds melodic playback so the bird-song corpus (and any
+loaded WAV) can be played from the keyboard:
+
+- New `granular.pitch_mappable` boolean.  When true, MIDI NoteOn
+  routes alongside the bass to a `TriggerEvent::GranularPitch
+  { note }` that sets a base-note transposition on the granular
+  voice; every spawned grain inherits the played pitch.  Reference
+  is C4 (MIDI 60).
+- Internal `base_note_st` field on `GranularVoice` + `set_base_note`
+  method — additive form means free-running texture mode (the
+  default) is bit-identical to V1.
+- LLM schema + `apply_llm_update` honour the new flag (lockable
+  like every other state field); the granular panel grows a
+  "PITCH MAP" checkbox.
+
+Opens the door to melodic bird-call solos and turns the granular
+voice into a one-shot sample-instrument when paired with a clean
+loop.
+
+### AI patch morph — UI dialog (deferred V2 from absurd queue)
+
+V1 of AI patch morph (absurd queue #4) shipped as `POST /api/morph`
+only — discoverable from a script but invisible from the menu.
+The deferred V2 dialog wraps that flow in a small modal accessible
+from `Edit → AI Patch Morph...`:
+
+- Prompt text field + `BARS` (1–64) and `CALLS` (1..=bars*4)
+  spinners — same envelope the API enforces.  Soft cap on calls
+  re-clamps when bars shrinks.
+- Live progress view: when a morph is already in flight, the
+  dialog reads `state.patch_morph` and renders a step counter +
+  fill bar instead of the input form, with `Stop` / `Hide` buttons.
+- Both API and UI now route through the new
+  `PatchMorphState::start` constructor — pure helper so the
+  bar-interval math + `last_step_fired` seed convention live
+  in one place rather than being duplicated.
+
+---
+
 ### Modulation utility cluster (Comparator + S&H + Math)
 
 Last three items from the Modulation wishlist, shipped

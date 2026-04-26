@@ -8,32 +8,18 @@ This file lists **future work only** — completed items get moved into
 
 ## Next session — kickoff queue
 
-The previous session shipped the full **Voices / FX / Visualizations /
-Modulation wishlists** end-to-end (1 voice + 9 FX + 2 viz + 6 modulation
-utilities + Phase 1 cv_buf cable infrastructure — see `features.md`).
-Pick from the small / focused queue below.
+This session shipped three of the previous queue (Hoover tuning, GRAN
+pitch-tracking, AI patch morph dialog — see `features.md`).  Remaining
+small / focused queue:
 
-1. **Hoover sound tuning** — the long-standing known issue at the
-   bottom of this file.  DSP / filter-sweep shape work, not new
-   surface area.  Concrete deliverable: an A/B test against a
-   reference patch + a tweak commit on `src/audio/dsp/voices.rs`'s
-   `HooverVoice`.
-2. **GRAN pitch-tracking trigger mode** (deferred V2 from absurd
-   queue).  Bird-song corpus already ships through the granular
-   voice; today it plays at fixed pitch.  Add a `pitch_mappable`
-   flag so played notes drive grain pitch — opens the door to
-   melodic bird-call solos.
-3. **AI patch morph UI dialog** (deferred V2 from absurd queue).
-   `POST /api/morph` works; needs a small modal with prompt input
-   + bars / calls knobs so it's discoverable from the menu.
-4. **Demo recording — pick one scene**.  Multiple scenarios queued
+1. **Demo recording — pick one scene**.  Multiple scenarios queued
    (acid re-record, MC singer, preecho, LFO assignment, parameter
    ramp, event stream, D&B re-record).  All are non-coding — just
    capturing audio against the existing scene scripts.
-
-Rough size guide: 1 + 3 are small ships; 2 is medium-shaped (touches
-the granular voice + sequencer trigger plumbing); 4 is recording, not
-coding.
+2. **Deferred V2 sweep** — pick from the `## Deferred V2 follow-ups`
+   list below: Vinyl start/stop transient (small), MIDI granuliser
+   file-to-file (small), Shimmer mode on `FxConvReverb` (medium),
+   Spectral gate STFT version (large, blocked on FFT machinery).
 
 ---
 
@@ -135,6 +121,9 @@ follow-ups carried per-feature in features.md:
   companion (the existing CV-seq panel already shows its 16 step
   bars in-place, so this is V2 polish rather than an unmet need).
 
+(GRAN pitch-tracking trigger mode + AI patch morph UI dialog
+shipped — see `features.md`.)
+
 ## Modulation — wishlist
 
 All previously-listed modulation utilities have shipped (CV
@@ -154,9 +143,6 @@ re-open here if any of them grow legs.
 
 ## Deferred V2 follow-ups (from the absurd-queue ship)
 
-- [ ] **AI patch morph — UI dialog**.  V1 is API-only
-  (`POST /api/morph`); a small modal with prompt input + bars /
-  calls knobs would make it discoverable from the menu.
 - [ ] **MIDI granuliser — file-to-file mode**.  V1 scatters the
   running sequencer pattern in place; a `granulise_smf_bytes`
   wrapper would let users pre-process MIDI clips offline.
@@ -164,10 +150,9 @@ re-open here if any of them grow legs.
   steady-state colour; the ramp-up / brake transient was
   deliberately deferred (FxTapeStop overlap).  Could come back
   as a dedicated knob if users want both.
-- [ ] **GRAN — pitch-tracking trigger mode**.  Bird-song corpus
-  ships, but the granular voice plays at fixed pitch; a
-  `pitch_mappable` flag would let played notes drive grain
-  pitch for melodic bird-call solos.
+
+(AI patch morph UI dialog + GRAN pitch-tracking trigger mode
+shipped — see `features.md`.)
 
 ## Demo recording
 
@@ -193,6 +178,5 @@ re-open here if any of them grow legs.
 
 ## Known issues
 
-| Issue | Cause | Status |
-|-------|-------|--------|
-| Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning (see Next-session kickoff #1) |
+(None currently — the long-standing Hoover-tuning issue shipped
+this session; see `features.md` for what changed.)
