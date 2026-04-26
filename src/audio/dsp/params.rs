@@ -709,6 +709,14 @@ pub struct AudioParams {
     /// stays at the played note while playback speed scales by
     /// time_stretch.
     pub sample_time_stretch: f32,
+    /// Mellotron mode opt-in.  When true the slot's playback gains
+    /// tape-loop character: per-slot pitch flutter, spin-up
+    /// transient on attack, and mild tanh saturation on output.
+    pub sample_mellotron_mode: bool,
+    /// Flutter depth 0..1 — scales the pitch wobble when
+    /// `sample_mellotron_mode` is on.  1.0 → ±~40 cents at the
+    /// LFO peak.
+    pub sample_mellotron_flutter: f32,
     // Hoover lead
     pub hoover_enabled: bool,
     pub hoover_filter_start: f32,

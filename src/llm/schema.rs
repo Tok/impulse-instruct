@@ -257,6 +257,8 @@ pub fn param_json_schema() -> serde_json::Value {
                     "loop_enabled":        { "type": "boolean", "description": "true = loop between loop_start..loop_end while gate held; false = one-shot" },
                     "formant_preserve":    { "type": "boolean", "description": "Phase-vocoder pitch shift that preserves the source's spectral envelope (formants stay put as pitch moves).  Costlier than the cheap linear-resample path; ideal for vocal samples." },
                     "time_stretch":        { "type": "number", "minimum": 0.25, "maximum": 4.0, "description": "Playback-speed multiplier decoupled from pitch.  1.0 = source's native tempo; 0.5 = half speed (twice as long); 2.0 = double speed (half as long).  Pitch stays at the played note; phase vocoder compensates.  Auto-engages the spectral processor — costlier than the cheap path.  Use for sustained loops at a different tempo without retuning." },
+                    "mellotron_mode":      { "type": "boolean", "description": "Mellotron tape-loop character: per-note pitch flutter, brief spin-up transient on attack, gentle tanh saturation.  Use for vintage / lo-fi pad and string sounds." },
+                    "mellotron_flutter":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Mellotron flutter depth.  0 = inaudible wobble; 1 = vintage-tape warble (±~40 cents at LFO peak).  Only audible when `mellotron_mode` is true." },
                     "sample_steps":        bool_array,
                     "sample_notes":        { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per sample-instrument step" }
                 },

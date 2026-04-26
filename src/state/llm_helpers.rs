@@ -543,6 +543,16 @@ pub(super) fn apply_sample_instrument_update(
     {
         s.sample_instrument.time_stretch = (v as f32).clamp(0.25, 4.0);
     }
+    if !locked.contains("sample.mellotron_mode")
+        && let Some(v) = w.get("mellotron_mode").and_then(|v| v.as_bool())
+    {
+        s.sample_instrument.mellotron_mode = v;
+    }
+    if !locked.contains("sample.mellotron_flutter")
+        && let Some(v) = w.get("mellotron_flutter").and_then(|v| v.as_f64())
+    {
+        s.sample_instrument.mellotron_flutter = (v as f32).clamp(0.0, 1.0);
+    }
     if !locked.contains("sequencer.sample_steps")
         && let Some(arr) = w.get("sample_steps").and_then(|v| v.as_array())
     {

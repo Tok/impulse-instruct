@@ -88,6 +88,21 @@ struct SampleInstrumentSlot {
     /// transpose / tune cents so the shifter ratio matches the
     /// played note's effective pitch shift relative to the source.
     pitch_ratio: f32,
+    /// Per-slot Mellotron tape-flutter LFO phase (0..1).  Random
+    /// start phase per trigger so two simultaneous notes don't
+    /// flutter in lockstep — the iconic Mellotron warble comes
+    /// from per-tape independent wobble.
+    flutter_phase: f32,
+    /// Per-slot LFO rate jitter (Hz, 1.0..3.0).  Set on trigger so
+    /// each voice's wobble has its own pace; together with
+    /// `flutter_phase` this defeats the perfect-sync that would
+    /// give the bank a synthesised feel.
+    flutter_rate_hz: f32,
+    /// Spin-up envelope value 0..1 — multiplies into the read
+    /// rate when `mellotron_mode` is on.  Resets to 0 on trigger
+    /// and ramps to 1 over ~80 ms (motor coming up to speed),
+    /// pulling the pitch from "noticeably flat" up to nominal.
+    spinup: f32,
 }
 
 impl SampleInstrumentSlot {
@@ -106,6 +121,9 @@ impl SampleInstrumentSlot {
             filter: Svf::new(),
             formant: FormantShifter::new(),
             pitch_ratio: 1.0,
+            flutter_phase: 0.0,
+            flutter_rate_hz: 2.0,
+            spinup: 1.0,
         }
     }
 
@@ -338,6 +356,16 @@ impl SampleInstrumentVoice {
         // routes through this shifter; otherwise it's untouched.
         slot.pitch_ratio = (shape.freq / shape.root_freq).clamp(0.05, 64.0);
         slot.formant.reset();
+        // Mellotron-mode init: randomise the flutter LFO so two
+        // simultaneous notes don't wobble in lockstep, and reset
+        // the spin-up envelope so the new note starts slightly
+        // flat and ramps to nominal pitch.  Cheap pseudo-random
+        // from the slot's own age + pos pointer — no allocations,
+        // no per-process RNG state.
+        let r = (self.next_age.wrapping_mul(0x9E37_79B9_7F4A_7C15)) as u32;
+        slot.flutter_phase = (r as f32 / u32::MAX as f32).fract();
+        slot.flutter_rate_hz = 1.0 + ((r >> 16) as f32 / u16::MAX as f32) * 2.0;
+        slot.spinup = 0.0;
     }
 
     /// Release every currently-gated slot.  Slots already in Release
@@ -434,7 +462,7 @@ impl SampleInstrumentVoice {
         //     pitch from speed.
         let stretch_active = (p.sample_time_stretch - 1.0).abs() > 0.001;
         let use_spectral = p.sample_formant_preserve || stretch_active;
-        let (rate, shift_ratio) = if !use_spectral {
+        let (mut rate, shift_ratio) = if !use_spectral {
             (slot.pitch_ratio, 1.0)
         } else if !stretch_active {
             (1.0, slot.pitch_ratio)
@@ -442,6 +470,42 @@ impl SampleInstrumentVoice {
             let ts = p.sample_time_stretch.clamp(0.25, 4.0);
             (ts, slot.pitch_ratio / ts)
         };
+
+        // Mellotron mode: per-slot pitch flutter + spin-up
+        // transient.  Modulates the read rate directly so the
+        // wobble lands without going through the spectral
+        // processor (cheaper, and matches the analog source).
+        if p.sample_mellotron_mode {
+            // Spin-up envelope: ~80 ms exponential ramp from 0 → 1.
+            // Multiplies into the rate so each note starts ~half
+            // a semitone flat and rises to nominal — the iconic
+            // "motor coming up to speed" gesture.  With a one-pole
+            // lowpass shape the audible glide is more natural than
+            // a linear ramp.
+            let spinup_t = 0.080_f32; // 80 ms
+            let spinup_coef = (-1.0_f32 / (spinup_t * sr)).exp();
+            slot.spinup = 1.0 + (slot.spinup - 1.0) * spinup_coef;
+            // Cap pitch dip at ~6 % (about a semitone) so the
+            // ramp is audible but not jarring.
+            let spinup_factor = 0.94 + 0.06 * slot.spinup.clamp(0.0, 1.0);
+            rate *= spinup_factor;
+
+            // Flutter LFO.  Triangle is gentler than sine for
+            // tape-wobble; our use of `(2.0 * (phase - 0.5)).abs()`
+            // produces a 0..1 triangle that we centre on 0.
+            slot.flutter_phase += slot.flutter_rate_hz / sr;
+            if slot.flutter_phase >= 1.0 {
+                slot.flutter_phase -= 1.0;
+            }
+            let tri = 2.0 * (slot.flutter_phase - 0.5).abs() - 0.5; // -0.5..+0.5
+            // Depth knob 0..1 → ±~40 cents at peak.  cents → ratio:
+            // 2^(cents/1200).  Approximate via the Taylor series
+            // 1 + cents * ln(2)/1200 since the deviation is small.
+            let depth = p.sample_mellotron_flutter.clamp(0.0, 1.0);
+            let cents = tri * 80.0 * depth; // ±40 cents at depth=1
+            let flutter_factor = 1.0 + cents * 0.000_577_6; // ln(2)/1200
+            rate *= flutter_factor;
+        }
 
         let ls = (p.sample_loop_start.clamp(0.0, 1.0) * n as f32) as usize;
         let le_raw = (p.sample_loop_end.clamp(0.0, 1.0) * n as f32) as usize;
@@ -479,6 +543,15 @@ impl SampleInstrumentVoice {
         };
 
         let accent_gain = 1.0 + slot.accent * 0.4;
+        // Mellotron tape saturation: gentle tanh shaping that
+        // compresses transients and adds even-order warmth.
+        // Off when the flag isn't set so non-Mellotron sessions
+        // are bit-identical to the V1.1 path.
+        let voiced = if p.sample_mellotron_mode {
+            (voiced * 1.4).tanh() * 0.85
+        } else {
+            voiced
+        };
         let dry = voiced * slot.adsr_value * accent_gain * slot.region_gain;
         // Per-voice SVF — applied before the global volume.  At
         // `filter_mix == 0` the SVF returns the dry input as-is and

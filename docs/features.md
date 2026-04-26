@@ -4,6 +4,52 @@ A detailed log of what's built.
 
 ---
 
+### Mellotron mode on SAMPLER+ (absurd queue #3)
+
+Per the brief — "uses the SampleInstrument scaffolding" — V1
+ships as a flag on the existing voice rather than a brand-new
+module.  Toggle `MELLO` on the SAMPLER+ panel and the slot's
+playback gains tape-loop character: per-note pitch flutter,
+brief spin-up transient on attack, and gentle tanh saturation
+on the output.
+
+DSP additions (all gated by `sample_mellotron_mode`):
+* **Per-slot flutter LFO** — triangle wave at 1–3 Hz with
+  per-trigger random phase + rate jitter, so two simultaneous
+  notes don't wobble in lockstep.  Modulates the read rate
+  directly (no spectral processor needed) for ±0–40 cents of
+  warble; the depth knob `mellotron_flutter` scales it 0..1.
+* **Spin-up transient** — 80 ms exponential ramp on attack
+  pulls the read rate from 0.94 to 1.0, so each note starts
+  ~half a semitone flat and rises to nominal pitch.  Iconic
+  "motor coming up to speed" gesture.
+* **Tape saturation** — gentle tanh shaping (`tanh(x*1.4)*0.85`)
+  compresses transients and adds even-order warmth; bounded so
+  the path stays in `[-1, 1]`.
+* Per-trigger init randomises `flutter_phase` and
+  `flutter_rate_hz` from the slot's age counter — no per-process
+  RNG state, no allocations.
+
+Plumbing:
+* `SampleInstrumentState.mellotron_mode` (bool) +
+  `mellotron_flutter` (f32, 0..1, default 0.4 — pleasant
+  warble), both `#[serde(default)]`.
+* `AudioParams.sample_mellotron_mode` + `sample_mellotron_flutter`
+  with the same clamp.
+* LLM API: `sample.mellotron_mode` (boolean) +
+  `sample.mellotron_flutter` (number, 0..1) added to the JSON
+  schema.
+* UI: 38-px `MELLO` toggle next to the FRMT button.
+
+2 new tests cover output stays finite + bounded with full
+flutter, and mellotron_mode = false is bit-identical to the
+default path.  **1901 tests passing**; clippy clean.
+
+A separate `ModuleKind::MellotronVoice` could come later if
+discoverability matters; for V1 the flag-on-SAMPLER+ approach
+keeps the rack uncluttered and avoids duplicating the SFZ /
+polyphony / loop machinery.
+
 ### Theremin voice (absurd queue #2)
 
 XY-pad-driven continuous-pitch oscillator with portamento glide.

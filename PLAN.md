@@ -153,9 +153,8 @@ independently.  Anything left at "unscheduled" goes in last.
 
 1. [x] ~~**Eurorack patch generator**~~ — shipped (see features.md).
 2. [x] ~~**Theremin**~~ — shipped (see features.md).
-3. [ ] **Mellotron voice** — sampler with per-note tape-loop model:
-   small tape-flutter LFO per slot, slight pitch wobble, brief
-   spin-up transient.  Uses the SampleInstrument scaffolding.
+3. [x] ~~**Mellotron voice**~~ — shipped as `MELLO` mode on
+   the existing `SampleInstrument` voice (see features.md).
 4. [ ] **AI patch morph** — LLM continuously walks the FX chain
    along a textual prompt across N bars.  ("Evolve from
    cathedral to dystopia over 8 bars.")  Builds on the existing

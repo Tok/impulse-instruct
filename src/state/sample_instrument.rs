@@ -94,6 +94,26 @@ pub struct SampleInstrumentState {
     /// the pitch ratio).  Default 1.0 = no stretch.
     #[serde(default = "default_time_stretch")]
     pub time_stretch: f32,
+    /// Mellotron mode opt-in (absurd-queue voice #3).  When on, the
+    /// slot's playback gains the character of a real Mellotron's
+    /// tape-loop bank: a slow per-slot pitch wobble (1–3 Hz LFO + a
+    /// touch of noise) for the tape-flutter sound, a brief
+    /// spin-up transient on attack so each new note starts
+    /// slightly flat and rises to pitch (the motor coming up to
+    /// speed), and a mild tanh saturation to approximate tape
+    /// compression.  Cheap path stays the V1.1 linear resample —
+    /// the flutter / spin-up modulate the read rate directly
+    /// without going through the spectral processor.  Default
+    /// off so loading a session never silently changes tone.
+    #[serde(default)]
+    pub mellotron_mode: bool,
+    /// Mellotron flutter depth 0..1.  Scales the LFO + noise pitch
+    /// modulation when `mellotron_mode` is on.  At 0 the wobble is
+    /// inaudible (still on but ±0 cents); at 1 it's a deep
+    /// vintage-tape warble.  No effect when `mellotron_mode` is
+    /// off.  0..1 → ±0..40 cents at the LFO peak.
+    #[serde(default = "default_mellotron_flutter")]
+    pub mellotron_flutter: f32,
 }
 
 fn default_attack() -> f32 {
@@ -120,6 +140,9 @@ fn default_filter_cutoff() -> f32 {
 fn default_time_stretch() -> f32 {
     1.0 // play at source's native tempo — no stretch
 }
+fn default_mellotron_flutter() -> f32 {
+    0.4 // pleasant default warble — audible without being a parody
+}
 
 impl Default for SampleInstrumentState {
     fn default() -> Self {
@@ -143,6 +166,8 @@ impl Default for SampleInstrumentState {
             filter_mix: 0.0,
             formant_preserve: false,
             time_stretch: default_time_stretch(),
+            mellotron_mode: false,
+            mellotron_flutter: default_mellotron_flutter(),
         }
     }
 }

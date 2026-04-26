@@ -306,6 +306,34 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     app.state.write().sample_instrument.formant_preserve = !fp_on;
                     app.push_audio_params();
                 }
+                // Mellotron-mode toggle.  When on, the slot's
+                // playback gains tape-loop character (per-note
+                // pitch flutter + spin-up + tanh sat).  Cheap
+                // path stays the V1.1 default — flutter modulates
+                // the read rate directly without going through
+                // the spectral processor.
+                let mello_on = app.state.read().sample_instrument.mellotron_mode;
+                let mello_label = if mello_on { "MELLO" } else { "mello" };
+                let mello_col = if mello_on { theme::CHALK } else { theme::IRON };
+                if ui
+                    .add_sized(
+                        [38.0, 18.0],
+                        egui::Button::new(
+                            egui::RichText::new(mello_label)
+                                .monospace()
+                                .size(8.0)
+                                .color(mello_col),
+                        ),
+                    )
+                    .on_hover_text(
+                        "Mellotron mode: tape-loop character — per-note pitch flutter, \
+                         spin-up transient on attack, gentle tanh saturation.",
+                    )
+                    .clicked()
+                {
+                    app.state.write().sample_instrument.mellotron_mode = !mello_on;
+                    app.push_audio_params();
+                }
                 // Continuous time-stretch knob — bipolar so the
                 // resting position (1.0×) sits at knob centre and
                 // dragging right makes playback faster, left

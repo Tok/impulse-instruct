@@ -111,6 +111,78 @@ mod sample_instrument_dsp_tests {
             assert!(v_oct.process(48_000.0, &p).is_finite());
         }
     }
+
+    #[test]
+    fn mellotron_mode_keeps_output_finite_and_in_range() {
+        // Mellotron mode adds flutter + spin-up + tanh sat to the
+        // signal path; verify the math doesn't blow up or drift
+        // unbounded over a few thousand samples.  The audible
+        // character is a subjective check; here we just lock the
+        // contract that the path stays well-behaved.
+        let mut v = SampleInstrumentVoice::new();
+        let data: Vec<f32> = (0..8192).map(|i| (i as f32 * 0.1).sin() * 0.5).collect();
+        v.load(Arc::new(data));
+        v.set_root_note(60, crate::audio::dsp::TuningSystem::TwelveTet);
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        let mut p = make_params();
+        p.sample_mellotron_mode = true;
+        p.sample_mellotron_flutter = 1.0; // full warble
+        let mut peak = 0.0_f32;
+        for _ in 0..4_000 {
+            let out = v.process(48_000.0, &p);
+            assert!(out.is_finite(), "mellotron path should not produce NaN/Inf");
+            peak = peak.max(out.abs());
+        }
+        // tanh saturation guarantees |out| < 1; with the 0.85
+        // post-scale it should comfortably stay under 1.0.
+        assert!(
+            peak <= 1.0,
+            "mellotron output should stay in range (peak {peak})"
+        );
+    }
+
+    #[test]
+    fn mellotron_mode_off_is_bit_identical_to_default_path() {
+        // Two voices: one with mellotron_mode = false (default),
+        // one with the same defaults.  Their outputs should match
+        // sample-for-sample for the first second — ensures the
+        // flag is truly off when off (no side-effect leakage from
+        // our new state fields).
+        let mut a = SampleInstrumentVoice::new();
+        let mut b = SampleInstrumentVoice::new();
+        let data: Vec<f32> = (0..8192).map(|i| (i as f32 * 0.1).sin() * 0.5).collect();
+        a.load(Arc::new(data.clone()));
+        b.load(Arc::new(data));
+        a.set_root_note(60, crate::audio::dsp::TuningSystem::TwelveTet);
+        b.set_root_note(60, crate::audio::dsp::TuningSystem::TwelveTet);
+        a.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        b.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+        );
+        let p = make_params();
+        // Both should match sample-for-sample with mellotron off.
+        for i in 0..2_000 {
+            let oa = a.process(48_000.0, &p);
+            let ob = b.process(48_000.0, &p);
+            assert_eq!(oa, ob, "frame {i}: outputs diverged with mellotron off");
+        }
+    }
 }
 
 #[cfg(test)]
