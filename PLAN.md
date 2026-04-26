@@ -6,32 +6,47 @@ This file lists **future work only** — completed items get moved into
 
 ---
 
-## Next session — kickoff items
+## Next session — kickoff queue
 
-The original three-pick queue is fully shipped (polyphony
-meter, DJ filter, FM operator synth — see features.md).
-Pick the next session's work from the wishlist sections
-below.
+The previous session shipped the full **Voices / FX / Visualizations /
+Modulation wishlists** end-to-end (1 voice + 9 FX + 2 viz + 6 modulation
+utilities + Phase 1 cv_buf cable infrastructure — see `features.md`).
+Pick from the small / focused queue below.
 
-Rough size guide: **DJ-style 3-band kill EQ** is the next
-small/quick win; **multiband compressor** is the biggest
-unshipped FX.  Voice-side, the additive synth and the modal /
-struck physical model both fill distinct gaps the FM op
-voice doesn't cover.
+1. **Hoover sound tuning** — the long-standing known issue at the
+   bottom of this file.  DSP / filter-sweep shape work, not new
+   surface area.  Concrete deliverable: an A/B test against a
+   reference patch + a tweak commit on `src/audio/dsp/voices.rs`'s
+   `HooverVoice`.
+2. **GRAN pitch-tracking trigger mode** (deferred V2 from absurd
+   queue).  Bird-song corpus already ships through the granular
+   voice; today it plays at fixed pitch.  Add a `pitch_mappable`
+   flag so played notes drive grain pitch — opens the door to
+   melodic bird-call solos.
+3. **AI patch morph UI dialog** (deferred V2 from absurd queue).
+   `POST /api/morph` works; needs a small modal with prompt input
+   + bars / calls knobs so it's discoverable from the menu.
+4. **Demo recording — pick one scene**.  Multiple scenarios queued
+   (acid re-record, MC singer, preecho, LFO assignment, parameter
+   ramp, event stream, D&B re-record).  All are non-coding — just
+   capturing audio against the existing scene scripts.
+
+Rough size guide: 1 + 3 are small ships; 2 is medium-shaped (touches
+the granular voice + sequencer trigger plumbing); 4 is recording, not
+coding.
 
 ---
 
 ## SampleInstrument V2 — outstanding follow-ups
 
-The 9 main stages are shipped (see features.md).  Stage 7.5
-also shipped — drag-to-edit loop markers + SFZ zone selection +
-per-zone inspector all wired (see features.md).  Remaining
-slice:
+The 9 main stages are shipped (see features.md).  Stage 7.5 also
+shipped — drag-to-edit loop markers + SFZ zone selection +
+per-zone inspector all wired (see features.md).  Remaining slice:
 
-- [ ] **Out-of-scope V1 items revisited** (per the original
-  PLAN's "deliberately deferred" list): multi-mic / multi-position
-  blends in SFZ, `.flac` / `.aiff` formats, `.sf2` parsing, disk
-  streaming for huge banks, sample recording from the audio input.
+- [ ] **Out-of-scope V1 items revisited** (per the original PLAN's
+  "deliberately deferred" list): multi-mic / multi-position blends
+  in SFZ, `.flac` / `.aiff` formats, `.sf2` parsing, disk streaming
+  for huge banks, sample recording from the audio input.
 
 ## FX — still open
 
@@ -50,6 +65,10 @@ slice:
   shipped `StereoVectorscope` covers the goniometer use case;
   fading-polyline depth is pure eye-candy and can come back if
   visual demand surfaces.
+- [-] **Spectral gate — true STFT version** — V1 ships an 8-band
+  parallel-BPF approximation (per-band envelope + gate, subtractive
+  recombination).  The textbook STFT version is deferred until FFT
+  machinery lands in the codebase.
 
 ## Integration — open
 
@@ -71,52 +90,56 @@ features.md.  No remaining items in this section.)
   helper).
 - [ ] **Large-file watch list** (none over the 1000-line cap;
   just noting the largest ones in case a future change pushes
-  one over).  Current top after the post-kickoff session:
+  one over).  Top after the wishlist-marathon session:
+  `src/state/rack.rs` (988),
   `src/tests/dsp_fx_tests.rs` (966),
   `src/llm/lanes.rs` (962),
+  `src/ui/rack_content_fx_extras.rs` (961),
+  `src/ui/rack_content.rs` (955),
+  `src/sequencer/mod.rs` (945),
   `src/ui/panels/sequencer.rs` (944),
+  `src/audio/dsp/params.rs` (937),
   `src/state/transitions.rs` (925),
   `src/audio/analysis.rs` (924),
   `src/llm/mod.rs` (921),
-  `src/ui/rack_content_fx_extras.rs` (918 — picked up DJ
-  filter + dispatches for the previously-empty card group),
-  `src/state/rack.rs` (916).  `src/audio/dsp/fx_extras.rs`
-  was split this session — extracted the glitch family
-  (TapeStop / Stutter / Freeze) into a sibling
-  `fx_glitch.rs`; the parent dropped 989 → 628 lines, no
-  behaviour change.  `audio/dsp/mod.rs`, `src/state/rack.rs`,
-  and `src/ui/rack_content.rs` were split in earlier
-  sessions (`process_block.rs`, `rack_wiring.rs`,
-  `rack_content_conv_reverb.rs` siblings).
+  `src/state/fx.rs` (895),
+  `src/audio/mod.rs` (895),
+  `src/state/module_kind.rs` (893).
+  This session's splits: `fx.rs` → `fx_defaults.rs`, `params.rs`
+  → `lfo_target_opcode.rs` + `mod_compile.rs`,
+  `rack_content_fx_extras.rs` → `rack_content_fx_lfo.rs`.  Adding
+  another voice or a new modulator with knob-heavy state will
+  need another split — `rack.rs` is the closest to the cap (988).
 
 ## Voices — wishlist
 
-All previously-listed voice gaps have shipped; re-open here if a
-new gap turns up.
+All previously-listed voice gaps have shipped (FM ops, additive,
+modal, chiptune, vocal — see features.md).  Re-open here if a new
+gap turns up.
 
 ## FX — wishlist
 
-All previously-listed FX wishlist items have shipped.  V2
+All previously-listed FX wishlist items have shipped (tremolo,
+vibrato, ISO EQ, de-esser, resonator bank, tape echo, multiband
+compressor, grain delay, spectral gate — see features.md).  V2
 follow-ups carried per-feature in features.md:
-`FxSpectralGate` ships as an 8-band parallel-BPF
-approximation; the textbook STFT version is deferred until
-FFT machinery lands.  Shimmer mode on `FxConvReverb` remains
-deferred (re-open if it grows legs).
+- `FxSpectralGate` ships as an 8-band parallel-BPF approximation;
+  the textbook STFT version is deferred until FFT machinery lands.
+- Shimmer mode on `FxConvReverb` remains deferred.
 
 ## Visualizations — wishlist
 
 - [ ] **CV sequence visualiser** — focused waveform / value-bar
-  view of an assigned CV-seq slot's per-step output.  The
-  CV sequencer module is shipped; this is the dedicated
-  visualiser companion (the existing CV-seq panel already shows
-  its 16 step bars in-place, so this is V2 polish rather than
-  an unmet need).
+  view of an assigned CV-seq slot's per-step output.  The CV
+  sequencer module is shipped; this is the dedicated visualiser
+  companion (the existing CV-seq panel already shows its 16 step
+  bars in-place, so this is V2 polish rather than an unmet need).
 
 ## Modulation — wishlist
 
 All previously-listed modulation utilities have shipped (CV
 sequencer, Slew, Quantizer, Comparator, Sample-and-hold, Math).
-The CV cable-routing infrastructure (cv_buf + per-utility
+The CV cable-routing infrastructure (`cv_buf` + per-utility
 compile passes) was built up in Phase 1; each utility now
 participates in the full graph — sources can chain through
 utilities to drive any synth/FX param.
@@ -172,4 +195,4 @@ re-open here if any of them grow legs.
 
 | Issue | Cause | Status |
 |-------|-------|--------|
-| Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning |
+| Hoover doesn't sound like a hoover | DSP tuning, not a code bug | Needs filter sweep shape tuning (see Next-session kickoff #1) |
