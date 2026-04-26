@@ -10,12 +10,6 @@ This file lists **future work only** — completed items get moved into
 
 The 9 main stages are shipped (see features.md).  Remaining slices:
 
-- [ ] **Continuous time-stretch knob**.  V1 ships as a 4-preset cycle
-  button (1.0× / 0.5× / 0.75× / 2.0× — see features.md).  A
-  continuous knob (logarithmic 0.25×–4.0×) would let users dial in
-  arbitrary tempos; deferred until demand surfaces, since the
-  4-preset cycle covers the common "half / double speed" cases
-  the original PLAN targeted.
 - [ ] **Drag-to-edit on the visualizer strip** (Stage 7.5).  Drag
   loop-start / loop-end markers on the waveform thumb; click a
   region in the SFZ zone-map to select it + open a per-zone

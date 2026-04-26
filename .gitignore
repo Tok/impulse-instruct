@@ -25,3 +25,10 @@ voices/*.wav
 # + .gitkeep stubs are tracked; the .wav contents are not.
 samples/**/*.wav
 samples/**/*.WAV
+# `download-samples.sh` clones full SFZ libraries (Salamander, SSO,
+# VSCO-2-CE, …) into `samples/instruments/<pack>/` — those can run
+# multiple GB and don't belong in the tree.  The `starter/` folder
+# stays tracked (curated placeholder; carries a .gitkeep) so the
+# directory structure survives a fresh clone.
+samples/instruments/*/
+!samples/instruments/starter/

@@ -306,35 +306,21 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     app.state.write().sample_instrument.formant_preserve = !fp_on;
                     app.push_audio_params();
                 }
-                // Time-stretch cycle button — picks from a small set of
-                // useful ratios (1.0×, 0.5×, 0.75×, 2.0×).  Auto-engages
-                // the spectral processor when != 1.0× so the cheap path
-                // doesn't need a separate flip.  A continuous knob can
-                // land later if demand appears; this V1 favours quick
-                // access to the common "half / double speed" cases over
-                // a sub-1° drag precision the user probably doesn't
-                // need.
+                // Continuous time-stretch knob — bipolar so the
+                // resting position (1.0×) sits at knob centre and
+                // dragging right makes playback faster, left
+                // slower.  Maps logarithmically: each octave of
+                // bipolar travel doubles / halves the multiplier
+                // (bipolar ±1 → 4.0× / 0.25×; bipolar 0 → 1.0×).
+                // Auto-engages the spectral processor when off-rest;
+                // the cheap path stays the V1.1 default at the
+                // detent.  Hover shows the live multiplier.
                 let ts = app.state.read().sample_instrument.time_stretch;
-                let ts_label = format!("{:.2}×", ts);
-                let ts_active = (ts - 1.0).abs() > 0.001;
-                let ts_col = if ts_active { theme::CHALK } else { theme::IRON };
-                if ui
-                    .add_sized(
-                        [38.0, 18.0],
-                        egui::Button::new(
-                            egui::RichText::new(ts_label)
-                                .monospace()
-                                .size(8.0)
-                                .color(ts_col),
-                        ),
-                    )
-                    .on_hover_text(
-                        "Time-stretch: cycle through 1.0× → 0.5× → 0.75× → 2.0×.  \
-                         Pitch stays at the played note; phase vocoder compensates.",
-                    )
-                    .clicked()
-                {
-                    let next = next_time_stretch(ts);
+                let mut bipolar = time_stretch_to_bipolar(ts);
+                let (changed, _) =
+                    widgets::param_control_bipolar(ui, "TIME", &mut bipolar, ParamMode::Free, ctrl);
+                if changed {
+                    let next = bipolar_to_time_stretch(bipolar);
                     app.state.write().sample_instrument.time_stretch = next;
                     app.push_audio_params();
                 }
@@ -422,32 +408,35 @@ fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
     }
 }
 
-/// Pick the next time-stretch ratio for the cycle button.  The
-/// preset order on the cycle is `1.0 → 0.5 → 0.75 → 2.0 → 1.0`.
-/// When `current` is *exactly* a preset the function returns the
-/// next entry; when it's an off-grid value (e.g. set by the LLM /
-/// API at 0.6 or 1.5) the function returns the first preset
-/// strictly greater than `current` in the **sorted** preset order
-/// (0.5, 0.75, 1.0, 2.0).  No nearest-snap — sorted-next is more
-/// predictable when the user clicks repeatedly.  Wraps to the
-/// smallest preset (0.5) once `current` exceeds the largest.
-fn next_time_stretch(current: f32) -> f32 {
-    const CYCLE: [f32; 4] = [1.0, 0.5, 0.75, 2.0];
-    // Exact-match preset → take the next cycle entry.
-    for (i, &v) in CYCLE.iter().enumerate() {
-        if (current - v).abs() < 1e-4 {
-            return CYCLE[(i + 1) % CYCLE.len()];
-        }
-    }
-    // Off-grid current → next preset strictly greater than it
-    // when scanned in sorted order; wrap if past the largest.
-    const SORTED: [f32; 4] = [0.5, 0.75, 1.0, 2.0];
-    for &v in &SORTED {
-        if v > current + 1e-4 {
-            return v;
-        }
-    }
-    SORTED[0]
+/// Time-stretch ↔ bipolar-knob log mapping.  The knob's bipolar
+/// `[-1, +1]` range maps to the time-stretch multiplier
+/// `[0.25, 4.0]` so that:
+///
+///   * bipolar  0  → multiplier 1.0× (rest position)
+///   * bipolar +1 → multiplier 4.0× (max speed-up)
+///   * bipolar -1 → multiplier 0.25× (max slow-down)
+///   * each ±0.5 of bipolar travel doubles or halves the multiplier
+///
+/// The doubling-per-half-knob symmetry matches musicians' ear for
+/// "octave" relationships (half speed ≈ pitch down an octave's
+/// worth of duration before the spectral shifter compensates) so
+/// the control feels uniform across the whole range.
+///
+/// Pulled out as a free function so the math is testable without
+/// spinning up egui or AppState.  Pure: same input → same output.
+fn bipolar_to_time_stretch(bipolar: f32) -> f32 {
+    let b = bipolar.clamp(-1.0, 1.0);
+    2.0_f32.powf(b * 2.0).clamp(0.25, 4.0)
+}
+
+/// Inverse of `bipolar_to_time_stretch` — used by the panel to
+/// initialise the knob position from `state.sample_instrument
+/// .time_stretch`.  Clamps the input to the legal range first so a
+/// pathological state (LLM / API set 100×, file load with zero)
+/// doesn't underflow log2.
+fn time_stretch_to_bipolar(stretch: f32) -> f32 {
+    let s = stretch.clamp(0.25, 4.0);
+    (s.log2() / 2.0).clamp(-1.0, 1.0)
 }
 
 #[cfg(test)]
@@ -455,21 +444,55 @@ mod tests {
     use super::*;
 
     #[test]
-    fn next_time_stretch_cycles_through_presets() {
-        assert_eq!(next_time_stretch(1.0), 0.5);
-        assert_eq!(next_time_stretch(0.5), 0.75);
-        assert_eq!(next_time_stretch(0.75), 2.0);
-        assert_eq!(next_time_stretch(2.0), 1.0);
+    fn bipolar_to_time_stretch_centre_is_unity() {
+        assert!((bipolar_to_time_stretch(0.0) - 1.0).abs() < 1e-5);
     }
 
     #[test]
-    fn next_time_stretch_off_grid_advances_in_sorted_order() {
-        // Off-grid values picked from the LLM / API land on the
-        // next-greater preset in sorted order (0.5, 0.75, 1.0,
-        // 2.0).  Wrap to the smallest once past the largest.
-        assert_eq!(next_time_stretch(0.6), 0.75); // 0.6 < 0.75 → 0.75
-        assert_eq!(next_time_stretch(1.5), 2.0); // 1.5 < 2.0 → 2.0
-        assert_eq!(next_time_stretch(0.3), 0.5); // 0.3 < 0.5 → 0.5
-        assert_eq!(next_time_stretch(3.0), 0.5); // past max → wrap
+    fn bipolar_to_time_stretch_endpoints_hit_clamp_range() {
+        assert!((bipolar_to_time_stretch(1.0) - 4.0).abs() < 1e-4);
+        assert!((bipolar_to_time_stretch(-1.0) - 0.25).abs() < 1e-4);
+    }
+
+    #[test]
+    fn bipolar_to_time_stretch_octave_symmetry() {
+        // Half-knob travel doubles or halves the multiplier — the
+        // log mapping's defining property.  At ±0.5 the knob
+        // should land on 2.0× and 0.5× respectively.
+        assert!((bipolar_to_time_stretch(0.5) - 2.0).abs() < 1e-4);
+        assert!((bipolar_to_time_stretch(-0.5) - 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn bipolar_to_time_stretch_clamps_out_of_range_input() {
+        // Bipolar values outside ±1 (defensive) get clamped before
+        // the exponential, so the multiplier never escapes
+        // 0.25..=4.0 even if the caller mishandles the knob.
+        assert!((bipolar_to_time_stretch(2.0) - 4.0).abs() < 1e-4);
+        assert!((bipolar_to_time_stretch(-3.5) - 0.25).abs() < 1e-4);
+    }
+
+    #[test]
+    fn time_stretch_to_bipolar_round_trip() {
+        // The inverse mapping is exact for the canonical values
+        // and round-trips within float-tolerance for arbitrary
+        // ones.
+        for &b in &[-1.0, -0.5, 0.0, 0.25, 0.5, 0.75, 1.0_f32] {
+            let s = bipolar_to_time_stretch(b);
+            let b2 = time_stretch_to_bipolar(s);
+            assert!(
+                (b - b2).abs() < 1e-4,
+                "round-trip drift: bipolar {b} → stretch {s} → bipolar {b2}"
+            );
+        }
+    }
+
+    #[test]
+    fn time_stretch_to_bipolar_clamps_pathological_input() {
+        // Out-of-range stretch (e.g. zero from a bad file load)
+        // shouldn't underflow log2 — clamps to 0.25 first, which
+        // maps to bipolar -1.
+        assert!((time_stretch_to_bipolar(0.0) + 1.0).abs() < 1e-4);
+        assert!((time_stretch_to_bipolar(100.0) - 1.0).abs() < 1e-4);
     }
 }

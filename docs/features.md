@@ -4,6 +4,34 @@ A detailed log of what's built.
 
 ---
 
+### SampleInstrument time-stretch — continuous knob (UI follow-up)
+
+The previous commit shipped time-stretch as a 4-preset cycle
+button (1.0 / 0.5 / 0.75 / 2.0×).  This follow-up replaces it
+with a continuous bipolar knob so the user can dial in arbitrary
+multipliers without going through the LLM / API.
+
+- Bipolar `param_control_bipolar` (range -1..+1) sits at knob
+  centre = 1.0× rest; drag right makes playback faster, left
+  slower.  Maps logarithmically: each ±0.5 of bipolar travel
+  doubles or halves the multiplier (bipolar ±1 → 4.0× / 0.25×).
+  The doubling-per-half-knob symmetry matches musicians' ear for
+  octave relationships, so the control feels uniform across the
+  range.
+- Two pure helpers in `panels/sample_instrument.rs`:
+  `bipolar_to_time_stretch` and its inverse
+  `time_stretch_to_bipolar`.  Both clamp to safe ranges
+  defensively (zero from a bad file load doesn't underflow log2;
+  out-of-band bipolar values get clamped before exp).
+- DSP path unchanged — knob writes through to
+  `state.sample_instrument.time_stretch`, the spectral processor
+  auto-engages when the value drifts off 1.0× by more than 0.001.
+- 6 new tests cover: centre = unity, ±1 endpoints, octave
+  symmetry at ±0.5, defensive clamping at out-of-range bipolar
+  inputs, round-trip across a representative bipolar grid, and
+  pathological `time_stretch` inputs (0 / 100×) clamping to the
+  legal range.  Total: **1886 tests passing**.
+
 ### SampleInstrument time-stretch decoupled from pitch
 
 V2 Stage 8 shipped formant-preserving pitch shift; this follow-up
