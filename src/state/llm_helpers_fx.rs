@@ -273,6 +273,14 @@ pub(super) fn apply_fx_update(
     u!(s.fx.iso_mid, "iso_mid", "fx.iso_mid");
     u!(s.fx.iso_high, "iso_high", "fx.iso_high");
     u!(s.fx.iso_mix, "iso_mix", "fx.iso_mix");
+    u!(s.fx.deess_freq, "deess_freq", "fx.deess_freq");
+    u!(
+        s.fx.deess_threshold,
+        "deess_threshold",
+        "fx.deess_threshold"
+    );
+    u!(s.fx.deess_amount, "deess_amount", "fx.deess_amount");
+    u!(s.fx.deess_mix, "deess_mix", "fx.deess_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {

@@ -52,6 +52,7 @@ mod fx_step_idx_tests {
             FxStep::Tremolo,
             FxStep::Vibrato,
             FxStep::IsoEq,
+            FxStep::DeEsser,
         ];
         assert_eq!(variants.len(), FX_STEP_COUNT);
         let mut seen = [false; FX_STEP_COUNT];

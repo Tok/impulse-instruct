@@ -465,6 +465,27 @@ pub struct FxState {
     /// back to 1.
     #[serde(default)]
     pub iso_mix: f32,
+    // ── De-esser ────────────────────────────────────────────────────────
+    /// Sibilant centre frequency 0..1 → 3..12 kHz log-mapped.  HP
+    /// detector + ducker centre — typical de-essing range with
+    /// vocals.  Below 3 kHz starts ducking sibilance into the
+    /// presence band; above 12 kHz misses most ess sounds.
+    #[serde(default = "default_deess_freq")]
+    pub deess_freq: f32,
+    /// Threshold 0..1 → linear amplitude.  When the sibilant band's
+    /// envelope rises above this level, the ducker engages.  Lower
+    /// = more aggressive de-essing.
+    #[serde(default = "default_deess_threshold")]
+    pub deess_threshold: f32,
+    /// Ducking amount 0..1 — how hard to attenuate when over
+    /// threshold.  0 = none (FX is a no-op even with full mix);
+    /// 1 = hard kill of the sibilant band on every over-threshold
+    /// sample.
+    #[serde(default = "default_deess_amount")]
+    pub deess_amount: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).
+    #[serde(default)]
+    pub deess_mix: f32,
     // ── Vibrato ──────────────────────────────────────────────────────────
     /// LFO rate 0..1 → 0.1..10 Hz log-mapped.  Vibrato tops out
     /// lower than tremolo because hyper-fast pitch wobble crosses
@@ -735,6 +756,18 @@ fn default_iso_pass() -> f32 {
     1.0 // All bands pass at full level — engaging the ISO via mix=>0 is the only audible change until the user kills a band.
 }
 
+fn default_deess_freq() -> f32 {
+    0.5 // ~6 kHz — between most "S" and "SH" centres for vocals.
+}
+
+fn default_deess_threshold() -> f32 {
+    0.5 // Linear amplitude — moderately permissive starting point.
+}
+
+fn default_deess_amount() -> f32 {
+    0.7 // Audible ducking on first engagement — users dial back if too aggressive.
+}
+
 impl Default for FxState {
     fn default() -> Self {
         Self {
@@ -868,6 +901,10 @@ impl Default for FxState {
             iso_mid: default_iso_pass(),
             iso_high: default_iso_pass(),
             iso_mix: 0.0,
+            deess_freq: default_deess_freq(),
+            deess_threshold: default_deess_threshold(),
+            deess_amount: default_deess_amount(),
+            deess_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

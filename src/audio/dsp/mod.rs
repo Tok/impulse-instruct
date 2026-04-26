@@ -9,6 +9,7 @@ mod dsp_util;
 pub mod fm_ops;
 pub mod formant_shifter;
 pub mod fx;
+pub mod fx_deesser;
 pub mod fx_djfilter;
 pub mod fx_extras;
 pub mod fx_freq_shift;
@@ -58,6 +59,7 @@ use vocal::VocalVoice;
 // fx_math symbols (free_eg_value_at, lfo_value_at, sidechain_duck,
 // sidechain_envelope_step, gated_reverb_envelope_step) are only used
 // inside the extracted `process_block.rs`; pulled in there directly.
+use fx_deesser::DeEsserFx;
 use fx_iso_eq::IsoEqFx;
 use fx_sidechain::{Gate, Vocoder};
 use fx_tremolo::TremoloFx;
@@ -148,6 +150,7 @@ pub struct DspState {
     tremolo: TremoloFx,
     vibrato: VibratoFx,
     iso_eq: IsoEqFx,
+    deesser: DeEsserFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -304,6 +307,7 @@ impl DspState {
             tremolo: TremoloFx::new(),
             vibrato: VibratoFx::new(),
             iso_eq: IsoEqFx::new(),
+            deesser: DeEsserFx::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

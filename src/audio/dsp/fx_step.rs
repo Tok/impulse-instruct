@@ -343,6 +343,14 @@ impl DspState {
             FxStep::IsoEq => self
                 .iso_eq
                 .process(sig, p.iso_low, p.iso_mid, p.iso_high, p.iso_mix, sr),
+            FxStep::DeEsser => self.deesser.process(
+                sig,
+                p.deess_freq,
+                p.deess_threshold,
+                p.deess_amount,
+                p.deess_mix,
+                sr,
+            ),
         }
     }
 

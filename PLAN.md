@@ -99,8 +99,6 @@ new gap turns up.
 - [ ] **Multiband compressor** (3-band split with per-band
   ratio/threshold).  Mastering-grade dynamics that the single-band
   `FxCompressor` can't shape.
-- [ ] **De-esser** — sidechain HP → narrow compress on the sibilant
-  band.  Specialist tool for vocal / hat material.
 - [ ] **Resonator bank** — 6 tuned resonant filters → pitched chord
   layer from any input.  Karplus-on-input character.
 - [ ] **Grain delay** — granular feedback path; distinct from

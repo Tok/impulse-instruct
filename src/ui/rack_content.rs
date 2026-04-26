@@ -322,7 +322,7 @@ pub(super) fn draw_fx_content(
                 pad_pair = new_pair;
             }
         }
-        ModuleKind::FxTremolo | ModuleKind::FxVibrato => {
+        ModuleKind::FxTremolo | ModuleKind::FxVibrato | ModuleKind::FxDeEsser => {
             // Internal-LFO modulation cluster lives in
             // `rack_content_fx_lfo.rs` — same split-for-LOC
             // pattern as the bigger fx_extras file.

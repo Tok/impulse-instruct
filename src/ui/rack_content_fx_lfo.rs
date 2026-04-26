@@ -1,9 +1,12 @@
 // ─── ui/rack_content_fx_lfo.rs ───────────────────────────────────────────────
-// Per-card render functions for the internal-LFO FX cluster
-// (Tremolo, Vibrato).  Split out of `rack_content_fx_extras.rs`
-// to keep that file under the 1000-line cap.  Same `pm` /
-// `user_owned` / `hk!` boilerplate as its siblings — the
-// duplication is the cost of avoiding a fat `DrawCtx` struct.
+// Per-card render functions for FX cards that didn't fit in
+// `rack_content_fx_extras.rs` (which ran into the 1000-line cap
+// during the LFO-modulation cluster ship).  Originally for
+// Tremolo + Vibrato; now also hosts De-esser since the same
+// 4-knob shape applies.  Same `pm` / `user_owned` / `hk!`
+// boilerplate as its siblings — the duplication is the cost of
+// avoiding a fat `DrawCtx` struct that would have to thread
+// `&mut app` and `&mut ui` through every helper.
 
 use std::collections::HashSet;
 
@@ -28,7 +31,7 @@ pub(super) fn try_draw_fx_lfo_content(
     pad_pair_in: u8,
 ) -> Option<u8> {
     match kind {
-        ModuleKind::FxTremolo | ModuleKind::FxVibrato => {}
+        ModuleKind::FxTremolo | ModuleKind::FxVibrato | ModuleKind::FxDeEsser => {}
         _ => return None,
     }
 
@@ -142,6 +145,53 @@ pub(super) fn try_draw_fx_lfo_content(
                 st.fx.vibrato_depth = d;
                 st.fx.vibrato_shape = sh;
                 st.fx.vibrato_mix = m;
+            }
+        }
+        ModuleKind::FxDeEsser => {
+            // FREQ / THRESHOLD / AMOUNT / MIX — same 4-knob 2×1
+            // grid as the other compact FX.  Defaults engage the
+            // ducker the moment the user dials mix > 0; below the
+            // threshold the FX is transparent.
+            let (mut f, mut t, mut a, mut m) = {
+                let st = app.state.read();
+                (
+                    st.fx.deess_freq,
+                    st.fx.deess_threshold,
+                    st.fx.deess_amount,
+                    st.fx.deess_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("FREQ", &mut f, pm("fx.deess_freq")),
+                ("THRESH", &mut t, pm("fx.deess_threshold")),
+                ("AMOUNT", &mut a, pm("fx.deess_amount")),
+                ("MIX", &mut m, pm("fx.deess_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("deesser_xy_{module_id}"),
+                    ["FREQ", "THRESH", "AMOUNT"],
+                    &mut pad_pair,
+                    (&mut f, &mut t, &mut a),
+                    [
+                        user_owned("fx.deess_freq"),
+                        user_owned("fx.deess_threshold"),
+                        user_owned("fx.deess_amount"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || f != app.state.read().fx.deess_freq {
+                let mut st = app.state.write();
+                st.fx.deess_freq = f;
+                st.fx.deess_threshold = t;
+                st.fx.deess_amount = a;
+                st.fx.deess_mix = m;
             }
         }
         _ => unreachable!("guarded by the early return above"),

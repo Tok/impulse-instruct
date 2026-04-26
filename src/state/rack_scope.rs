@@ -88,7 +88,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxDjFilter
         | ModuleKind::FxTremolo
         | ModuleKind::FxVibrato
-        | ModuleKind::FxIsoEq => Some("fx".to_string()),
+        | ModuleKind::FxIsoEq
+        | ModuleKind::FxDeEsser => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         _ => None,
     }
@@ -161,6 +162,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxtremolo" | "tremolo" | "trem" | "amplmod" | "ampmod" => Some(FxTremolo),
         "fxvibrato" | "vibrato" | "vib" | "pitchmod" | "pitchwobble" => Some(FxVibrato),
         "fxisoeq" | "isoeq" | "iso" | "killeq" | "kill" | "3band" | "threeband" => Some(FxIsoEq),
+        "fxdeesser" | "deesser" | "deess" | "sibilance" | "sibilant" => Some(FxDeEsser),
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
@@ -256,6 +258,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxIsoEq => matches!(
             n.as_str(),
             "iso" | "isoeq" | "iso_eq" | "killeq" | "kill" | "3band" | "fx"
+        ),
+        ModuleKind::FxDeEsser => matches!(
+            n.as_str(),
+            "deesser" | "de-esser" | "deess" | "sibilance" | "sibilant" | "fx"
         ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),

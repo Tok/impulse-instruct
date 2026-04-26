@@ -4,6 +4,73 @@ A detailed log of what's built.
 
 ---
 
+### De-esser FX (`FxDeEsser`)
+
+Specialist dynamics tool for vocal / hat material from the
+FX wishlist.  Distinct from `FxCompressor` (broadband
+dynamics): the de-esser only attenuates the sibilant band;
+everything below the cutoff passes untouched, so the de-essed
+signal sounds natural rather than dynamics-pumped.
+
+**DSP shape.**  Complementary band split: one RBJ-cookbook
+LP biquad at the cutoff produces the low band; the sibilant
+band is `input - low`.  This is **phase-coherent** by
+construction — `low + sibilant = input` exactly, so the FX
+is bit-transparent when the ducker gain is 1.0.  An HP
+biquad with subtractive complement was tried first but the
+phase shift at the cutoff lets `input - sibilant` swing to
+±2× the input amplitude — wrong shape for a de-esser.
+
+**Envelope follower** runs on the sibilant band — peak-style
+with ~3 ms attack / ~50 ms release.  When `env > threshold`,
+the gain reduction is `(env / threshold)^(-amount)`, the
+classic soft-knee compressor curve mapped through the amount
+knob (amount=0 → exponent=0 → gain=1, no compression;
+amount=1 → exponent=-1 → gain=thr/env, hard kill).
+
+**Knobs.**
+- `deess_freq` 0..1 → 3..12 kHz log-mapped.  Sibilant centre
+  for typical vocal de-essing.  Default 0.5 (~6 kHz).
+- `deess_threshold` 0..1 — linear amplitude.  When the
+  sibilant-band envelope rises above this level, the ducker
+  engages.  Lower = more aggressive de-essing.
+- `deess_amount` 0..1.  0 = transparent; 1 = hard kill of
+  the sibilant band on every over-threshold sample.
+- `deess_mix` 0..1 wet/dry with cheap-bypass fast path.
+
+**Wiring.**  Standard FX add ritual — `FxStep::DeEsser`
+(idx 37, `FX_STEP_COUNT` bumped to 38), `ModuleKind::FxDeEsser`
+("DE-ESSER" label, 2×1 grid, sort-group 28 next to the gate
+/ compressor cluster).  Aliases deesser / deess / fxdeesser /
+sibilance / sibilant.  4 × Selector modulation jacks so an
+LFO on the threshold gives a "breathing" gating-style patch.
+
+**LLM apply + schema.**  Standard `apply_fx_update` macro
+expansion + flat schema entries describing the sibilant range
+and the ducker behaviour.
+
+**UI panel** lives in `rack_content_fx_lfo.rs` — repurposed
+from "LFO cluster" to "spillover for new FX" once the file
+naming gap stopped mattering vs the LOC cap on
+`rack_content_fx_extras.rs`.  Header comment updated.
+
+**Tests.**  +5 DSP (mix=0 bypass, amount=0 transparency
+after warmup, 6 kHz sine gets ducked, 100 Hz sine passes
+through, output bounded), +6 state-side (defaults, llm-apply
+all 4 knobs, lock honoured, FxStep mapping, label, alias).
+Suite **2056 → 2067**.
+
+Caught a bug in the cached-coefficient pattern while at it:
+initialising `cached_freq` to NaN means `(fc - NaN).abs() > 1.0`
+returns FALSE (NaN compares as not-greater), so the biquad
+never refreshes.  Fix is `!cached_freq.is_finite()` as a
+first-time-init flag.
+
+Files: new `src/audio/dsp/fx_deesser.rs`, new
+`src/tests/fx_deesser_tests.rs`.
+
+---
+
 ### 3-band ISO / kill EQ (`FxIsoEq`)
 
 DJ-style hard-kill bands (LOW / MID / HIGH) at fixed

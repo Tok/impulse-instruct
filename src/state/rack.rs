@@ -307,6 +307,7 @@ impl RackState {
                 | ModuleKind::FxTremolo
                 | ModuleKind::FxVibrato
                 | ModuleKind::FxIsoEq
+                | ModuleKind::FxDeEsser
         );
         if !has_audio_out {
             return true;
@@ -587,6 +588,9 @@ impl RackState {
                 // ISO EQ groups with the DJ filter — both are
                 // performance-oriented filter / band-shaping FX.
                 ModuleKind::FxIsoEq => 19,
+                // De-esser groups with the dynamics tools — same
+                // sidechain idiom as the gate / compressor.
+                ModuleKind::FxDeEsser => 28,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

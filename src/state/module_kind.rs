@@ -150,6 +150,12 @@ pub enum ModuleKind {
     /// gain knobs) — ISO is for live performance kills, not
     /// shelf shaping.
     FxIsoEq,
+    /// De-esser — sidechain HP detector → narrow ducker on the
+    /// sibilant band.  Specialist tool for vocal / hat material.
+    /// Distinct from `FxCompressor` (broadband dynamics): only
+    /// the sibilant band is attenuated, the rest of the signal
+    /// passes untouched.
+    FxDeEsser,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -270,6 +276,7 @@ impl ModuleKind {
             Self::FxTremolo => "TREMOLO",
             Self::FxVibrato => "VIBRATO",
             Self::FxIsoEq => "ISO EQ",
+            Self::FxDeEsser => "DE-ESSER",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -449,7 +456,8 @@ impl ModuleKind {
             | Self::FxDjFilter
             | Self::FxTremolo
             | Self::FxVibrato
-            | Self::FxIsoEq => (2, 1),
+            | Self::FxIsoEq
+            | Self::FxDeEsser => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -521,6 +529,7 @@ impl ModuleKind {
             | Self::FxTremolo
             | Self::FxVibrato
             | Self::FxIsoEq
+            | Self::FxDeEsser
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -601,6 +610,7 @@ impl ModuleKind {
                 | Self::FxTremolo
                 | Self::FxVibrato
                 | Self::FxIsoEq
+                | Self::FxDeEsser
         )
     }
 
@@ -656,6 +666,7 @@ impl ModuleKind {
                 | Self::FxTremolo
                 | Self::FxVibrato
                 | Self::FxIsoEq
+                | Self::FxDeEsser
         )
     }
 

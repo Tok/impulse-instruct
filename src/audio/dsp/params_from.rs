@@ -198,6 +198,10 @@ impl AudioParams {
             iso_mid: s.fx.iso_mid.clamp(0.0, 1.0),
             iso_high: s.fx.iso_high.clamp(0.0, 1.0),
             iso_mix: s.fx.iso_mix.clamp(0.0, 1.0),
+            deess_freq: s.fx.deess_freq.clamp(0.0, 1.0),
+            deess_threshold: s.fx.deess_threshold.clamp(0.0, 1.5),
+            deess_amount: s.fx.deess_amount.clamp(0.0, 1.0),
+            deess_mix: s.fx.deess_mix.clamp(0.0, 1.0),
             param_eq_ms_mode: s.fx.param_eq_ms_mode,
             conv_reverb_mix: s.fx.conv_reverb_mix.clamp(0.0, 1.0),
             // Cabinet mode caps the IR length at 10 % of the loaded

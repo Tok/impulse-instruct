@@ -673,6 +673,11 @@ pub struct AudioParams {
     pub iso_mid: f32,
     pub iso_high: f32,
     pub iso_mix: f32,
+    // De-esser — sidechain HP detector + ducker on the sibilant band.
+    pub deess_freq: f32,
+    pub deess_threshold: f32,
+    pub deess_amount: f32,
+    pub deess_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,
