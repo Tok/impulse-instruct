@@ -177,6 +177,11 @@ impl RackState {
                 // spectral-domain effects, both V1 approximations
                 // pending FFT machinery.
                 ModuleKind::FxSpectralGate => 24,
+                // Plate reverb sorts next to ConvReverb (37) so the
+                // three reverb modules cluster (FxReverb=21 separated
+                // by other FX, ConvReverb / Plate sit together) — users
+                // tend to A/B between them in the same context.
+                ModuleKind::FxPlate => 37,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

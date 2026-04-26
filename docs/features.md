@@ -4,6 +4,66 @@ A detailed log of what's built.
 
 ---
 
+### Plate reverb FX (`FxPlate`)
+
+Dattorro-style plate reverb — figure-of-eight tank of modulated
+allpasses + delays + LP damping.  Distinct from the existing
+`FxReverb` (Schroeder parallel-comb + series-allpass; brighter,
+less dense character) and `FxConvReverb` (IR-driven, file-loaded).
+Captures the dense, slightly metallic Lexicon / EMT plate
+character that the prior two reverbs can't reach.
+
+**DSP shape.**  Input bandwidth-limit → 4-stage all-pass
+diffusion network (lengths 142 / 107 / 379 / 277 samples scaled
+to engine sr) → figure-of-eight tank: each half has a modulated
+all-pass (LFO depth ±8 samples at ~1 Hz) + delay line + one-pole
+LP damping inside the loop + decay all-pass + delay line.
+Cross-feed between halves makes the loop topology a figure-eight
+(implicit one-sample delay from `feedback_l/r` registers keeps it
+stable).  Output mixer reads 7 fixed taps per half (Dattorro's
+standard pattern) and folds the stereo image down to mono for
+the chain step.
+
+Allocation-free hot path; all delay buffers heap-allocated once
+in `new()` and indexed via mask-wrap (power-of-two sizes:
+PLATE_DELAY_LEN = 8192, PLATE_AP_LEN = 4096).
+
+**Knobs.**  4 knobs, all 0..1 unipolar:
+- `plate_size` 0..1 — tank time / decay scale, mapped to the
+  cross-feed gain (0 → 0.4×base, 1 → 1.0×base of the conservative
+  PLATE_TANK_GAIN = 0.5 cap).  Larger = longer tail without
+  reallocating delay lines.
+- `plate_damping` 0..1 — one-pole LP coefficient inside each
+  tank half.  0 = bright / metallic, 1 ≈ very dark.
+- `plate_diffusion` 0..1 → input pre-AP gain 0..0.75 (with the
+  last two pre-APs at 0.625× per Dattorro's paper).  Higher =
+  denser early reflections.
+- `plate_mix` 0..1 wet/dry with cheap-bypass fast path
+  (mix < 0.001).  Default 0 so a freshly inserted FX is no-op
+  until dialed in.
+
+Defaults pick a medium plate (size 0.55, damping 0.4, diffusion
+0.7) so flipping mix > 0 immediately produces audible output
+without further knob-twiddling.
+
+**Wiring.**  Standard FX add ritual — `FxStep::Plate` (idx 43,
+`FX_STEP_COUNT` bumped to 44), `ModuleKind::FxPlate` ("PLATE"
+label, 2×1 grid, sort-group 37 next to `FxConvReverb` so the
+two non-Schroeder reverbs cluster).  Aliases plate / fxplate /
+platereverb / plate_reverb / emt / lexicon.  Renders in the
+fx_lfo cluster (4-knob shape).
+
+**Tests.**  +5 DSP (mix=0 bypass, audible tail from impulse,
+output bounded under full drive 1 s, mix=0 fast-path even at
+full drive, larger size = more late-tail energy), +6 state-side
+(defaults are medium plate / mix=0, llm-apply all 4 knobs, lock
+honoured, FxStep mapping, label, alias).  Suite **2213 → 2226**.
+
+Files: new `src/audio/dsp/fx_plate.rs`, new
+`src/tests/fx_plate_tests.rs`.
+
+---
+
 ### SampleInstrument — SF2 filter generators + per-region filter override
 
 Pair of changes — SF2 filter generators on the parser side,

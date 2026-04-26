@@ -397,6 +397,14 @@ impl DspState {
                 p.spec_mix,
                 sr,
             ),
+            FxStep::Plate => self.plate.process(
+                sig,
+                p.plate_size,
+                p.plate_damping,
+                p.plate_diffusion,
+                p.plate_mix,
+                sr,
+            ),
         }
     }
 

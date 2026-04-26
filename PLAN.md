@@ -13,11 +13,6 @@ Pick from the top down; each row is one focused commit.
 
 ### FX — new modules
 
-- [ ] **Plate reverb** (`FxPlate`) — algorithmic plate emulation
-  (Dattorro-style allpass network), distinct from the Schroeder
-  comb stack `FxReverb` and the IR-driven `FxConvReverb`.  Vintage
-  studio character (early reflections from a metal plate's
-  diffusion); fills the "I want a plate" gap.
 - [ ] **Trance gate** (`FxTranceGate`) — 16-step pattern-driven
   gate.  Distinct from the envelope-driven `FxGate`: this one
   toggles wet/dry on a step grid synced to the sequencer clock.

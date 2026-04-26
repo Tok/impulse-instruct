@@ -18,6 +18,7 @@ pub mod fx_grain_delay;
 pub mod fx_iso_eq;
 pub mod fx_math;
 pub mod fx_mb_comp;
+pub mod fx_plate;
 pub mod fx_resbank;
 pub mod fx_sidechain;
 pub mod fx_spectral_gate;
@@ -70,6 +71,7 @@ use fx_deesser::DeEsserFx;
 use fx_grain_delay::GrainDelayFx;
 use fx_iso_eq::IsoEqFx;
 use fx_mb_comp::MultibandCompFx;
+use fx_plate::PlateFx;
 use fx_resbank::ResBankFx;
 use fx_sidechain::{Gate, Vocoder};
 use fx_spectral_gate::SpectralGateFx;
@@ -177,6 +179,7 @@ pub struct DspState {
     mb_comp: MultibandCompFx,
     grain_delay: GrainDelayFx,
     spectral_gate: SpectralGateFx,
+    plate: PlateFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -348,6 +351,7 @@ impl DspState {
             mb_comp: MultibandCompFx::new(),
             grain_delay: GrainDelayFx::new(),
             spectral_gate: SpectralGateFx::new(),
+            plate: PlateFx::new(sample_rate),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

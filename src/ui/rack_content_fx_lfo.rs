@@ -38,7 +38,8 @@ pub(super) fn try_draw_fx_lfo_content(
         | ModuleKind::FxTapeEcho
         | ModuleKind::FxMultibandComp
         | ModuleKind::FxGrainDelay
-        | ModuleKind::FxSpectralGate => {}
+        | ModuleKind::FxSpectralGate
+        | ModuleKind::FxPlate => {}
         _ => return None,
     }
 
@@ -449,6 +450,54 @@ pub(super) fn try_draw_fx_lfo_content(
                 st.fx.spec_tilt = tl;
                 st.fx.spec_mix = m;
                 st.fx.spec_stft = stft;
+            }
+        }
+        ModuleKind::FxPlate => {
+            // SIZE / DAMPING / DIFFUSION / MIX — same compact 4-knob
+            // shape as the rest of the LFO-cluster cards.  Default
+            // mix=0 so the FX is silent on insert; once the user dials
+            // mix > 0 the tank rings immediately because the other
+            // three knobs default to musically useful values.
+            let (mut sz, mut d, mut df, mut m) = {
+                let st = app.state.read();
+                (
+                    st.fx.plate_size,
+                    st.fx.plate_damping,
+                    st.fx.plate_diffusion,
+                    st.fx.plate_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("SIZE", &mut sz, pm("fx.plate_size")),
+                ("DAMPING", &mut d, pm("fx.plate_damping")),
+                ("DIFFUSION", &mut df, pm("fx.plate_diffusion")),
+                ("MIX", &mut m, pm("fx.plate_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("plate_xy_{module_id}"),
+                    ["SIZE", "DAMPING", "MIX"],
+                    &mut pad_pair,
+                    (&mut sz, &mut d, &mut m),
+                    [
+                        user_owned("fx.plate_size"),
+                        user_owned("fx.plate_damping"),
+                        user_owned("fx.plate_mix"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || sz != app.state.read().fx.plate_size {
+                let mut st = app.state.write();
+                st.fx.plate_size = sz;
+                st.fx.plate_damping = d;
+                st.fx.plate_diffusion = df;
+                st.fx.plate_mix = m;
             }
         }
         _ => unreachable!("guarded by the early return above"),

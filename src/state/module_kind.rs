@@ -192,6 +192,13 @@ pub enum ModuleKind {
     /// HF rolloff together so users dial "more worn-out tape" with
     /// one gesture.
     FxTapeEcho,
+    /// Plate reverb — Dattorro-style figure-of-eight tank of
+    /// modulated allpasses + delays + LP damping.  Distinct from
+    /// `FxReverb` (Schroeder parallel-comb + series-allpass; brighter,
+    /// less dense) and `FxConvReverb` (IR-driven, file-loaded).
+    /// Captures the dense, slightly metallic Lexicon / EMT plate
+    /// character.
+    FxPlate,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -375,6 +382,7 @@ impl ModuleKind {
             Self::FxMultibandComp => "MB COMP",
             Self::FxGrainDelay => "GRAIN DEL",
             Self::FxSpectralGate => "SPEC GATE",
+            Self::FxPlate => "PLATE",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -589,7 +597,8 @@ impl ModuleKind {
             | Self::FxTapeEcho
             | Self::FxMultibandComp
             | Self::FxGrainDelay
-            | Self::FxSpectralGate => (2, 1),
+            | Self::FxSpectralGate
+            | Self::FxPlate => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -667,6 +676,7 @@ impl ModuleKind {
             | Self::FxMultibandComp
             | Self::FxGrainDelay
             | Self::FxSpectralGate
+            | Self::FxPlate
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -762,6 +772,7 @@ impl ModuleKind {
                 | Self::FxMultibandComp
                 | Self::FxGrainDelay
                 | Self::FxSpectralGate
+                | Self::FxPlate
         )
     }
 
@@ -823,6 +834,7 @@ impl ModuleKind {
                 | Self::FxMultibandComp
                 | Self::FxGrainDelay
                 | Self::FxSpectralGate
+                | Self::FxPlate
         )
     }
 
@@ -864,6 +876,7 @@ impl ModuleKind {
                 | Self::FxFreqShift
                 | Self::FxVinyl
                 | Self::FxDjFilter
+                | Self::FxPlate
                 | Self::LfoModule
                 | Self::CvSequencer
                 | Self::CvSeqScope

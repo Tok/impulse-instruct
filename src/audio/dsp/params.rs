@@ -675,6 +675,11 @@ pub struct AudioParams {
     pub spec_release: f32,
     pub spec_tilt: f32,
     pub spec_mix: f32,
+    // Plate reverb — Dattorro figure-of-eight tank.
+    pub plate_size: f32,
+    pub plate_damping: f32,
+    pub plate_diffusion: f32,
+    pub plate_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,

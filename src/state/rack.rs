@@ -313,6 +313,7 @@ impl RackState {
                 | ModuleKind::FxMultibandComp
                 | ModuleKind::FxGrainDelay
                 | ModuleKind::FxSpectralGate
+                | ModuleKind::FxPlate
         );
         if !has_audio_out {
             return true;

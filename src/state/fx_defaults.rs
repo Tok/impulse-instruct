@@ -210,3 +210,15 @@ pub(super) fn default_spec_release() -> f32 {
 pub(super) fn default_spec_tilt() -> f32 {
     0.5 // Uniform threshold across all 8 bands.
 }
+
+pub(super) fn default_plate_size() -> f32 {
+    0.55 // Medium plate — long enough to hear, short enough to read as a plate.
+}
+
+pub(super) fn default_plate_damping() -> f32 {
+    0.4 // Moderate HF rolloff — modern plates aren't as dark as a real EMT.
+}
+
+pub(super) fn default_plate_diffusion() -> f32 {
+    0.7 // Dense diffusion network — what gives the plate its smooth-tail character.
+}

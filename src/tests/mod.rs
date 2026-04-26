@@ -39,6 +39,7 @@ mod fx_iso_eq_tests;
 mod fx_math_tests;
 mod fx_mb_comp_tests;
 mod fx_plan_tests;
+mod fx_plate_tests;
 mod fx_resbank_tests;
 mod fx_sidechain_tests;
 mod fx_spectral_gate_tests;

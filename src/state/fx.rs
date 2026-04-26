@@ -735,6 +735,26 @@ pub struct FxState {
     /// Side-channel saturation.
     #[serde(default)]
     pub ms_side_sat: f32,
+    // ── Plate reverb ─────────────────────────────────────────────────────
+    /// Tank time / decay scale 0..1.  Internally maps to the cross-feed
+    /// gain inside the figure-of-eight tank, so larger values produce a
+    /// longer tail without changing the (heap-allocated) delay-line
+    /// lengths.  Distinct from `reverb_size` (Schroeder comb / allpass
+    /// stack with a different decay character) and `conv_reverb_size`
+    /// (truncates a loaded IR).
+    #[serde(default = "default_plate_size")]
+    pub plate_size: f32,
+    /// One-pole LP coefficient inside each tank half — 0 = bright,
+    /// 1 ≈ very dark.  Shapes the tail's HF rolloff.
+    #[serde(default = "default_plate_damping")]
+    pub plate_damping: f32,
+    /// Input pre-AP gain 0..1 → 0..0.75.  Higher values produce denser,
+    /// smoother early reflections.
+    #[serde(default = "default_plate_diffusion")]
+    pub plate_diffusion: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).
+    #[serde(default)]
+    pub plate_mix: f32,
 }
 
 impl Default for FxState {
@@ -918,6 +938,10 @@ impl Default for FxState {
             ms_side_gain: default_ms_unity(),
             ms_side_tilt: default_ms_unity(),
             ms_side_sat: 0.0,
+            plate_size: default_plate_size(),
+            plate_damping: default_plate_damping(),
+            plate_diffusion: default_plate_diffusion(),
+            plate_mix: 0.0,
         }
     }
 }

@@ -106,6 +106,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // selectors so users can sequence threshold opens for
         // gate-and-release patches.
         FxSpectralGate => &[Selector, Selector, Selector, Selector],
+        // Plate reverb: 4 knobs (size / damping / diffusion / mix);
+        // all selectors so an LFO on size gives a slowly-evolving
+        // tail length.
+        FxPlate => &[Selector, Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],

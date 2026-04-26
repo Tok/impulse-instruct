@@ -319,6 +319,14 @@ pub(super) fn apply_fx_update(
     u!(s.fx.spec_release, "spec_release", "fx.spec_release");
     u!(s.fx.spec_tilt, "spec_tilt", "fx.spec_tilt");
     u!(s.fx.spec_mix, "spec_mix", "fx.spec_mix");
+    u!(s.fx.plate_size, "plate_size", "fx.plate_size");
+    u!(s.fx.plate_damping, "plate_damping", "fx.plate_damping");
+    u!(
+        s.fx.plate_diffusion,
+        "plate_diffusion",
+        "fx.plate_diffusion"
+    );
+    u!(s.fx.plate_mix, "plate_mix", "fx.plate_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {
