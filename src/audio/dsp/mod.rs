@@ -22,6 +22,7 @@ pub mod pitch_shift;
 pub mod pluck;
 mod process_block;
 mod rev_tap;
+pub mod pendulum;
 pub mod sample_instrument;
 pub mod samplers;
 pub mod theremin;
@@ -48,6 +49,7 @@ pub use params::{AudioParams, MAX_MOD_ROUTES, compile_mod_routes, lfo_target_to_
 use pitch_shift::PitchShift;
 use pluck::PluckVoice;
 pub use rev_tap::{FxDirection, FxRevQuant};
+use pendulum::PendulumVoice;
 use sample_instrument::{SampleInstrumentVoice, SfzRegionRuntime};
 use samplers::*;
 use theremin::ThereminVoice;
@@ -129,6 +131,7 @@ pub struct DspState {
     eq: EqBands,
     noise_voice: NoiseVoice,
     theremin: ThereminVoice,
+    pendulum: PendulumVoice,
     granular: GranularVoice,
     hoover: HooverVoice,
     pluck: PluckVoice,
@@ -273,6 +276,7 @@ impl DspState {
             bitcrush_counter: 0,
             noise_voice: NoiseVoice::new(0x4015_EB3D),
             theremin: ThereminVoice::new(),
+            pendulum: PendulumVoice::new(),
             granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
             pluck: PluckVoice::new(),

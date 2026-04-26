@@ -30,6 +30,10 @@ pub enum ModuleKind {
     /// portamento glide.  Absurd-queue voice; no sequencer hookup
     /// in V1, the user "plays" it by dragging the pad on its panel.
     Theremin,
+    /// Pendulum — two near-tuned sine oscillators that beat
+    /// acoustically.  Absurd-queue voice; no sequencer hookup,
+    /// drone voice driven by knobs (base pitch + detune Hz).
+    Pendulum,
     GranularTexture,
     /// Dedicated hardcore-style kick voice — distinct from the 808/909 kicks.
     GabberKick,
@@ -165,6 +169,7 @@ impl ModuleKind {
             Self::AmenSampler => "AMEN",
             Self::NoiseVoice => "NOISE",
             Self::Theremin => "THEREMIN",
+            Self::Pendulum => "PENDULUM",
             Self::GranularTexture => "GRANULAR",
             Self::GabberKick => "GABBER KICK",
             Self::NeuTts => "TTS VOICE",
@@ -263,6 +268,10 @@ impl ModuleKind {
             // square-ish; 3 rows tall — pad takes most of it,
             // bottom row hosts the four small knobs.
             Self::Theremin => (3, 3),
+            // Pendulum: 3×2 — top row knob bank (PITCH / DETUNE /
+            // MIX / VOL / PAN), bottom row carries the live beat-rate
+            // readout label.
+            Self::Pendulum => (3, 2),
             Self::GranularTexture => (3, 2),
             Self::GabberKick => (3, 2),
             Self::LlmAgent => (3, 2),
@@ -371,6 +380,7 @@ impl ModuleKind {
             | Self::AmenSampler
             | Self::NoiseVoice
             | Self::Theremin
+            | Self::Pendulum
             | Self::GranularTexture
             | Self::NeuTts
             | Self::GabberKick => Zone::Voice,
@@ -441,6 +451,7 @@ impl ModuleKind {
                 | Self::GabberKick
                 | Self::NoiseVoice
                 | Self::Theremin
+                | Self::Pendulum
                 | Self::An1xVoice
                 | Self::NeuTts
                 | Self::FxReverb

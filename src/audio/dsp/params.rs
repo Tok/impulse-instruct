@@ -650,6 +650,13 @@ pub struct AudioParams {
     pub theremin_brightness: f32,
     pub theremin_volume: f32,
     pub theremin_pan: f32,
+    // Pendulum — two near-tuned sines that beat acoustically.
+    pub pendulum_enabled: bool,
+    pub pendulum_base_pitch: f32,
+    pub pendulum_detune_hz: f32,
+    pub pendulum_mix: f32,
+    pub pendulum_volume: f32,
+    pub pendulum_pan: f32,
     // Granular texture
     pub granular_enabled: bool,
     pub granular_volume: f32,

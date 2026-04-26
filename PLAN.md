@@ -157,9 +157,7 @@ independently.  Anything left at "unscheduled" goes in last.
    the existing `SampleInstrument` voice (see features.md).
 4. [x] ~~**AI patch morph**~~ — V1 shipped (see features.md);
    API + scheduler done, dedicated UI dialog deferred.
-5. [ ] **Pendulum** — two near-tuned oscillators beating
-   acoustically.  As detune drifts the sound moves from chord →
-   beat → drone.  Built-in beat-rate readout in the panel.
+5. [x] ~~**Pendulum**~~ — shipped (see features.md).
 6. [ ] **Vinyl / cassette simulator** (FX) — surface noise +
    start / stop transient + RIAA EQ shape.  Distinct from
    `FxTapeStop` (just the brake).

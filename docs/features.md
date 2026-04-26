@@ -4,6 +4,57 @@ A detailed log of what's built.
 
 ---
 
+### Pendulum voice (absurd queue #5)
+
+Two near-tuned sine oscillators that beat acoustically.  As
+`detune_hz` drifts from 0 the sound moves from chord (< 1 Hz
+beat, inaudible) through tremolo (1–10 Hz, the iconic
+Riley-style pulsing) to inharmonic drone (10+ Hz where the
+difference becomes its own subaudible tone).  No sequencer
+trigger — drone voice driven by knobs, same shape as the
+Theremin.
+
+DSP (`audio::dsp::pendulum`):
+* Two sine oscillators with independent phase accumulators —
+  the constructive / destructive interference between them
+  *is* the beat, no separate amplitude modulator.
+* Base pitch knob log-mapped 30–800 Hz (~4.7 octaves) — lower
+  than the Theremin's range because the beating effect is most
+  musical in the low-mid register where the difference tone
+  lands inside the audible band.
+* Detune knob 0..1 → 0–60 Hz separation.  At 0 the two are in
+  phase (no beat); above ~10 Hz the difference becomes its own
+  tone.
+* Mix knob 0..1 → osc1 / osc2 balance; 0.5 (default) gives the
+  deepest beat amplitude modulation.
+* Pure additive — no allocations, peak amplitude bounded by
+  ±0.5 even at full mix.
+
+State + plumbing:
+* `state::pendulum::PendulumState` (enabled / base_pitch /
+  detune_hz / mix / volume / pan), `#[serde(default)]`.
+* `ModuleKind::Pendulum` with full metadata (label PENDULUM,
+  grid 3×2, `Zone::Voice`, `has_audio_output()` true).  All
+  exhaustive matches updated.
+* `wire_default_cables` adds Pendulum to the `audio_only_voices`
+  list (no CV-in jack — knob-driven).
+
+UI panel:
+* Top row: ON/OFF + live beat-rate readout (`BEAT 3.0 Hz`)
+  computed from the same `beat_rate_hz(detune_knob)` helper
+  the DSP uses, so what you see is what you hear.
+* Bottom row: PITCH / DETUNE / MIX / VOL / PAN knobs.
+
+4 new tests cover disabled-is-silent, audible-when-enabled
+with bounded amplitude, no-detune collapse stays in range,
+and `beat_rate_hz` matches the DSP's 0..60 Hz scale (defends
+against the readout lying about the actual beat rate).
+**1913 tests passing**; clippy clean.
+
+Excluded from `random_layout` pool — same reasoning as
+Theremin: a knob-driven drone with no hand on the knobs is
+silent, doesn't make sense as a random pick.
+
 ### AI patch morph (absurd queue #4)
 
 Schedule a sequence of LLM "nudge" prompts that evolve the patch

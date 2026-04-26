@@ -28,6 +28,7 @@ pub(super) fn draw_voice_content(
         ModuleKind::AmenSampler => crate::ui::panels::draw_amen(app, ui),
         ModuleKind::NoiseVoice => crate::ui::panels::draw_noise(app, ui),
         ModuleKind::Theremin => crate::ui::panels::draw_theremin(app, ui),
+        ModuleKind::Pendulum => crate::ui::panels::draw_pendulum(app, ui),
         ModuleKind::GranularTexture => crate::ui::panels::draw_granular(app, ui),
         ModuleKind::GabberKick => crate::ui::panels::draw_gabber(app, ui),
         ModuleKind::NeuTts => crate::ui::panels::draw_tts(app, ui, module_id),

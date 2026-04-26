@@ -38,6 +38,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // (X / Y / portamento / brightness) is a continuous knob the
         // user reaches via mod-routes rather than a fixed jack.
         Theremin => &[Selector, Selector, Selector],
+        // Pendulum: same as Theremin — selectors only, the user
+        // routes LFOs to base_pitch / detune / mix from the back
+        // panel without dedicated fixed jacks.
+        Pendulum => &[Selector, Selector, Selector],
         // ── Voices without a single pan (multi-voice kits / pan-less) ─────
         DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
             &[Selector, Selector, Selector]

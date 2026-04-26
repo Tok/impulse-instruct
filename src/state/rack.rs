@@ -279,6 +279,7 @@ impl RackState {
                 | ModuleKind::GabberKick
                 | ModuleKind::NoiseVoice
                 | ModuleKind::Theremin
+                | ModuleKind::Pendulum
                 | ModuleKind::An1xVoice
                 | ModuleKind::NeuTts
                 | ModuleKind::FxReverb
@@ -479,6 +480,9 @@ impl RackState {
                 // Theremin sits next to the noise voice — both are
                 // "weird sustained drones" tonally.
                 ModuleKind::Theremin => 17,
+                // Pendulum same family — drone voice with no
+                // sequencer trigger, knob-driven beat character.
+                ModuleKind::Pendulum => 17,
                 ModuleKind::GranularTexture => 18,
                 ModuleKind::NeuTts => 19,
                 ModuleKind::FxWaveshaper => 20,

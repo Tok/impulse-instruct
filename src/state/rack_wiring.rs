@@ -98,7 +98,7 @@ impl RackState {
         // audio output to master so the card isn't silent the
         // moment it's added; skip the seq → CV cable since there's
         // no CV-in jack to land on.
-        let audio_only_voices: Vec<u32> = [ModuleKind::Theremin]
+        let audio_only_voices: Vec<u32> = [ModuleKind::Theremin, ModuleKind::Pendulum]
             .iter()
             .filter_map(|&k| find(&self.modules, k))
             .collect();
