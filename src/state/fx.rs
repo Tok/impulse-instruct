@@ -465,6 +465,27 @@ pub struct FxState {
     /// back to 1.
     #[serde(default)]
     pub iso_mix: f32,
+    // ── Resonator bank ──────────────────────────────────────────────────
+    /// Root pitch 0..1 → MIDI 24..96 (C1..C7).  Each of the six
+    /// resonators is tuned to root + an interval defined by the
+    /// `resbank_chord` preset.
+    #[serde(default = "default_resbank_root")]
+    pub resbank_root: f32,
+    /// Chord preset 0..1 → quantized to one of six interval sets:
+    /// 0=minor7, 1=major triad spread, 2=dom9, 3=open fifths,
+    /// 4=octave stack, 5=cluster.  Discretised inside the DSP so
+    /// the FX still uses one continuous f32 field (no separate
+    /// u8 mode + cycle button).
+    #[serde(default)]
+    pub resbank_chord: f32,
+    /// Resonance 0..1 → Q 1..50 — controls how pingy / sustained
+    /// the resonators sound.  High Q = singing pitches; low Q =
+    /// muted ringing.
+    #[serde(default = "default_resbank_resonance")]
+    pub resbank_resonance: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).
+    #[serde(default)]
+    pub resbank_mix: f32,
     // ── De-esser ────────────────────────────────────────────────────────
     /// Sibilant centre frequency 0..1 → 3..12 kHz log-mapped.  HP
     /// detector + ducker centre — typical de-essing range with
@@ -768,6 +789,14 @@ fn default_deess_amount() -> f32 {
     0.7 // Audible ducking on first engagement — users dial back if too aggressive.
 }
 
+fn default_resbank_root() -> f32 {
+    0.5 // ~MIDI 60 (middle C) — neutral starting pitch.
+}
+
+fn default_resbank_resonance() -> f32 {
+    0.6 // Singing-but-not-screaming Q on first engagement.
+}
+
 impl Default for FxState {
     fn default() -> Self {
         Self {
@@ -905,6 +934,10 @@ impl Default for FxState {
             deess_threshold: default_deess_threshold(),
             deess_amount: default_deess_amount(),
             deess_mix: 0.0,
+            resbank_root: default_resbank_root(),
+            resbank_chord: 0.0,
+            resbank_resonance: default_resbank_resonance(),
+            resbank_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

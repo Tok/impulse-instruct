@@ -281,6 +281,14 @@ pub(super) fn apply_fx_update(
     );
     u!(s.fx.deess_amount, "deess_amount", "fx.deess_amount");
     u!(s.fx.deess_mix, "deess_mix", "fx.deess_mix");
+    u!(s.fx.resbank_root, "resbank_root", "fx.resbank_root");
+    u!(s.fx.resbank_chord, "resbank_chord", "fx.resbank_chord");
+    u!(
+        s.fx.resbank_resonance,
+        "resbank_resonance",
+        "fx.resbank_resonance"
+    );
+    u!(s.fx.resbank_mix, "resbank_mix", "fx.resbank_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {

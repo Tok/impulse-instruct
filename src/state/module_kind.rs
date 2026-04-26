@@ -156,6 +156,13 @@ pub enum ModuleKind {
     /// the sibilant band is attenuated, the rest of the signal
     /// passes untouched.
     FxDeEsser,
+    /// Resonator bank — six tuned BPF biquads in parallel turn
+    /// any input into a chord layer.  Karplus-on-input character.
+    /// Distinct from `FxComb` (single tuned-delay resonator) —
+    /// six simultaneous pitches at once, picked by the chord
+    /// preset knob, with pitch governed by the root knob rather
+    /// than tracking the input.
+    FxResBank,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -277,6 +284,7 @@ impl ModuleKind {
             Self::FxVibrato => "VIBRATO",
             Self::FxIsoEq => "ISO EQ",
             Self::FxDeEsser => "DE-ESSER",
+            Self::FxResBank => "RES BANK",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -457,7 +465,8 @@ impl ModuleKind {
             | Self::FxTremolo
             | Self::FxVibrato
             | Self::FxIsoEq
-            | Self::FxDeEsser => (2, 1),
+            | Self::FxDeEsser
+            | Self::FxResBank => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -530,6 +539,7 @@ impl ModuleKind {
             | Self::FxVibrato
             | Self::FxIsoEq
             | Self::FxDeEsser
+            | Self::FxResBank
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -611,6 +621,7 @@ impl ModuleKind {
                 | Self::FxVibrato
                 | Self::FxIsoEq
                 | Self::FxDeEsser
+                | Self::FxResBank
         )
     }
 
@@ -667,6 +678,7 @@ impl ModuleKind {
                 | Self::FxVibrato
                 | Self::FxIsoEq
                 | Self::FxDeEsser
+                | Self::FxResBank
         )
     }
 

@@ -351,6 +351,14 @@ impl DspState {
                 p.deess_mix,
                 sr,
             ),
+            FxStep::ResBank => self.resbank.process(
+                sig,
+                p.resbank_root,
+                p.resbank_chord,
+                p.resbank_resonance,
+                p.resbank_mix,
+                sr,
+            ),
         }
     }
 

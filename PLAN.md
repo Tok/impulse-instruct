@@ -99,8 +99,6 @@ new gap turns up.
 - [ ] **Multiband compressor** (3-band split with per-band
   ratio/threshold).  Mastering-grade dynamics that the single-band
   `FxCompressor` can't shape.
-- [ ] **Resonator bank** — 6 tuned resonant filters → pitched chord
-  layer from any input.  Karplus-on-input character.
 - [ ] **Grain delay** — granular feedback path; distinct from
   `FxMultitap` (rhythmic taps) and `FxFreeze` (held buffer).
 - [ ] **Spectral gate** — per-bin gate on STFT magnitude (not a

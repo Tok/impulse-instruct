@@ -48,6 +48,7 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxVibrato => Some(FxStep::Vibrato),
         ModuleKind::FxIsoEq => Some(FxStep::IsoEq),
         ModuleKind::FxDeEsser => Some(FxStep::DeEsser),
+        ModuleKind::FxResBank => Some(FxStep::ResBank),
         _ => None,
     }
 }

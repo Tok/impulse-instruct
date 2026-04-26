@@ -31,7 +31,10 @@ pub(super) fn try_draw_fx_lfo_content(
     pad_pair_in: u8,
 ) -> Option<u8> {
     match kind {
-        ModuleKind::FxTremolo | ModuleKind::FxVibrato | ModuleKind::FxDeEsser => {}
+        ModuleKind::FxTremolo
+        | ModuleKind::FxVibrato
+        | ModuleKind::FxDeEsser
+        | ModuleKind::FxResBank => {}
         _ => return None,
     }
 
@@ -192,6 +195,53 @@ pub(super) fn try_draw_fx_lfo_content(
                 st.fx.deess_threshold = t;
                 st.fx.deess_amount = a;
                 st.fx.deess_mix = m;
+            }
+        }
+        ModuleKind::FxResBank => {
+            // ROOT / CHORD / RES / MIX — chord knob quantises into
+            // 6 preset interval sets inside the DSP, so the user
+            // hears discrete chord changes as they sweep across
+            // the knob's range.
+            let (mut r, mut c, mut q, mut m) = {
+                let st = app.state.read();
+                (
+                    st.fx.resbank_root,
+                    st.fx.resbank_chord,
+                    st.fx.resbank_resonance,
+                    st.fx.resbank_mix,
+                )
+            };
+            hk!(
+                ui,
+                ("ROOT", &mut r, pm("fx.resbank_root")),
+                ("CHORD", &mut c, pm("fx.resbank_chord")),
+                ("RES", &mut q, pm("fx.resbank_resonance")),
+                ("MIX", &mut m, pm("fx.resbank_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("resbank_xy_{module_id}"),
+                    ["ROOT", "CHORD", "RES"],
+                    &mut pad_pair,
+                    (&mut r, &mut c, &mut q),
+                    [
+                        user_owned("fx.resbank_root"),
+                        user_owned("fx.resbank_chord"),
+                        user_owned("fx.resbank_resonance"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || r != app.state.read().fx.resbank_root {
+                let mut st = app.state.write();
+                st.fx.resbank_root = r;
+                st.fx.resbank_chord = c;
+                st.fx.resbank_resonance = q;
+                st.fx.resbank_mix = m;
             }
         }
         _ => unreachable!("guarded by the early return above"),

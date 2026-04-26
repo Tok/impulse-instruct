@@ -95,6 +95,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::FxVibrato
         | ModuleKind::FxIsoEq
         | ModuleKind::FxDeEsser
+        | ModuleKind::FxResBank
         | ModuleKind::SpectrumAnalyzer
         | ModuleKind::StereoMeter
         | ModuleKind::ActivityTimeline

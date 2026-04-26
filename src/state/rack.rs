@@ -308,6 +308,7 @@ impl RackState {
                 | ModuleKind::FxVibrato
                 | ModuleKind::FxIsoEq
                 | ModuleKind::FxDeEsser
+                | ModuleKind::FxResBank
         );
         if !has_audio_out {
             return true;
@@ -591,6 +592,10 @@ impl RackState {
                 // De-esser groups with the dynamics tools — same
                 // sidechain idiom as the gate / compressor.
                 ModuleKind::FxDeEsser => 28,
+                // Resonator bank groups with the comb resonator —
+                // same family of pitched-resonance FX, just with
+                // six tuned bands instead of one.
+                ModuleKind::FxResBank => 9,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

@@ -86,6 +86,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // selectors — LFO on threshold gives a gating-style breath
         // patch.
         FxDeEsser => &[Selector, Selector, Selector, Selector],
+        // Resonator bank: 4 knobs (root / chord / resonance / mix);
+        // all selectors so the user can sequence root pitch via
+        // LFO for slow chord-progression patches.
+        FxResBank => &[Selector, Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],

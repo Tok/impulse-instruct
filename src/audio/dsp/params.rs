@@ -678,6 +678,11 @@ pub struct AudioParams {
     pub deess_threshold: f32,
     pub deess_amount: f32,
     pub deess_mix: f32,
+    // Resonator bank — six tuned BPF biquads in parallel (chord layer).
+    pub resbank_root: f32,
+    pub resbank_chord: f32,
+    pub resbank_resonance: f32,
+    pub resbank_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,

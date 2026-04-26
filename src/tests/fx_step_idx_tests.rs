@@ -53,6 +53,7 @@ const ALL_FX_STEPS: &[FxStep] = &[
     FxStep::Vibrato,
     FxStep::IsoEq,
     FxStep::DeEsser,
+    FxStep::ResBank,
 ];
 
 #[test]

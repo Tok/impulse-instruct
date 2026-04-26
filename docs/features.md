@@ -4,6 +4,61 @@ A detailed log of what's built.
 
 ---
 
+### Resonator bank FX (`FxResBank`)
+
+Six tuned BPF biquads in parallel turn any input into a chord
+layer.  Karplus-on-input character: noisy inputs ring at the
+chord pitches, percussive transients pluck each pitch like a
+string.  Distinct from `FxComb` (one tuned-delay resonator) —
+six simultaneous pitches at once, chord-knob-selectable, with
+pitch governed by the root knob rather than tracking the
+input's fundamental.
+
+**DSP shape.**  6 RBJ-cookbook constant-skirt-gain BPFs
+(`b1=0`, `b2=-b0` baked into the recurrence).  Each tuned to
+`root_midi + interval[i]` Hz at the same Q.  Output is the
+sum of taps divided by `√(N · Q)` — gives consistent
+perceived loudness across the resonance knob since the BPF's
+peak gain is Q itself.  Coefficients refresh lazily on knob
+movement (rare relative to audio rate).  Allocation-free.
+
+**Knobs.**
+- `resbank_root` 0..1 → MIDI 24..96 (C1..C7).  Default 0.5
+  (≈ middle C).
+- `resbank_chord` 0..1 quantised into 6 chord presets:
+  - 0: minor 7 — root, m3, P5, m7, +oct root, +oct m3
+  - 1: major triad spread — root, M3, P5, +oct root, +oct M3, +oct P5
+  - 2: dominant 9 — root, M3, P5, m7, +oct root, M9
+  - 3: open fifths — root, P5, +oct root, +oct P5, +2oct root, +2oct P5
+  - 4: octave stack — root, +oct, +2oct, +3oct, +4oct, +5oct
+  - 5: cluster — root, +M2, +P4, +P5, +M6, +oct
+  Single f32 knob with quantisation inside the DSP — no u8
+  mode field + cycle button, keeps the FX surface consistent
+  with the other 4-knob 2×1 cards.
+- `resbank_resonance` 0..1 → Q 1..50 log-mapped (1 = barely-
+  resonant, 50 = singing).  Default 0.6.
+- `resbank_mix` 0..1 wet/dry with cheap-bypass fast path.
+
+**Wiring.**  Standard FX add ritual — `FxStep::ResBank`
+(idx 38, `FX_STEP_COUNT` bumped to 39),
+`ModuleKind::FxResBank` ("RES BANK" label, 2×1 grid,
+sort-group 9 next to FxComb — same family of pitched-
+resonance FX).  Aliases resbank / fxresbank / resonatorbank /
+resonators / chordres / chordresonator.  4 × Selector
+modulation jacks so an LFO on root drives slow chord
+progressions.
+
+**Tests.**  +4 DSP (mix=0 bypass, impulse → audible ring,
+every chord preset rings, output bounded), +6 state-side
+(defaults are middle-C minor7, llm-apply all 4 knobs, lock
+honoured, FxStep mapping, label, alias).  Suite **2067 →
+2077**.
+
+Files: new `src/audio/dsp/fx_resbank.rs`, new
+`src/tests/fx_resbank_tests.rs`.
+
+---
+
 ### De-esser FX (`FxDeEsser`)
 
 Specialist dynamics tool for vocal / hat material from the
