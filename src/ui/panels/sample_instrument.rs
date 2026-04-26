@@ -8,9 +8,50 @@
 // button that runs `detect_pitch_hz` on the loaded buffer and writes
 // the nearest MIDI note back into state.
 
-use crate::audio::{AudioCommand, load_wav_to_44100};
+use crate::audio::{AudioCommand, load_audio_to_engine};
 use crate::state::ParamMode;
 use crate::ui::{ImpulseApp, theme, widgets};
+
+/// Synthetic path label written when the user captures the master
+/// output into the SampleInstrument via the REC button — same idiom
+/// the AmenSampler's REC→CHOP and the granular CAPTURE buttons use,
+/// so the API-poll path doesn't try to reload from disk.
+const REC_LABEL: &str = "«rec»";
+
+/// Capture the master-output ring buffer (the same `granular_tap`
+/// the AmenSampler's REC→CHOP and the granular CAPTURE buttons read)
+/// and hand it to the SampleInstrument as the loaded source.  Mirrors
+/// `record_chop_into_amen` in shape — extracted so a unit test can
+/// drive the wave-thumbnail rebuild without rtrb plumbing.
+pub(crate) fn record_into_sample_instrument(app: &mut ImpulseApp) {
+    let buf = crate::ui::panels::amen::linearise_tap(&app.granular_tap, app.granular_tap_head);
+    if buf.iter().all(|s| s.abs() < 1e-5) {
+        log::warn!("[sample_instrument] REC: tap is silent, ignoring");
+        return;
+    }
+    // Auto-detect root pitch on the captured material — same path
+    // load_sample_instrument_path takes for fresh disk loads.  Only
+    // commit the detected note when confidence clears the same 0.5
+    // bar so a tap full of noise doesn't mis-tune the instrument.
+    if let Some((hz, conf)) =
+        crate::audio::analysis::detect_pitch_hz(&buf, crate::audio::SAMPLE_RATE)
+        && conf >= 0.5
+    {
+        let midi = crate::audio::dsp::hz_to_midi(hz).round().clamp(0.0, 127.0) as u8;
+        app.state.write().sample_instrument.root_note = midi;
+    }
+    // Captured-buffer mode replaces SFZ regions; clear the UI-side
+    // cache + rebuild the waveform thumbnail for paint, just like
+    // the disk-load single-WAV path.
+    app.sample_sfz_regions.clear();
+    app.sample_selected_region = None;
+    let thumb = crate::ui::panels::sample_instrument_viz::build_thumbnail(&buf, 128);
+    app.sample_wave_cache = (REC_LABEL.to_string(), thumb);
+    let arc = std::sync::Arc::new(buf);
+    let _ = app.audio_tx.push(AudioCommand::LoadSampleInstrument(arc));
+    app.state.write().sample_instrument.sample_path = REC_LABEL.to_string();
+    app.last_sample_instrument_path = REC_LABEL.to_string();
+}
 
 pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
@@ -51,12 +92,31 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .add_sized([60.0, 20.0], egui::Button::new("LOAD"))
             .clicked()
             && let Some(p) = crate::ui::header_menu::pick_file_via_portal(
-                "WAV/SFZ",
-                &["wav", "WAV", "sfz", "SFZ"],
+                "Audio/SFZ",
+                &[
+                    "wav", "WAV", "sfz", "SFZ", "flac", "FLAC", "aif", "AIF", "aiff", "AIFF",
+                    "aifc", "AIFC",
+                ],
             )
         {
             let ps = p.to_string_lossy().to_string();
             load_sample_instrument_path(app, &ps);
+        }
+        // REC — capture the master-output ring buffer as the
+        // SampleInstrument source.  Same shared `granular_tap` the
+        // amen REC→CHOP + granular CAPTURE read; auto-detect-root
+        // runs on the captured material so the instrument tunes
+        // itself.  No file is written; in-memory only.
+        if ui
+            .add_sized([46.0, 20.0], egui::Button::new("REC"))
+            .on_hover_text(
+                "Freeze the master-output ring buffer (last few seconds)\n\
+                 as the SampleInstrument source.  Auto-detects root pitch.\n\
+                 In-memory only — no file written.",
+            )
+            .clicked()
+        {
+            record_into_sample_instrument(app);
         }
         let path = app.state.read().sample_instrument.sample_path.clone();
         let name = if path.is_empty() {
@@ -464,7 +524,7 @@ fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
             app.state.write().sample_instrument.sample_path = path.to_string();
             app.last_sample_instrument_path = path.to_string();
         }
-    } else if let Some(data) = load_wav_to_44100(path) {
+    } else if let Some(data) = load_audio_to_engine(path) {
         if let Some((hz, conf)) =
             crate::audio::analysis::detect_pitch_hz(&data, crate::audio::SAMPLE_RATE)
             && conf >= 0.5
