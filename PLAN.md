@@ -69,6 +69,114 @@ The 9 main stages are shipped (see features.md).  Remaining slices:
   (`process_block.rs` and `rack_wiring.rs` siblings); both now sit
   comfortably under the cap.
 
+## Voices — wishlist
+
+Modules that would plug a real gap in the current voice palette.
+
+- [ ] **FM operator synth** (DX7-style 4- or 6-op).  Closest gap to
+  the existing AN1X subtractive — DX-flavoured bell / E-piano /
+  bass tones don't reproduce well from the current stack.
+- [ ] **Additive synth** with per-harmonic level sliders.  Distinct
+  from wavetable: the user draws the spectrum directly instead of
+  scanning frames.
+- [ ] **Modal / struck physical model** — mass-spring bank for
+  marimba, bell, glass.  Cheap N-mode resonator excited by an
+  impulse / noise burst.
+- [ ] **Chiptune voice** — 2× pulse + triangle + LFSR noise +
+  optional 1-bit DPCM, NES-authentic.  Pairs well with the existing
+  step sequencer for tracker workflows.
+- [ ] **Vocal formant synth** — formant filter bank around an
+  oscillator.  Distinct from `NeuTts` — sings vowels without
+  needing a phoneme model.
+
+## FX — wishlist
+
+- [ ] **Multiband compressor** (3-band split with per-band
+  ratio/threshold).  Mastering-grade dynamics that the single-band
+  `FxCompressor` can't shape.
+- [ ] **De-esser** — sidechain HP → narrow compress on the sibilant
+  band.  Specialist tool for vocal / hat material.
+- [ ] **Resonator bank** — 6 tuned resonant filters → pitched chord
+  layer from any input.  Karplus-on-input character.
+- [ ] **Grain delay** — granular feedback path; distinct from
+  `FxMultitap` (rhythmic taps) and `FxFreeze` (held buffer).
+- [ ] **DJ filter** — single morph LP↔HP through BP with the
+  classic resonance peak at the crossover.  Live-friendly single
+  knob.
+- [ ] **3-band ISO / kill EQ** — DJ-style hard-kill bands (low /
+  mid / high).  Cheap but invaluable for live cuts.
+- [ ] **Spectral gate** — per-bin gate on STFT magnitude (not a
+  global threshold).  Pairs with `FxFreeze`'s spectral path.
+- [ ] **Tape echo** — dedicated, with wow / flutter + saturation
+  inside the feedback loop.  Distinct from `FxTapeSat` (no
+  delay) and `FxDelay` (no character).
+- [ ] **Tremolo** + **vibrato** as their own modules.  Currently
+  approximated via Chorus / Pan; users typing "add a tremolo"
+  expect a dedicated knob.
+- [ ] **Shimmer mode flag on `FxConvReverb`** (already deferred
+  above — repeated here so the FX wishlist scans complete).
+
+## Visualizations — wishlist
+
+- [ ] **Polyphony usage meter** — `SampleInstrument` ships with
+  `POLY_VOICES = 8` slots and no live readout of how many are
+  active; a small bar / dot meter on the panel would surface the
+  steal vs free path.  Tiny win, immediately useful.
+- [ ] **Pattern density heatmap** — 16 steps × N bars grid,
+  brightness = note density per voice.  Quick "where are the
+  busy parts" read across a long song.
+- [ ] **Onset / beat-grid overlay** — detected onsets vs sequencer
+  grid (already have `audio/onset.rs`).  Debug tool for groove /
+  late-strike discussions.
+- [ ] **CV sequence visualiser** — paired with the
+  modulation-wishlist CV sequencer below if shipped.
+
+## Modulation — wishlist
+
+- [ ] **CV sequencer** — 16-step CV pattern module distinct from
+  the audio sequencer.  Outputs CV that other modules can patch
+  in for envelope / pitch automation.
+- [ ] **Slew / glide module** — smooth a CV with separate
+  rise / fall times.  Currently glide is bass-only.
+- [ ] **Quantizer** — snap a CV to the nearest scale note.
+- [ ] **Comparator / threshold** — CV → gate when above a level.
+- [ ] **Math** — combine two CVs (add / multiply / blend).  Opens
+  patches the rack can't currently express (e.g. one LFO scaling
+  another).
+- [ ] **Sequenced sample-and-hold** — externally clockable S&H
+  module, distinct from the LFO's S&H waveform option.
+
+## Absurd / unusual — staged for build
+
+User-prioritised order; each is its own module, shippable
+independently.  Anything left at "unscheduled" goes in last.
+
+1. [ ] **Eurorack patch generator** — button on the rack header
+   that resets the rack, drops a random selection of voices /
+   FX / modulators, and patches plausible cables between them.
+   "Show me what could happen" creative-seed tool.
+2. [ ] **Theremin** — XY pad → pitch (one axis) + volume (other).
+   Heterodyning oscillator pair so the squeal character lands;
+   could also be MIDI / mouse drivable.
+3. [ ] **Mellotron voice** — sampler with per-note tape-loop model:
+   small tape-flutter LFO per slot, slight pitch wobble, brief
+   spin-up transient.  Uses the SampleInstrument scaffolding.
+4. [ ] **AI patch morph** — LLM continuously walks the FX chain
+   along a textual prompt across N bars.  ("Evolve from
+   cathedral to dystopia over 8 bars.")  Builds on the existing
+   agent / pipeline machinery.
+5. [ ] **Pendulum** — two near-tuned oscillators beating
+   acoustically.  As detune drifts the sound moves from chord →
+   beat → drone.  Built-in beat-rate readout in the panel.
+6. [ ] **Vinyl / cassette simulator** (FX) — surface noise +
+   start / stop transient + RIAA EQ shape.  Distinct from
+   `FxTapeStop` (just the brake).
+7. [ ] **Bird-songs voice** — small CC0 corpus, granularised and
+   pitch-mappable.  Pairs with `samples/textures/`.
+8. [ ] **MIDI granuliser** — input a MIDI clip, scatter the
+   triggers with jitter / density knobs.  Granular but for
+   triggers, not audio.
+
 ## Demo recording
 
 - [ ] **Next acid demo re-record** — showcase the **two bass voices**
