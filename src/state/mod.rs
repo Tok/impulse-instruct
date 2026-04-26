@@ -196,6 +196,7 @@ pub mod fx_types;
 pub mod modulation;
 pub mod module_kind;
 pub mod rack;
+mod rack_arrange;
 mod rack_presets;
 pub mod rack_random;
 pub mod rack_scope;
