@@ -515,6 +515,85 @@ mod sample_instrument_sfz_mode_tests {
         // = ~0.175.  Allow generous slop for ADSR ramp + accent.
         assert!(max_out < 0.3, "expected -6 dB attenuation; got {max_out}");
     }
+
+    #[test]
+    fn region_ampeg_release_overrides_global_knob() {
+        // Region with ampeg_release_s = 0.001 should fall to silence
+        // within ~50 ms after gate-off, regardless of how long the
+        // global `sample_release` knob is set.
+        let mut r = region(60, 60, 60, 0.5);
+        r.region.ampeg_release_s = 0.001; // 1 ms — effectively instant
+        let mut v = SampleInstrumentVoice::new();
+        v.load_sfz(vec![r]);
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        );
+        // Baseline: sample_release = 1.0 (long release, ~2 s).
+        let mut p = make_params();
+        p.sample_release = 1.0;
+        for _ in 0..200 {
+            let _ = v.process(48_000.0, &p);
+        }
+        v.gate_off();
+        // Region release of 1 ms = 48 samples per time-constant at
+        // 48 k.  exp(-N/48) drops below ~0.003 (the effective audible
+        // floor after volume × sample-magnitude scaling) around
+        // sample 300.  500-iteration cap leaves plenty of slack.
+        let mut decayed = false;
+        for _ in 0..500 {
+            let out = v.process(48_000.0, &p).abs();
+            if out < 0.001 {
+                decayed = true;
+                break;
+            }
+        }
+        assert!(
+            decayed,
+            "region's 1 ms ampeg_release_s should override the long global knob"
+        );
+    }
+
+    #[test]
+    fn region_with_default_ampeg_uses_global_knobs() {
+        // Region with all ampeg fields at SfzRegion defaults
+        // (attack/decay/release_s = 0, sustain_pct = 100) should
+        // fall through to the global knob path.  Set the global
+        // release short and confirm the region path picks it up.
+        let r = region(60, 60, 60, 0.5);
+        let mut v = SampleInstrumentVoice::new();
+        v.load_sfz(vec![r]);
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        );
+        let mut p = make_params();
+        p.sample_release = 0.0; // → 5 ms (lo end of the knob map)
+        for _ in 0..200 {
+            let _ = v.process(48_000.0, &p);
+        }
+        v.gate_off();
+        let mut decayed = false;
+        for _ in 0..2000 {
+            let out = v.process(48_000.0, &p).abs();
+            if out < 0.001 {
+                decayed = true;
+                break;
+            }
+        }
+        assert!(
+            decayed,
+            "default ampeg should use global knob — short release should fire"
+        );
+    }
 }
 
 #[cfg(test)]

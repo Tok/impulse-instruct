@@ -46,6 +46,13 @@ struct TriggerShape {
     root_freq: f32,
     freq: f32,
     region_gain: f32,
+    /// When `Some`, the slot's ADSR uses these region-supplied
+    /// values instead of the global `sample_attack` / `sample_decay`
+    /// / `sample_sustain` / `sample_release` knobs.  Tuple is
+    /// `(attack_s, decay_s, sustain_level_0_to_1, release_s)`.
+    /// Single-WAV mode passes `None` so live knob edits keep
+    /// applying mid-note.
+    region_adsr: Option<(f32, f32, f32, f32)>,
 }
 
 /// ADSR stages tracked per-trigger.
@@ -71,6 +78,12 @@ struct SampleInstrumentSlot {
     gate: bool,
     accent: f32,
     region_gain: f32,
+    /// Per-slot ADSR override resolved at trigger time.  `Some` =
+    /// region (SFZ / SF2) supplied explicit ampeg values; `None` =
+    /// fall through to the global `sample_attack`/`_decay`/`_sustain`
+    /// /`_release` knobs (which the single-WAV path uses, keeping
+    /// live knob edits responsive).  Tuple matches `TriggerShape`.
+    region_adsr: Option<(f32, f32, f32, f32)>,
     /// Monotonic counter set at trigger time — lowest = oldest slot.
     age: u64,
     /// Per-slot SVF state for the per-voice filter.  Each slot keeps
@@ -117,6 +130,7 @@ impl SampleInstrumentSlot {
             gate: false,
             accent: 0.0,
             region_gain: 1.0,
+            region_adsr: None,
             age: 0,
             filter: Svf::new(),
             formant: FormantShifter::new(),
@@ -325,11 +339,31 @@ impl SampleInstrumentVoice {
                 let region_offset = r.region.transpose as f32 * 100.0 + r.region.tune_cents;
                 let cents_ratio = 2.0_f32.powf((pitch_offset_cents + region_offset) / 1200.0);
                 let v = r.region.volume_db.clamp(-60.0, 12.0);
+                // Region-supplied ADSR override — `Some` only when at
+                // least one ampeg field diverges from the SFZ /
+                // SF2-default "instant" envelope.  Sustain is stored
+                // as 0..100 percent; convert to the 0..1 level the
+                // DSP expects.
+                let region_adsr = if r.region.ampeg_attack_s > 0.0
+                    || r.region.ampeg_decay_s > 0.0
+                    || r.region.ampeg_release_s > 0.0
+                    || (r.region.ampeg_sustain_pct - 100.0).abs() > 0.01
+                {
+                    Some((
+                        r.region.ampeg_attack_s.max(0.0),
+                        r.region.ampeg_decay_s.max(0.0),
+                        (r.region.ampeg_sustain_pct.clamp(0.0, 100.0) / 100.0),
+                        r.region.ampeg_release_s.max(0.0),
+                    ))
+                } else {
+                    None
+                };
                 pending[count] = Some(TriggerShape {
                     samples: r.samples.clone(),
                     root_freq: midi_to_hz_tuned(r.region.pitch_keycenter, tuning).max(20.0),
                     freq: (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0),
                     region_gain: 10.0_f32.powf(v / 20.0) * cf_gain,
+                    region_adsr,
                 });
                 count += 1;
             }
@@ -343,6 +377,11 @@ impl SampleInstrumentVoice {
                 root_freq: self.single_root_freq,
                 freq: (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0),
                 region_gain: 1.0,
+                // Single-WAV mode keeps the V1 behaviour: the slot's
+                // ADSR reads from the global knobs each sample, so
+                // turning the attack knob mid-note is audible
+                // immediately.  No region overrides apply here.
+                region_adsr: None,
             };
             self.fire_slot(&shape, accent);
         }
@@ -359,6 +398,7 @@ impl SampleInstrumentVoice {
         slot.root_freq = shape.root_freq;
         slot.freq = shape.freq;
         slot.region_gain = shape.region_gain;
+        slot.region_adsr = shape.region_adsr;
         slot.pos = 0.0;
         slot.adsr_stage = AdsrStage::Attack;
         slot.adsr_value = 0.0;
@@ -401,19 +441,36 @@ impl SampleInstrumentVoice {
         }
     }
 
-    /// Advance one slot's ADSR by one sample.
+    /// Advance one slot's ADSR by one sample.  When the slot carries
+    /// a `region_adsr` override (SFZ / SF2 path), the four times +
+    /// sustain level come from the region; otherwise the global
+    /// `sample_attack`/`_decay`/`_sustain`/`_release` knobs win
+    /// (single-WAV path, with live knob edits).
     fn step_adsr(slot: &mut SampleInstrumentSlot, sr: f32, p: &AudioParams) {
         let knob_to_secs = |knob: f32, lo: f32, hi: f32| -> f32 {
             let k = knob.clamp(0.0, 1.0);
             (lo + (hi - lo) * k).max(0.0005)
+        };
+        let (attack_s, decay_s, sustain, release_s) = match slot.region_adsr {
+            Some((a, d, s, r)) => (
+                a.max(0.0005),
+                d.max(0.0005),
+                s.clamp(0.0, 1.0),
+                r.max(0.0005),
+            ),
+            None => (
+                knob_to_secs(p.sample_attack, 0.0005, 1.5),
+                knob_to_secs(p.sample_decay, 0.005, 2.0),
+                p.sample_sustain.clamp(0.0, 1.0),
+                knob_to_secs(p.sample_release, 0.005, 2.0),
+            ),
         };
         match slot.adsr_stage {
             AdsrStage::Off => {
                 slot.adsr_value = 0.0;
             }
             AdsrStage::Attack => {
-                let t = knob_to_secs(p.sample_attack, 0.0005, 1.5);
-                let coef = (-1.0_f32 / (t * sr)).exp();
+                let coef = (-1.0_f32 / (attack_s * sr)).exp();
                 slot.adsr_value = 1.0 - (1.0 - slot.adsr_value) * coef;
                 if slot.adsr_value >= 0.999 {
                     slot.adsr_value = 1.0;
@@ -421,22 +478,18 @@ impl SampleInstrumentVoice {
                 }
             }
             AdsrStage::Decay => {
-                let t = knob_to_secs(p.sample_decay, 0.005, 2.0);
-                let coef = (-1.0_f32 / (t * sr)).exp();
-                let target = p.sample_sustain.clamp(0.0, 1.0);
-                slot.adsr_value = target + (slot.adsr_value - target) * coef;
-                if (slot.adsr_value - target).abs() < 1e-3 {
-                    slot.adsr_value = target;
+                let coef = (-1.0_f32 / (decay_s * sr)).exp();
+                slot.adsr_value = sustain + (slot.adsr_value - sustain) * coef;
+                if (slot.adsr_value - sustain).abs() < 1e-3 {
+                    slot.adsr_value = sustain;
                     slot.adsr_stage = AdsrStage::Sustain;
                 }
             }
             AdsrStage::Sustain => {
-                let target = p.sample_sustain.clamp(0.0, 1.0);
-                slot.adsr_value += (target - slot.adsr_value) * 0.001;
+                slot.adsr_value += (sustain - slot.adsr_value) * 0.001;
             }
             AdsrStage::Release => {
-                let t = knob_to_secs(p.sample_release, 0.005, 2.0);
-                let coef = (-1.0_f32 / (t * sr)).exp();
+                let coef = (-1.0_f32 / (release_s * sr)).exp();
                 slot.adsr_value *= coef;
                 if slot.adsr_value < 1e-5 {
                     slot.adsr_value = 0.0;
