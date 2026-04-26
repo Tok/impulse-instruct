@@ -4,6 +4,37 @@ A detailed log of what's built.
 
 ---
 
+### SampleInstrument — SF2 filter generators + per-region filter override
+
+Pair of changes — SF2 filter generators on the parser side,
+per-region filter override on the DSP side.  Together they mean
+SF2 banks (and SFZ regions with `fil_type` / `cutoff_hz` /
+`resonance_db` set) shape the per-note tone independently of the
+user's global filter knobs.
+
+- New SF2 generator opcodes parsed: `initialFilterFc` (8) and
+  `initialFilterQ` (9).  Cents → Hz via
+  `8.176 × 2^(cents / 1200)`; centibels → dB via `cB / 10`.  SF2
+  spec default 13500 cents (~20 kHz, "filter off") collapses
+  back to "no filter" so SoundFonts without filter generators
+  pass through unchanged.
+- `SampleInstrumentSlot` and `TriggerShape` gain
+  `region_filter: Option<(cutoff_knob, resonance_knob, mode)>`.
+  Mirrors the per-region ADSR shape: `Some` = SFZ / SF2 region
+  with `fil_type` set; `None` = single-WAV / unfiltered region.
+- `process_slot` is now 3-way: region filter override (force-
+  apply with `mix=1`) → global filter knobs (V1.1 path) →
+  bypass.  An explicit SFZ / SF2 filter shapes the sound
+  regardless of the user's global mix knob.
+- New helpers: `hz_to_svf_knob`, `db_to_svf_resonance_knob`,
+  `sfz_fil_type_to_svf_mode` — convert from the human / spec
+  units that SfzRegion carries to the 0..1 / u8 the SVF expects.
+
+2 new tests: a region with a 100 Hz LPF measurably attenuates an
+8 kHz sine compared to the same buffer through a no-filter
+region; the filter generator absorption captures both
+`initialFilterFc` and `initialFilterQ` correctly.
+
 ### SampleInstrument — SF2 envelope generators (V2 follow-up)
 
 Builds on the per-region ADSR override (immediately prior).

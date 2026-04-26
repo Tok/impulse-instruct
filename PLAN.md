@@ -27,19 +27,19 @@ The 9 main stages are shipped (see features.md).  Stage 7.5 also
 shipped — drag-to-edit loop markers + SFZ zone selection +
 per-zone inspector all wired (see features.md).  Remaining slice:
 
-- [ ] **`.sf2` — filter / modulator / LFO generators**.  Volume
-  envelope already shipped (V2 follow-up: per-region ADSR
-  override + timecents conversion).  Remaining: filter cutoff
-  / Q (initialFilterFc / Q), modulation envelope, modulation
-  LFO, vibrato LFO, sample modes (one-shot / loop continuous /
-  loop until release), generator-to-target modulators.
+- [ ] **`.sf2` — modulator / LFO generators + sample modes**.
+  Volume envelope + filter shipped.  Remaining: modulation
+  envelope (modEnvToPitch / modEnvToFilterFc), modulation LFO
+  (modLfoToPitch / modLfoToFilterFc / modLfoToVolume), vibrato
+  LFO (vibLfoToPitch), sample modes (one-shot / loop continuous
+  / loop until release), generator-to-target modulators.
 - [ ] **Disk streaming for huge banks** — architectural change;
   V1 fits everything in memory which caps usable bank size.
 
-(SF2 V1 parsing + preset picker + envelope generators,
+(SF2 V1 parsing + preset picker + envelope + filter generators,
 `.flac` / `.aiff` decoding, sample recording from the audio
 input, multi-mic / multi-position SFZ blends, and per-region
-ADSR override all shipped — see features.md.)
+ADSR + filter overrides all shipped — see features.md.)
 
 ## FX — still open
 
