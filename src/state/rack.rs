@@ -306,6 +306,7 @@ impl RackState {
                 | ModuleKind::FxFreqShift
                 | ModuleKind::FxTremolo
                 | ModuleKind::FxVibrato
+                | ModuleKind::FxIsoEq
         );
         if !has_audio_out {
             return true;
@@ -583,6 +584,9 @@ impl RackState {
                 // Vibrato joins the same cluster — pitch-modulation
                 // cousin of Tremolo's amplitude modulation.
                 ModuleKind::FxVibrato => 36,
+                // ISO EQ groups with the DJ filter — both are
+                // performance-oriented filter / band-shaping FX.
+                ModuleKind::FxIsoEq => 19,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

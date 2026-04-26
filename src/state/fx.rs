@@ -446,6 +446,25 @@ pub struct FxState {
     /// this value first.
     #[serde(default)]
     pub tremolo_mix: f32,
+    // ── 3-band ISO / kill EQ ────────────────────────────────────────────
+    /// Low-band level 0..1.  Hard-kills (or passes) the band below
+    /// the ~250 Hz crossover.  1 = full pass; 0 = silenced.
+    #[serde(default = "default_iso_pass")]
+    pub iso_low: f32,
+    /// Mid-band level 0..1.  Implemented subtractively from the dry
+    /// signal so the three bands sum to the input exactly when all
+    /// three knobs are at 1.
+    #[serde(default = "default_iso_pass")]
+    pub iso_mid: f32,
+    /// High-band level 0..1.  Hard-kills (or passes) the band above
+    /// the ~2.5 kHz crossover.
+    #[serde(default = "default_iso_pass")]
+    pub iso_high: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).  Lets the user A/B the ISO'd
+    /// signal against the original without dialling all three bands
+    /// back to 1.
+    #[serde(default)]
+    pub iso_mix: f32,
     // ── Vibrato ──────────────────────────────────────────────────────────
     /// LFO rate 0..1 → 0.1..10 Hz log-mapped.  Vibrato tops out
     /// lower than tremolo because hyper-fast pitch wobble crosses
@@ -712,6 +731,10 @@ fn default_vibrato_depth() -> f32 {
     0.5 // ~25 cents peak swing — audible without sounding seasick.
 }
 
+fn default_iso_pass() -> f32 {
+    1.0 // All bands pass at full level — engaging the ISO via mix=>0 is the only audible change until the user kills a band.
+}
+
 impl Default for FxState {
     fn default() -> Self {
         Self {
@@ -841,6 +864,10 @@ impl Default for FxState {
             vibrato_depth: default_vibrato_depth(),
             vibrato_shape: 0.0,
             vibrato_mix: 0.0,
+            iso_low: default_iso_pass(),
+            iso_mid: default_iso_pass(),
+            iso_high: default_iso_pass(),
+            iso_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

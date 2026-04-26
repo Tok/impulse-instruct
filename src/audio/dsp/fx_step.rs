@@ -340,6 +340,9 @@ impl DspState {
                 p.vibrato_mix,
                 sr,
             ),
+            FxStep::IsoEq => self
+                .iso_eq
+                .process(sig, p.iso_low, p.iso_mid, p.iso_high, p.iso_mix, sr),
         }
     }
 

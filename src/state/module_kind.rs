@@ -142,6 +142,14 @@ pub enum ModuleKind {
     /// thickening) — vibrato is a single tap with no dry blend in
     /// the wet path so the user hears pure pitch wobble.
     FxVibrato,
+    /// 3-band ISO / kill EQ — DJ-style hard-kill bands (low /
+    /// mid / high) at ~250 Hz and ~2.5 kHz crossovers.
+    /// Subtractive mid (dry minus low minus high) so the three
+    /// bands sum to the input exactly when all knobs are at 1.
+    /// Distinct from `FxEq` (3-band fixed-shelf with continuous
+    /// gain knobs) — ISO is for live performance kills, not
+    /// shelf shaping.
+    FxIsoEq,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -261,6 +269,7 @@ impl ModuleKind {
             Self::FxDjFilter => "DJ FILTER",
             Self::FxTremolo => "TREMOLO",
             Self::FxVibrato => "VIBRATO",
+            Self::FxIsoEq => "ISO EQ",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -439,7 +448,8 @@ impl ModuleKind {
             | Self::FxVinyl
             | Self::FxDjFilter
             | Self::FxTremolo
-            | Self::FxVibrato => (2, 1),
+            | Self::FxVibrato
+            | Self::FxIsoEq => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -510,6 +520,7 @@ impl ModuleKind {
             | Self::FxDjFilter
             | Self::FxTremolo
             | Self::FxVibrato
+            | Self::FxIsoEq
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -589,6 +600,7 @@ impl ModuleKind {
                 | Self::FxDjFilter
                 | Self::FxTremolo
                 | Self::FxVibrato
+                | Self::FxIsoEq
         )
     }
 
@@ -643,6 +655,7 @@ impl ModuleKind {
                 | Self::FxDjFilter
                 | Self::FxTremolo
                 | Self::FxVibrato
+                | Self::FxIsoEq
         )
     }
 

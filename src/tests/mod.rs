@@ -31,6 +31,7 @@ mod fm_ops_tests;
 mod formant_shifter_tests;
 mod fx_djfilter_tests;
 mod fx_freq_shift_tests;
+mod fx_iso_eq_tests;
 mod fx_math_tests;
 mod fx_plan_tests;
 mod fx_sidechain_tests;

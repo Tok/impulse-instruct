@@ -75,6 +75,7 @@ const FX_POOL: &[ModuleKind] = &[
     ModuleKind::FxDjFilter,
     ModuleKind::FxTremolo,
     ModuleKind::FxVibrato,
+    ModuleKind::FxIsoEq,
 ];
 
 /// Result of `random_layout` — a recipe the caller applies to its

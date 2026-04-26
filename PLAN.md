@@ -105,8 +105,6 @@ new gap turns up.
   layer from any input.  Karplus-on-input character.
 - [ ] **Grain delay** — granular feedback path; distinct from
   `FxMultitap` (rhythmic taps) and `FxFreeze` (held buffer).
-- [ ] **3-band ISO / kill EQ** — DJ-style hard-kill bands (low /
-  mid / high).  Cheap but invaluable for live cuts.
 - [ ] **Spectral gate** — per-bin gate on STFT magnitude (not a
   global threshold).  Pairs with `FxFreeze`'s spectral path.
 - [ ] **Tape echo** — dedicated, with wow / flutter + saturation

@@ -269,6 +269,10 @@ pub(super) fn apply_fx_update(
     u!(s.fx.vibrato_depth, "vibrato_depth", "fx.vibrato_depth");
     u!(s.fx.vibrato_shape, "vibrato_shape", "fx.vibrato_shape");
     u!(s.fx.vibrato_mix, "vibrato_mix", "fx.vibrato_mix");
+    u!(s.fx.iso_low, "iso_low", "fx.iso_low");
+    u!(s.fx.iso_mid, "iso_mid", "fx.iso_mid");
+    u!(s.fx.iso_high, "iso_high", "fx.iso_high");
+    u!(s.fx.iso_mix, "iso_mix", "fx.iso_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {

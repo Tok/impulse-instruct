@@ -300,7 +300,8 @@ pub(super) fn draw_fx_content(
         | ModuleKind::FxTapeStop
         | ModuleKind::FxStutter
         | ModuleKind::FxFreeze
-        | ModuleKind::FxDjFilter => {
+        | ModuleKind::FxDjFilter
+        | ModuleKind::FxIsoEq => {
             // FX cards in `rack_content_fx_extras.rs` to keep this file
             // under the 1000-line cap.  Helper returns the new pad_pair.
             // Dispatch list MUST stay in lockstep with the accept list

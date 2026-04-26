@@ -194,6 +194,10 @@ impl AudioParams {
             vibrato_depth: s.fx.vibrato_depth.clamp(0.0, 1.0),
             vibrato_shape: s.fx.vibrato_shape.clamp(0.0, 1.0),
             vibrato_mix: s.fx.vibrato_mix.clamp(0.0, 1.0),
+            iso_low: s.fx.iso_low.clamp(0.0, 1.0),
+            iso_mid: s.fx.iso_mid.clamp(0.0, 1.0),
+            iso_high: s.fx.iso_high.clamp(0.0, 1.0),
+            iso_mix: s.fx.iso_mix.clamp(0.0, 1.0),
             param_eq_ms_mode: s.fx.param_eq_ms_mode,
             conv_reverb_mix: s.fx.conv_reverb_mix.clamp(0.0, 1.0),
             // Cabinet mode caps the IR length at 10 % of the loaded

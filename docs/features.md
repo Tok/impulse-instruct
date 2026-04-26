@@ -4,6 +4,58 @@ A detailed log of what's built.
 
 ---
 
+### 3-band ISO / kill EQ (`FxIsoEq`)
+
+DJ-style hard-kill bands (LOW / MID / HIGH) at fixed
+crossovers (~250 Hz, ~2.5 kHz).  Performance FX, distinct
+from `FxEq` — that one is 3-band fixed-shelf with continuous
+gain knobs; this one is unipolar 0..1 (kill / pass) with a
+subtractive midband.
+
+**DSP shape.**  Two RBJ-cookbook biquads — LP at 250 Hz for
+the low band, HP at 2.5 kHz for the high band.  The mid band
+is computed *subtractively*: `mid = dry - low - high`.  This
+guarantees that when all three knobs are at 1.0, the bands
+sum to the dry input EXACTLY, with no phase-cancellation
+surprises as the user dials between extremes.  Allocation-
+free; coefficients refresh lazily on sample-rate changes.
+
+**Knobs.**
+- `iso_low` 0..1 — gain on the band below ~250 Hz.  1 = full
+  pass; 0 = silenced.  Default 1.0.
+- `iso_mid` 0..1 — gain on the (subtractive) mid band.
+  Default 1.0.
+- `iso_high` 0..1 — gain on the band above ~2.5 kHz.
+  Default 1.0.
+- `iso_mix` 0..1 — wet/dry blend; 0 = bypass.  Default 0.0.
+  All-bands-at-unity + mix=1 is a passthrough by design, so
+  the user can A/B the FX engagement without dialling all
+  three bands back to 1.
+
+**Wiring.**  Standard FX add ritual — `FxStep::IsoEq` (idx
+36, `FX_STEP_COUNT` bumped to 37), `ModuleKind::FxIsoEq`
+("ISO EQ" label, 2×1 grid, sort-group 19 next to FxDjFilter
+since both are DJ-style performance filters).  Aliases
+iso / isoeq / iso_eq / killeq / kill / 3band / fxisoeq.
+4 × Selector modulation jacks so the user can sequence kill
+patterns by routing an LFO at a beat-aligned rate.
+
+**LLM apply + schema.**  Standard `apply_fx_update` macro
+expansion + flat schema entries describing the kill
+behaviour and the subtractive midband (so the LLM can pitch
+patches like "ISO out the low end on every other bar").
+
+**Tests.**  +5 DSP (mix=0 bypass, exact passthrough at unity
+gains after warmup, 50 Hz silenced when low killed, 8 kHz
+silenced when high killed, output bounded), +6 state-side
+(defaults, llm-apply all 4 knobs, lock honoured, FxStep
+mapping, label, alias parsing).  Suite **2045 → 2056**.
+
+Files: new `src/audio/dsp/fx_iso_eq.rs`, new
+`src/tests/fx_iso_eq_tests.rs`.
+
+---
+
 ### Vibrato FX (`FxVibrato`)
 
 Pitch-modulation cousin of the shipped `FxTremolo`.  Single

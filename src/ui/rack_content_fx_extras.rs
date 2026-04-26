@@ -50,7 +50,8 @@ pub(super) fn try_draw_fx_extras_content(
         | ModuleKind::FxWiden
         | ModuleKind::FxFreqShift
         | ModuleKind::FxVinyl
-        | ModuleKind::FxDjFilter => {}
+        | ModuleKind::FxDjFilter
+        | ModuleKind::FxIsoEq => {}
         _ => return None,
     }
 
@@ -910,6 +911,48 @@ pub(super) fn try_draw_fx_extras_content(
                 st.fx.dj_filter_morph = morph;
                 st.fx.dj_filter_resonance = res;
                 st.fx.dj_filter_mix = mix;
+            }
+        }
+        ModuleKind::FxIsoEq => {
+            // LOW / MID / HIGH / MIX — DJ-style 4-knob layout.
+            // Defaults park each band at unity so engaging the
+            // FX (mix > 0) is a no-op until the user starts
+            // killing bands.
+            let (mut l, mut m, mut h, mut mx) = {
+                let st = app.state.read();
+                (st.fx.iso_low, st.fx.iso_mid, st.fx.iso_high, st.fx.iso_mix)
+            };
+            hk!(
+                ui,
+                ("LOW", &mut l, pm("fx.iso_low")),
+                ("MID", &mut m, pm("fx.iso_mid")),
+                ("HIGH", &mut h, pm("fx.iso_high")),
+                ("MIX", &mut mx, pm("fx.iso_mix"))
+            );
+            if pad_expanded {
+                ui.add_space(PAD_SECTION_TOP_GAP);
+                let (vc, _) = render_three_pad(
+                    ui,
+                    &format!("iso_eq_xy_{module_id}"),
+                    ["LOW", "MID", "HIGH"],
+                    &mut pad_pair,
+                    (&mut l, &mut m, &mut h),
+                    [
+                        user_owned("fx.iso_low"),
+                        user_owned("fx.iso_mid"),
+                        user_owned("fx.iso_high"),
+                    ],
+                );
+                if vc {
+                    changed = true;
+                }
+            }
+            if changed || l != app.state.read().fx.iso_low {
+                let mut st = app.state.write();
+                st.fx.iso_low = l;
+                st.fx.iso_mid = m;
+                st.fx.iso_high = h;
+                st.fx.iso_mix = mx;
             }
         }
         _ => unreachable!("guarded by the early return above"),

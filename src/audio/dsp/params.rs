@@ -668,6 +668,11 @@ pub struct AudioParams {
     pub vibrato_depth: f32,
     pub vibrato_shape: f32,
     pub vibrato_mix: f32,
+    // 3-band ISO / kill EQ — DJ-style hard-kill bands.
+    pub iso_low: f32,
+    pub iso_mid: f32,
+    pub iso_high: f32,
+    pub iso_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,
