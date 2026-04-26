@@ -6,6 +6,32 @@ This file lists **future work only** — completed items get moved into
 
 ---
 
+## Next session — kickoff items
+
+Three picks queued for the next session (two small, one bigger).
+All three are unblocked, well-scoped, and live in their own
+sections below — pick whichever fits your appetite first.
+
+- [ ] **Polyphony usage meter** (visualisation wishlist) — tiny
+  win, ~1 file.  `SampleInstrument` ships with `POLY_VOICES = 8`
+  slots and zero live readout; a small dot / bar meter on the
+  panel surfaces the steal-vs-free path so users can dial
+  density before they hit voice-stealing.
+- [ ] **DJ filter** (FX wishlist) — single-morph LP↔HP through
+  BP with a resonance peak at the crossover.  Live-friendly
+  one-knob FX; smaller than a multiband comp, immediately
+  useful for performance.
+- [ ] **FM operator synth** (voices wishlist) — biggest visible
+  new feature.  4-op DX7-flavoured voice plugs the gap between
+  the existing AN1X (subtractive) and SAMPLER+ (samples) for
+  bell / E-piano / FM-bass tones.  Real DSP build — phase
+  modulation chain + ADSR per op + algorithm selector.
+
+The wishlist + remaining sections below carry the rest of the
+unshipped roadmap.
+
+---
+
 ## SampleInstrument V2 — outstanding follow-ups
 
 The 9 main stages are shipped (see features.md).  Remaining slices:
@@ -60,14 +86,21 @@ The 9 main stages are shipped (see features.md).  Remaining slices:
   helper).
 - [ ] **Large-file watch list** (none over the 1000-line cap; just
   noting the largest ones in case a future change pushes one
-  over).  Current top: `src/llm/lanes.rs` (962),
-  `src/ui/panels/sequencer.rs` (944), `src/state/transitions.rs`
-  (925), `src/llm/mod.rs` (921).  `src/state/transitions.rs`
-  remains the cleanest split candidate (song-mode helpers +
-  bank/chain into a sibling).  `audio/dsp/mod.rs` and
+  over).  Current top after the absurd-queue session:
+  `src/audio/dsp/fx_extras.rs` (989 — closest to the cap; one
+  more FX struct lands it over),
+  `src/tests/dsp_fx_tests.rs` (966),
+  `src/llm/lanes.rs` (962),
+  `src/ui/panels/sequencer.rs` (944),
+  `src/ui/rack_content.rs` (931 — picked up Theremin / Pendulum /
+  Vinyl dispatch this session),
+  `src/state/transitions.rs` (925),
+  `src/llm/mod.rs` (921).  Cleanest split candidate is
+  `fx_extras.rs` (per-FX struct → sibling per family —
+  saturation / EQ / dynamics).  `audio/dsp/mod.rs` and
   `src/state/rack.rs` were split out in earlier sessions
-  (`process_block.rs` and `rack_wiring.rs` siblings); both now sit
-  comfortably under the cap.
+  (`process_block.rs` and `rack_wiring.rs` siblings); both now
+  sit comfortably under the cap.
 
 ## Voices — wishlist
 
@@ -146,29 +179,30 @@ Modules that would plug a real gap in the current voice palette.
 - [ ] **Sequenced sample-and-hold** — externally clockable S&H
   module, distinct from the LFO's S&H waveform option.
 
-## Absurd / unusual — staged for build
+## Absurd / unusual — all shipped
 
-User-prioritised order; each is its own module, shippable
-independently.  Anything left at "unscheduled" goes in last.
+Eurorack patch generator, Theremin, Mellotron mode, AI patch
+morph, Pendulum, Vinyl/cassette FX, bird-song corpus, MIDI
+granuliser — all V1-shipped (see features.md).  Deferred V2
+follow-ups carried in the per-feature sections of features.md;
+re-open here if any of them grow legs.
 
-1. [x] ~~**Eurorack patch generator**~~ — shipped (see features.md).
-2. [x] ~~**Theremin**~~ — shipped (see features.md).
-3. [x] ~~**Mellotron voice**~~ — shipped as `MELLO` mode on
-   the existing `SampleInstrument` voice (see features.md).
-4. [x] ~~**AI patch morph**~~ — V1 shipped (see features.md);
-   API + scheduler done, dedicated UI dialog deferred.
-5. [x] ~~**Pendulum**~~ — shipped (see features.md).
-6. [x] ~~**Vinyl / cassette simulator**~~ — V1 shipped (see
-   features.md).  Start/stop transient deferred — `FxTapeStop`
-   covers that family.
-7. [x] ~~**Bird-songs voice**~~ — V1 shipped as a curated source
-   pointer + `samples/birds/` corpus dir, played through the
-   existing GRAN voice (see features.md).  A dedicated module
-   isn't justified — GRAN already handles the playback; only
-   the corpus needed curating.
-8. [x] ~~**MIDI granuliser**~~ — V1 shipped (see features.md);
-   in-place pattern scatter via API.  File-to-file MIDI mode
-   deferred — V1 covers the live-session use case directly.
+## Deferred V2 follow-ups (from the absurd-queue ship)
+
+- [ ] **AI patch morph — UI dialog**.  V1 is API-only
+  (`POST /api/morph`); a small modal with prompt input + bars /
+  calls knobs would make it discoverable from the menu.
+- [ ] **MIDI granuliser — file-to-file mode**.  V1 scatters the
+  running sequencer pattern in place; a `granulise_smf_bytes`
+  wrapper would let users pre-process MIDI clips offline.
+- [ ] **Vinyl FX — start / stop transient**.  V1 covers the
+  steady-state colour; the ramp-up / brake transient was
+  deliberately deferred (FxTapeStop overlap).  Could come back
+  as a dedicated knob if users want both.
+- [ ] **GRAN — pitch-tracking trigger mode**.  Bird-song corpus
+  ships, but the granular voice plays at fixed pitch; a
+  `pitch_mappable` flag would let played notes drive grain
+  pitch for melodic bird-call solos.
 
 ## Demo recording
 
