@@ -661,6 +661,11 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             locked,
         );
         s.granular.spray = unlocked_f32(s.granular.spray, g, "spray", "granular.spray", locked);
+        if !locked.contains("granular.pitch_mappable")
+            && let Some(v) = g.get("pitch_mappable").and_then(|v| v.as_bool())
+        {
+            s.granular.pitch_mappable = v;
+        }
     }
 
     if in_scope("hoover")

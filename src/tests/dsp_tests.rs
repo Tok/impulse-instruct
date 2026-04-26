@@ -143,6 +143,32 @@ mod granular_llm_tests {
         assert!((s.granular.density - 0.8).abs() < 1e-4);
         assert!((s.granular.position - 0.3).abs() < 1e-4);
     }
+
+    #[test]
+    fn granular_pitch_mappable_default_off() {
+        let s = AppState::default();
+        assert!(!s.granular.pitch_mappable);
+    }
+
+    #[test]
+    fn granular_pitch_mappable_round_trip() {
+        let s = AppState::default();
+        let update = serde_json::json!({ "granular": { "pitch_mappable": true } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!(s.granular.pitch_mappable);
+        let update = serde_json::json!({ "granular": { "pitch_mappable": false } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!(!s.granular.pitch_mappable);
+    }
+
+    #[test]
+    fn granular_pitch_mappable_respects_lock() {
+        let s = AppState::default();
+        // Lock the field then try to enable via LLM update — must stay off.
+        let update = serde_json::json!({ "granular": { "pitch_mappable": true } });
+        let s = apply_llm_update(s, &update, &["granular.pitch_mappable".to_string()]);
+        assert!(!s.granular.pitch_mappable);
+    }
 }
 
 #[cfg(test)]

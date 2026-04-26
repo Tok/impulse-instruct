@@ -485,6 +485,7 @@ impl AudioParams {
             granular_position_jitter: s.granular.position_jitter,
             granular_pitch_scatter: s.granular.pitch_scatter,
             granular_spray: s.granular.spray,
+            granular_pitch_mappable: s.granular.pitch_mappable,
             pluck_enabled: s.pluck.enabled,
             pluck_damping: s.pluck.damping.clamp(0.0, 1.0),
             pluck_brightness: s.pluck.brightness.clamp(0.0, 1.0),

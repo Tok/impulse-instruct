@@ -770,6 +770,7 @@ pub struct AudioParams {
     pub granular_position_jitter: f32,
     pub granular_pitch_scatter: f32,
     pub granular_spray: f32,
+    pub granular_pitch_mappable: bool,
     // Karplus-Strong pluck voice
     pub pluck_enabled: bool,
     pub pluck_damping: f32,

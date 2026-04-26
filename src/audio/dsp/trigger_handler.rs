@@ -263,6 +263,11 @@ impl DspState {
                     self.vocal.gate_off();
                 }
             }
+            GranularPitch { note } => {
+                if self.params.granular_enabled && self.params.granular_pitch_mappable {
+                    self.granular.set_base_note(*note);
+                }
+            }
         }
     }
 }

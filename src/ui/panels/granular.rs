@@ -324,4 +324,26 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             ("granular.spray", spray),
         ]);
     }
+
+    // ── Pitch-mappable toggle ────────────────────────────────────────────────
+    // When on, MIDI NoteOn (and `GranularPitch` sequencer triggers)
+    // transpose the grain rate so the texture tracks the keyboard —
+    // melodic mode for bird-call solos, sample-instrument fills, etc.
+    let mut pitch_map = app.state.read().granular.pitch_mappable;
+    if ui
+        .checkbox(
+            &mut pitch_map,
+            egui::RichText::new("PITCH MAP").monospace().size(8.0),
+        )
+        .on_hover_text(
+            "Pitch-tracking mode.  Played notes (MIDI in / sequencer\n\
+             trigger) transpose the granular voice — every grain inherits\n\
+             the played pitch.  C4 = no transpose; higher notes raise\n\
+             grain rate, lower notes drop it.",
+        )
+        .changed()
+    {
+        app.state.write().granular.pitch_mappable = pitch_map;
+        app.push_audio_params();
+    }
 }

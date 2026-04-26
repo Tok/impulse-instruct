@@ -38,6 +38,10 @@ pub(crate) struct GranularVoice {
     samples: Option<Arc<Vec<f32>>>,
     grains: [Grain; MAX_GRAINS],
     spawn_counter: f32, // counts down to next grain spawn
+    /// Base-note transposition in semitones, relative to MIDI note 60 (C4).
+    /// Set by `set_base_note` when pitch-mappable mode is on; applied as
+    /// a multiplier on every newly-spawned grain's rate.  0 = no transpose.
+    base_note_st: f32,
     rng: NoiseGen,
 }
 
@@ -47,6 +51,7 @@ impl GranularVoice {
             samples: None,
             grains: [Grain::default(); MAX_GRAINS],
             spawn_counter: 0.0,
+            base_note_st: 0.0,
             rng: NoiseGen::new(seed),
         }
     }
@@ -56,6 +61,14 @@ impl GranularVoice {
         for g in &mut self.grains {
             g.active = false;
         }
+    }
+
+    /// Set the base-note transposition.  Reference is MIDI 60 (C4): note 60
+    /// → 0 semitones, note 72 → +12, note 48 → -12.  Subsequent grains
+    /// inherit this offset as a rate multiplier.  Only meaningful when
+    /// `pitch_mappable` is enabled in state.
+    pub(crate) fn set_base_note(&mut self, note: u8) {
+        self.base_note_st = note as f32 - 60.0;
     }
 
     /// Render one stereo sample pair from all active grains.
@@ -94,7 +107,11 @@ impl GranularVoice {
                 let start = (position * buf_len + jitter_offset).rem_euclid(buf_len);
                 let rng_pitch = self.rng.next();
                 let pitch_st = rng_pitch * pitch_scatter * 12.0; // ±12 st
-                let rate = 2.0_f32.powf(pitch_st / 12.0);
+                // base_note_st adds melodic transposition when
+                // pitch_mappable mode is on (set via `set_base_note`);
+                // 0 by default so the additive form is a no-op for the
+                // free-running texture path.
+                let rate = 2.0_f32.powf((pitch_st + self.base_note_st) / 12.0);
                 let rng_pan = self.rng.next();
 
                 g.pos = start;

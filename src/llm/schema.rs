@@ -200,7 +200,8 @@ pub fn param_json_schema() -> serde_json::Value {
                     "position":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "playback position in WAV" },
                     "position_jitter":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "random spread around position" },
                     "pitch_scatter":    { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "random pitch per grain, ±12st at max" },
-                    "spray":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "stereo spread (0=mono, 1=full width)" }
+                    "spray":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "stereo spread (0=mono, 1=full width)" },
+                    "pitch_mappable":   { "type": "boolean", "description": "true: played notes (MIDI in / sequencer trigger) transpose grain pitch — melodic mode for bird-call solos. C4 = no transpose." }
                 },
                 "additionalProperties": false
             },

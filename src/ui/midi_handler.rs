@@ -35,6 +35,18 @@ impl ImpulseApp {
                             gate_samples: 22050,
                             pan: 0.0,
                         }));
+                    // Pitch-mappable granular: live MIDI notes also drive
+                    // the granular base-note transposition so a played
+                    // bird-call corpus tracks the keyboard.
+                    let granular_pitch_map = {
+                        let s = self.state.read();
+                        s.granular.enabled && s.granular.pitch_mappable
+                    };
+                    if granular_pitch_map {
+                        let _ = self
+                            .audio_tx
+                            .push(AudioCommand::Trigger(TriggerEvent::GranularPitch { note }));
+                    }
                     let step = self.state.read().sequencer.current_step;
                     let s = self.state.read().clone();
                     let was_active = s

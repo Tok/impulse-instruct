@@ -136,6 +136,14 @@ pub enum TriggerEvent {
         slide: f32,
     },
     VocalGateOff,
+    /// Granular voice pitch-mapping trigger.  Fires when pitch-mappable
+    /// mode is on: sets the granular voice's base-note transposition so
+    /// every subsequent grain inherits the played pitch.  Carries no
+    /// gate-off — the granular voice keeps producing grains until
+    /// `granular.enabled` flips off.
+    GranularPitch {
+        note: u8,
+    },
 }
 
 impl TriggerEvent {
