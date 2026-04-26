@@ -80,12 +80,12 @@ use fx_vinyl::VinylFx;
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 pub use lfo_target_opcode::lfo_target_to_u8;
-pub use mod_compile::{compile_mod_routes, compile_slew_params};
+pub use mod_compile::{compile_mod_routes, compile_quantizer_params, compile_slew_params};
 use ms_master::MsMaster;
 use param_eq::ParamEq;
 pub use params::{
-    AudioParams, MAX_MOD_ROUTES, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE, MOD_BUF_SIZE,
-    MOD_BUF_SLEW_BASE, MOD_UTIL_SLOTS,
+    AudioParams, MAX_MOD_ROUTES, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE, MOD_BUF_QUANTIZER_BASE,
+    MOD_BUF_SIZE, MOD_BUF_SLEW_BASE, MOD_UTIL_SLOTS,
 };
 use pendulum::PendulumVoice;
 use pitch_shift::PitchShift;

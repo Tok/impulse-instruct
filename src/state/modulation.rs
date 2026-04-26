@@ -187,6 +187,8 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // direct routes (the module's CV-out cable produces them
         // separately via the standard mod-route path).
         Slew => &[Selector],
+        // Quantizer — same shape as Slew.
+        Quantizer => &[Selector],
     }
 }
 
@@ -605,7 +607,8 @@ pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
         ModuleKind::LfoModule
         | ModuleKind::StepSequencer
         | ModuleKind::CvSequencer
-        | ModuleKind::Slew => PortKind::Cv,
+        | ModuleKind::Slew
+        | ModuleKind::Quantizer => PortKind::Cv,
         _ => PortKind::Audio,
     }
 }

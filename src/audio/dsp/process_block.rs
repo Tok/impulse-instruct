@@ -149,6 +149,34 @@ impl DspState {
             p.cv_buf[out_idx] = self.slew_state[i];
         }
 
+        // ── Quantizer utility ─────────────────────────────────────────────────
+        // Snap each enabled Quantizer slot's input value
+        // (interpreted as bipolar -1..+1 → -12..+12 semitones)
+        // to the nearest note in the configured scale.  Output
+        // is the bipolar value of the snapped semitone (÷ 12).
+        for (i, qp) in p_base.quantizer.iter().enumerate() {
+            let out_idx = super::params::MOD_BUF_QUANTIZER_BASE + i;
+            let raw = if qp.cv_in_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[qp.cv_in_buf_idx as usize]
+            };
+            if !qp.enabled {
+                p.cv_buf[out_idx] = raw;
+                continue;
+            }
+            // Map the bipolar -1..+1 to a signed semitone offset
+            // in -12..+12, snap, then back.  Add 60 (middle C
+            // base) before snap so the existing `snap_to_scale`
+            // helper (which expects a u8 MIDI note) operates
+            // inside its valid range.
+            let semitone = (raw.clamp(-1.0, 1.0) * 12.0).round() as i32 + 60;
+            let snapped =
+                crate::state::snap_to_scale(semitone.clamp(0, 127) as u8, qp.root, qp.scale);
+            let out = ((snapped as i32) - 60) as f32 / 12.0;
+            p.cv_buf[out_idx] = out;
+        }
+
         // ── Apply cable-routed modulation ─────────────────────────────────────
         // All sources have been staged into `cv_buf` by the
         // preceding stages.  Now walk the compiled route list and

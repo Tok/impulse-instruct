@@ -95,6 +95,7 @@ mod polymeter_tests;
 mod preecho_apply_tests;
 mod preecho_config_tests;
 mod prompt_summary_tests;
+mod quantizer_tests;
 mod rack_extras_tests;
 mod rack_minimap_tests;
 mod rack_reach_tests;

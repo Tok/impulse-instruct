@@ -4,53 +4,98 @@
 // and emit:
 //   * `compile_mod_routes` — flat ModRouteCopy array driving
 //     `apply_mod_target` from any CV-out source.
-//   * `compile_slew_params` — Slew utility-slot snapshots with
-//     resolved `cv_in_buf_idx`.
-//   * (future utility-kind compile passes share this file.)
+//   * `compile_slew_params` / `compile_quantizer_params` /
+//     (future utility-kind compile passes) — utility-slot
+//     snapshots with resolved `cv_in_buf_idx`.
 //
-// Lifted out of params.rs once that file hit the 1000-line cap
-// after the cv_buf + utility modules landed.  No behaviour change
-// — functions moved verbatim with their imports updated.
+// The shared `CvSourceMaps` walks the rack once and stashes the
+// id lists for every CV-emitting module kind so per-utility
+// compile passes don't re-walk the rack four times each.
 
 use super::lfo_target_opcode::lfo_target_to_u8;
 use super::params::{
-    MAX_MOD_ROUTES, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE, MOD_BUF_SLEW_BASE, ModRouteCopy,
-    SlewParamsCopy,
+    MAX_MOD_ROUTES, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE, MOD_BUF_QUANTIZER_BASE,
+    MOD_BUF_SLEW_BASE, ModRouteCopy, QuantizerParamsCopy, SlewParamsCopy,
 };
-use crate::state::{AppState, LfoTarget};
+use crate::state::{AppState, LfoTarget, ModuleKind, PortKind};
 
-/// Walk the rack's Mod cables and emit a fixed-size array of compiled mod
-/// routes for the audio thread to consume.  Each route resolves the source
-/// LFO module to its slot index (position in the rack's LfoModule order) and
-/// the destination Mod-In jack to its `LfoTarget` (Fixed slot or the user-
-/// picked Selector value).  Routes whose source/target can't be resolved or
-/// whose target is `None` are silently skipped.  The depth defaults to 1.0
-/// (a per-cable depth knob is a future addition).
+/// Per-kind id lists for every CV-emitting module.  Walks the
+/// rack once; downstream resolves use the cached vecs to map a
+/// cable's source module id to its `cv_buf` slot.
+struct CvSourceMaps {
+    lfo: Vec<u32>,
+    cv_seq: Vec<u32>,
+    slew: Vec<u32>,
+    quantizer: Vec<u32>,
+}
+
+impl CvSourceMaps {
+    fn build(s: &AppState) -> Self {
+        let mut lfo = Vec::new();
+        let mut cv_seq = Vec::new();
+        let mut slew = Vec::new();
+        let mut quantizer = Vec::new();
+        for m in &s.rack.modules {
+            match m.kind {
+                ModuleKind::LfoModule => lfo.push(m.id),
+                ModuleKind::CvSequencer => cv_seq.push(m.id),
+                ModuleKind::Slew => slew.push(m.id),
+                ModuleKind::Quantizer => quantizer.push(m.id),
+                _ => {}
+            }
+        }
+        Self {
+            lfo,
+            cv_seq,
+            slew,
+            quantizer,
+        }
+    }
+
+    /// Resolve a cable's source module id to a `cv_buf` index.
+    /// Returns `None` if the source isn't a recognised CV
+    /// emitter or its slot index is out of range for that kind.
+    fn resolve(&self, s: &AppState, src_module_id: u32) -> Option<u8> {
+        if let Some(idx) = self.lfo.iter().position(|id| *id == src_module_id) {
+            if idx >= s.lfo.len() {
+                return None;
+            }
+            return Some((MOD_BUF_LFO_BASE + idx) as u8);
+        }
+        if let Some(idx) = self.cv_seq.iter().position(|id| *id == src_module_id) {
+            if idx >= crate::state::CV_SEQ_SLOTS {
+                return None;
+            }
+            return Some((MOD_BUF_CV_SEQ_BASE + idx) as u8);
+        }
+        if let Some(idx) = self.slew.iter().position(|id| *id == src_module_id) {
+            if idx >= crate::state::SLEW_SLOTS {
+                return None;
+            }
+            return Some((MOD_BUF_SLEW_BASE + idx) as u8);
+        }
+        if let Some(idx) = self.quantizer.iter().position(|id| *id == src_module_id) {
+            if idx >= crate::state::QUANTIZER_SLOTS {
+                return None;
+            }
+            return Some((MOD_BUF_QUANTIZER_BASE + idx) as u8);
+        }
+        None
+    }
+}
+
+/// Walk the rack's Mod cables and emit a fixed-size array of
+/// compiled mod routes for the audio thread to consume.  Every
+/// route resolves the source CV emitter (LFO, CV sequencer, or
+/// any utility module) to a `cv_buf` index, then walks the
+/// destination Mod-In's `LfoTarget` list and emits one route
+/// per target.  Routes whose source/target can't be resolved or
+/// whose target is `None` are silently skipped.
 pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) {
-    use crate::state::{ModInput, ModuleKind, PortKind, mod_inputs};
+    use crate::state::{ModInput, mod_inputs};
     let mut routes = [ModRouteCopy::default(); MAX_MOD_ROUTES];
     let mut count = 0usize;
-    let lfo_ids: Vec<u32> = s
-        .rack
-        .modules
-        .iter()
-        .filter(|m| m.kind == ModuleKind::LfoModule)
-        .map(|m| m.id)
-        .collect();
-    let cv_seq_ids: Vec<u32> = s
-        .rack
-        .modules
-        .iter()
-        .filter(|m| m.kind == ModuleKind::CvSequencer)
-        .map(|m| m.id)
-        .collect();
-    let slew_ids: Vec<u32> = s
-        .rack
-        .modules
-        .iter()
-        .filter(|m| m.kind == ModuleKind::Slew)
-        .map(|m| m.id)
-        .collect();
+    let maps = CvSourceMaps::build(s);
     for cable in &s.rack.cables {
         if count >= MAX_MOD_ROUTES {
             break;
@@ -58,29 +103,7 @@ pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) 
         if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
             continue;
         }
-        // Resolve the source — LFO, CV sequencer, or utility.
-        // Each kind owns a 4-slot range in `cv_buf`; resolve to a
-        // flat buf index so the audio thread reads the value
-        // without re-checking the source kind.
-        let source_buf_idx: u8 = if let Some(slot_idx) =
-            lfo_ids.iter().position(|id| *id == cable.from.module_id)
-        {
-            if slot_idx >= s.lfo.len() {
-                continue;
-            }
-            (MOD_BUF_LFO_BASE + slot_idx) as u8
-        } else if let Some(slot_idx) = cv_seq_ids.iter().position(|id| *id == cable.from.module_id)
-        {
-            if slot_idx >= crate::state::CV_SEQ_SLOTS {
-                continue;
-            }
-            (MOD_BUF_CV_SEQ_BASE + slot_idx) as u8
-        } else if let Some(slot_idx) = slew_ids.iter().position(|id| *id == cable.from.module_id) {
-            if slot_idx >= crate::state::SLEW_SLOTS {
-                continue;
-            }
-            (MOD_BUF_SLEW_BASE + slot_idx) as u8
-        } else {
+        let Some(source_buf_idx) = maps.resolve(s, cable.from.module_id) else {
             continue;
         };
         let Some(target_module) = s.rack.modules.iter().find(|m| m.id == cable.to.module_id) else {
@@ -129,41 +152,14 @@ pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) 
     (routes, count as u8)
 }
 
-/// Walk the rack's cables and produce the Slew utility-slot snapshot
-/// (4 slots, each with audio-thread-ready params + a resolved
-/// `cv_in_buf_idx`).  Each `ModuleKind::Slew` instance maps to
-/// one slot in rack order; the 5th instance stacks on the last
-/// slot.  Cables from any CV-out source (LFO / CvSeq / future
-/// utility) into a Slew's Mod-In port are resolved here so the
-/// audio thread can read the source value from `cv_buf` without
-/// re-walking the cable graph.
+/// Walk the rack's cables and produce the Slew utility-slot
+/// snapshot.  Each `ModuleKind::Slew` instance maps to one slot
+/// in rack order; cables from any CV-out source into the
+/// instance's Mod-In port resolve the slot's `cv_in_buf_idx`.
 pub fn compile_slew_params(s: &AppState) -> [SlewParamsCopy; crate::state::SLEW_SLOTS] {
-    use crate::state::{ModuleKind, PortKind};
     let mut out = [SlewParamsCopy::default(); crate::state::SLEW_SLOTS];
-    let lfo_ids: Vec<u32> = s
-        .rack
-        .modules
-        .iter()
-        .filter(|m| m.kind == ModuleKind::LfoModule)
-        .map(|m| m.id)
-        .collect();
-    let cv_seq_ids: Vec<u32> = s
-        .rack
-        .modules
-        .iter()
-        .filter(|m| m.kind == ModuleKind::CvSequencer)
-        .map(|m| m.id)
-        .collect();
-    let slew_ids: Vec<u32> = s
-        .rack
-        .modules
-        .iter()
-        .filter(|m| m.kind == ModuleKind::Slew)
-        .map(|m| m.id)
-        .collect();
-    // Copy the user-set knobs into each slot first (they apply
-    // even when no cable is wired — the slot still smooths the 0
-    // input toward 0 with its release time).
+    let maps = CvSourceMaps::build(s);
+    let slew_ids = &maps.slew;
     for (i, slot) in s.slew.iter().enumerate().take(crate::state::SLEW_SLOTS) {
         out[i] = SlewParamsCopy {
             enabled: slot.enabled,
@@ -172,10 +168,6 @@ pub fn compile_slew_params(s: &AppState) -> [SlewParamsCopy; crate::state::SLEW_
             cv_in_buf_idx: u8::MAX,
         };
     }
-    // Resolve the cv_in_buf_idx for each Slew slot from cables
-    // landing on Slew.ModIn[0].  Last-cable-wins; the UI prevents
-    // multiple cables on the same Mod-In jack so this is normally
-    // a single-cable resolution.
     for cable in &s.rack.cables {
         if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
             continue;
@@ -186,23 +178,52 @@ pub fn compile_slew_params(s: &AppState) -> [SlewParamsCopy; crate::state::SLEW_
         if slew_idx >= crate::state::SLEW_SLOTS {
             continue;
         }
-        let source_buf_idx: u8 = if let Some(slot_idx) =
-            lfo_ids.iter().position(|id| *id == cable.from.module_id)
-        {
-            if slot_idx >= s.lfo.len() {
-                continue;
-            }
-            (MOD_BUF_LFO_BASE + slot_idx) as u8
-        } else if let Some(slot_idx) = cv_seq_ids.iter().position(|id| *id == cable.from.module_id)
-        {
-            if slot_idx >= crate::state::CV_SEQ_SLOTS {
-                continue;
-            }
-            (MOD_BUF_CV_SEQ_BASE + slot_idx) as u8
-        } else {
+        if let Some(buf_idx) = maps.resolve(s, cable.from.module_id) {
+            out[slew_idx].cv_in_buf_idx = buf_idx;
+        }
+    }
+    out
+}
+
+/// Walk the rack's cables and produce the Quantizer utility-slot
+/// snapshot.  Same per-instance slot mapping as `compile_slew_params`;
+/// resolves the `cv_in_buf_idx` for any cable landing on a
+/// Quantizer's Mod-In port.
+pub fn compile_quantizer_params(
+    s: &AppState,
+) -> [QuantizerParamsCopy; crate::state::QUANTIZER_SLOTS] {
+    let mut out = [QuantizerParamsCopy::default(); crate::state::QUANTIZER_SLOTS];
+    let maps = CvSourceMaps::build(s);
+    let quantizer_ids = &maps.quantizer;
+    for (i, slot) in s
+        .quantizer
+        .iter()
+        .enumerate()
+        .take(crate::state::QUANTIZER_SLOTS)
+    {
+        out[i] = QuantizerParamsCopy {
+            enabled: slot.enabled,
+            root: slot.root.min(11),
+            scale: slot.scale,
+            cv_in_buf_idx: u8::MAX,
+        };
+    }
+    for cable in &s.rack.cables {
+        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
+            continue;
+        }
+        let Some(qidx) = quantizer_ids
+            .iter()
+            .position(|id| *id == cable.to.module_id)
+        else {
             continue;
         };
-        out[slew_idx].cv_in_buf_idx = source_buf_idx;
+        if qidx >= crate::state::QUANTIZER_SLOTS {
+            continue;
+        }
+        if let Some(buf_idx) = maps.resolve(s, cable.from.module_id) {
+            out[qidx].cv_in_buf_idx = buf_idx;
+        }
     }
     out
 }

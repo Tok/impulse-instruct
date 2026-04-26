@@ -41,6 +41,8 @@ pub const MOD_BUF_CV_SEQ_BASE: usize = 4;
 pub const MOD_UTIL_SLOTS: usize = 4;
 /// Slew utility output range starts here.
 pub const MOD_BUF_SLEW_BASE: usize = 8;
+/// Quantizer utility output range starts here.
+pub const MOD_BUF_QUANTIZER_BASE: usize = 12;
 
 /// Per-slot LFO configuration passed to the audio thread (Copy-safe).
 #[derive(Clone, Copy, Debug)]
@@ -95,6 +97,29 @@ impl Default for SlewParamsCopy {
             enabled: false,
             attack: 0.2,
             release: 0.2,
+            cv_in_buf_idx: u8::MAX,
+        }
+    }
+}
+
+/// Per-slot Quantizer configuration passed to the audio thread.
+/// Stores the scale + root choice + the resolved input buf
+/// index.  The scale's note set is rebuilt on the audio thread
+/// each block (cheap — 12 candidate notes max).
+#[derive(Clone, Copy, Debug)]
+pub struct QuantizerParamsCopy {
+    pub enabled: bool,
+    pub root: u8,
+    pub scale: crate::state::Scale,
+    pub cv_in_buf_idx: u8,
+}
+
+impl Default for QuantizerParamsCopy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            root: 0,
+            scale: crate::state::Scale::Major,
             cv_in_buf_idx: u8::MAX,
         }
     }
@@ -460,6 +485,10 @@ pub struct AudioParams {
     /// `cv_buf[cv_in_buf_idx]`, write output to
     /// `cv_buf[MOD_BUF_SLEW_BASE + i]`.
     pub slew: [SlewParamsCopy; crate::state::SLEW_SLOTS],
+    /// Quantizer utility slots — snap incoming CV (interpreted
+    /// as bipolar -1..+1 → -12..+12 semitones) to the nearest
+    /// note in the configured scale.
+    pub quantizer: [QuantizerParamsCopy; crate::state::QUANTIZER_SLOTS],
     /// Per-block modulation source buffer.  The audio thread fills
     /// the LFO range (0..4), CV-seq range (4..8), and utility
     /// module ranges (8..32) before applying `mod_routes`.

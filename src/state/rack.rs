@@ -620,6 +620,7 @@ impl RackState {
                 ModuleKind::LfoModule => 35,
                 ModuleKind::CvSequencer => 35,
                 ModuleKind::Slew => 35,
+                ModuleKind::Quantizer => 35,
                 // Bar oscilloscope sorts next to the spectrum module —
                 // both are global-bus visualisers; users tend to want
                 // them adjacent.

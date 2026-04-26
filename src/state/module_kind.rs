@@ -269,6 +269,11 @@ pub enum ModuleKind {
     /// works on any CV stream cabled into its Mod-In, then the
     /// smoothed output cables out to a synth / FX param.
     Slew,
+    /// Quantizer CV utility — snap an incoming bipolar CV
+    /// (-1..+1 → -12..+12 semitones) to the nearest note in the
+    /// configured scale.  Useful for turning continuous LFO
+    /// sweeps into pitch-quantised arpeggios.
+    Quantizer,
     LlmAgent,
     // ── LLM console (singleton, Global zone) ──────────────────────────────
     LlmConsole,
@@ -361,6 +366,7 @@ impl ModuleKind {
             Self::LfoModule => "LFO",
             Self::CvSequencer => "CV SEQ",
             Self::Slew => "SLEW",
+            Self::Quantizer => "QUANTIZER",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
             Self::MasterOutput => "MASTER",
@@ -483,6 +489,8 @@ impl ModuleKind {
             Self::CvSequencer => (5, 2),
             // Slew — 2 knobs, compact card.
             Self::Slew => (2, 1),
+            // Quantizer — root + scale dropdowns, 2×1 fits.
+            Self::Quantizer => (2, 1),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
             // Convolution Reverb — 6 knobs in a glass-grouped 2-row
@@ -636,7 +644,8 @@ impl ModuleKind {
             | Self::OnsetGrid
             | Self::LfoModule
             | Self::CvSequencer
-            | Self::Slew => Zone::FxMod,
+            | Self::Slew
+            | Self::Quantizer => Zone::FxMod,
         }
     }
 
@@ -815,6 +824,7 @@ impl ModuleKind {
                 | Self::LfoModule
                 | Self::CvSequencer
                 | Self::Slew
+                | Self::Quantizer
                 | Self::LlmAgent
         )
     }

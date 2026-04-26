@@ -98,6 +98,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::LfoModule => Some("lfo".to_string()),
         ModuleKind::CvSequencer => Some("cv_seq".to_string()),
         ModuleKind::Slew => Some("slew".to_string()),
+        ModuleKind::Quantizer => Some("quantizer".to_string()),
         _ => None,
     }
 }
@@ -185,6 +186,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "lfomodule" | "lfo" => Some(LfoModule),
         "cvsequencer" | "cvseq" | "cv_seq" | "stepcv" | "cv" => Some(CvSequencer),
         "slew" | "glide" | "portacv" | "lag" => Some(Slew),
+        "quantizer" | "quant" | "quantize" | "scalesnap" => Some(Quantizer),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
         "activitytimeline" | "timeline" | "activity" | "log" => Some(ActivityTimeline),
@@ -331,6 +333,7 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
         ModuleKind::CvSequencer => matches!(n.as_str(), "cvseq" | "cv_seq" | "cv seq" | "cv"),
         ModuleKind::Slew => matches!(n.as_str(), "slew" | "glide" | "lag"),
+        ModuleKind::Quantizer => matches!(n.as_str(), "quantizer" | "quant" | "scalesnap"),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),
         ModuleKind::DrumKit909 => matches!(n.as_str(), "909" | "kit_b" | "drum_b" | "drums_b"),
