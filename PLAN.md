@@ -8,17 +8,16 @@ This file lists **future work only** — completed items get moved into
 
 ## Next session — kickoff queue
 
-This session also closed the deferred V2 sweep — Vinyl start/stop
-transient, MIDI granuliser file-to-file, Shimmer mode on
-`FxConvReverb`, and the CV-sequence visualiser all shipped (see
-`features.md`).  Remaining queue:
+Spectral gate STFT shipped this session (V1 BPF still the default,
+toggle on the panel).  SampleInstrument V2 made progress on three
+fronts: `.flac` / `.aiff` decode, REC-from-master-output button,
+and the unified `load_audio_to_engine` loader (also used by the SFZ
+region path so multi-format `.sfz` packs work).  Remaining:
 
 1. **Demo recording — pick one scene**.  Multiple scenarios queued
    (acid re-record, MC singer, preecho, LFO assignment, parameter
    ramp, event stream, D&B re-record).  All are non-coding — just
    capturing audio against the existing scene scripts.
-2. **Spectral gate — true STFT version**.  Still deferred; needs
-   FFT machinery to land first.  Multi-session prerequisite chain.
 
 ---
 
@@ -28,10 +27,17 @@ The 9 main stages are shipped (see features.md).  Stage 7.5 also
 shipped — drag-to-edit loop markers + SFZ zone selection +
 per-zone inspector all wired (see features.md).  Remaining slice:
 
-- [ ] **Out-of-scope V1 items revisited** (per the original PLAN's
-  "deliberately deferred" list): multi-mic / multi-position blends
-  in SFZ, `.flac` / `.aiff` formats, `.sf2` parsing, disk streaming
-  for huge banks, sample recording from the audio input.
+- [ ] **Multi-mic / multi-position SFZ blends** — V1 SFZ honours
+  one sample per region; multi-mic packs (close / room / ambient)
+  need a blend-position knob + opcode parsing.  Medium scope.
+- [ ] **`.sf2` SoundFont parsing** — entire format
+  implementation; large.
+- [ ] **Disk streaming for huge banks** — architectural change;
+  V1 fits everything in memory which caps usable bank size.
+
+(`.flac` / `.aiff` decoding + sample recording from the audio
+input shipped — see features.md.  Sample recording captures the
+master-output tap, mirroring the AmenSampler's REC→CHOP idiom.)
 
 ## FX — still open
 
@@ -44,12 +50,9 @@ per-zone inspector all wired (see features.md).  Remaining slice:
   shipped `StereoVectorscope` covers the goniometer use case;
   fading-polyline depth is pure eye-candy and can come back if
   visual demand surfaces.
-- [-] **Spectral gate — true STFT version** — V1 ships an 8-band
-  parallel-BPF approximation (per-band envelope + gate, subtractive
-  recombination).  The textbook STFT version is deferred until FFT
-  machinery lands in the codebase.
-
-(Shimmer mode on `FxConvReverb` shipped — see `features.md`.)
+(Shimmer mode on `FxConvReverb` + Spectral gate STFT version both
+shipped — see `features.md`.  V1 BPF stays the default for the
+spectral gate; toggle on the panel switches modes.)
 
 ## Integration — open
 

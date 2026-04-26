@@ -4,6 +4,75 @@ A detailed log of what's built.
 
 ---
 
+### SampleInstrument — REC button (master-output capture)
+
+V2 SampleInstrument follow-up.  Mirrors the AmenSampler's REC→CHOP
+button: freezes the shared master-output ring buffer (the same
+`granular_tap` the AmenSampler and granular CAPTURE buttons read)
+and hands the captured material to the SampleInstrument as the
+loaded source.
+
+- New REC button next to LOAD on the SampleInstrument panel.
+- Auto-detect-root runs on the captured material — same path the
+  disk-load takes — so the instrument tunes itself to the
+  recording.  Confidence threshold 0.5 prevents noise from
+  mis-tuning the root note.
+- Synthetic `«rec»` path label so the API-poll auto-reload
+  doesn't try to re-read from disk.
+- Captured-buffer mode replaces SFZ regions cleanly; UI region
+  cache + selection are cleared so the previous bank's
+  metadata doesn't bleed through.
+- In-memory only — no file written.
+
+### SampleInstrument — `.flac` / `.aiff` format support
+
+V2 SampleInstrument follow-up.  V1 only handled `.wav`; this
+expands the accepted file types to FLAC and AIFF/AIFC.
+
+- New `audio::audio_load::load_audio_to_engine(path)` dispatches by
+  extension to the appropriate decoder, downmixes to mono,
+  resamples to the engine rate.
+- FLAC via `claxon` (pure Rust, no native deps) — supports any
+  bit depth + channel count + sample rate the format allows.
+- AIFF via a hand-rolled parser in `audio_load` — 16-bit PCM,
+  mono or multichannel (downmixed), big-endian PCM (the standard
+  AIFF interpretation; AIFC compression beyond `NONE`/`sowt` is
+  rejected with a warning).
+- Unified loader replaces `load_wav_to_44100` at the
+  SampleInstrument call sites + the SFZ region loader so
+  `region.sample` references inside `.sfz` packs can target FLAC
+  and AIFF too.
+- File-picker grows the new extensions: `.wav`, `.sfz`, `.flac`,
+  `.aif`, `.aiff`, `.aifc`.
+
+8 new tests cover the AIFF 80-bit IEEE 754 sample-rate decode
+(44100 / 48000 / zero / negative reject), the dispatch routing,
+and a full AIFF round-trip via a synthesised in-memory file.
+
+### Spectral gate — true STFT version
+
+V2 of `FxSpectralGate`.  V1 ships an 8-band parallel-BPF
+approximation; V2 adds a textbook STFT path: windowed FFT →
+per-bin amplitude gate → IFFT → overlap-add.
+
+- New `spec_stft` boolean flag (default false — V1 BPF mode is
+  preserved as the default).  UI toggle on the FxSpectralGate
+  card flips between BPF / STFT.
+- 1024-point Hann-windowed FFT, hop 256 (75 % overlap, COLA-
+  compliant for Hann²).  At 48 kHz this gives ~47 Hz/bin and
+  ~16 ms latency.
+- Per-bin gate envelope with frame-rate attack (~5 ms) and
+  user-controlled release (10–2000 ms).  Tilt knob skews the
+  threshold across the bin range — same gentle ±2× shape as the
+  BPF path so the knob feel is consistent across modes.
+- Allocation-free in the audio callback: FFT plans, scratch,
+  Hann window, input/output rings, and per-bin gate state all
+  owned by the struct.
+
+3 new STFT-mode tests cover passthrough at threshold=0, silence
+on quiet-input + high-threshold, and bounded output under
+full drive.
+
 ### CV-sequence visualiser (`CvSeqScope`)
 
 V2 polish — the existing `CvSequencer` panel already shows its 16
