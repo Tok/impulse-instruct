@@ -34,6 +34,7 @@ const VOICE_POOL: &[ModuleKind] = &[
     ModuleKind::GranularTexture,
     ModuleKind::GabberKick,
     ModuleKind::AmenSampler,
+    ModuleKind::FmOpsVoice,
 ];
 
 /// Curated pool of FX modules.  Includes both the cheap-and-cheerful

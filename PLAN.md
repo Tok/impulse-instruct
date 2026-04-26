@@ -8,18 +8,16 @@ This file lists **future work only** — completed items get moved into
 
 ## Next session — kickoff items
 
-One pick queued for the next session (the big one — polyphony
-meter and DJ filter from this queue both shipped, see
-features.md).
+The original three-pick queue is fully shipped (polyphony
+meter, DJ filter, FM operator synth — see features.md).
+Pick the next session's work from the wishlist sections
+below.
 
-- [ ] **FM operator synth** (voices wishlist) — biggest visible
-  new feature.  4-op DX7-flavoured voice plugs the gap between
-  the existing AN1X (subtractive) and SAMPLER+ (samples) for
-  bell / E-piano / FM-bass tones.  Real DSP build — phase
-  modulation chain + ADSR per op + algorithm selector.
-
-The wishlist + remaining sections below carry the rest of the
-unshipped roadmap.
+Rough size guide: **DJ-style 3-band kill EQ** is the next
+small/quick win; **multiband compressor** is the biggest
+unshipped FX.  Voice-side, the additive synth and the modal /
+struck physical model both fill distinct gaps the FM op
+voice doesn't cover.
 
 ---
 
@@ -97,9 +95,6 @@ The 9 main stages are shipped (see features.md).  Remaining slices:
 
 Modules that would plug a real gap in the current voice palette.
 
-- [ ] **FM operator synth** (DX7-style 4- or 6-op).  Closest gap to
-  the existing AN1X subtractive — DX-flavoured bell / E-piano /
-  bass tones don't reproduce well from the current stack.
 - [ ] **Additive synth** with per-harmonic level sliders.  Distinct
   from wavetable: the user draws the spectrum directly instead of
   scanning frames.

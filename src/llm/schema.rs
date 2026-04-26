@@ -23,6 +23,22 @@ pub fn param_json_schema() -> serde_json::Value {
         "items": { "type": "integer", "minimum": 0, "maximum": 3 },
         "maxItems": 64
     });
+    // Per-FM-op parameter block — reused across the 4 ops on the
+    // FM operator synth.  Six knobs per op (ratio + level + ADSR);
+    // each maps 0..1 like every other voice's ADSR knobs.
+    let fm_op_schema = serde_json::json!({
+        "type": "object",
+        "description": "One of the four FM operator slots.  In modulator role: `level` is the modulation index (brighter = more partials).  In carrier role: `level` is audio gain.",
+        "properties": {
+            "ratio":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Frequency ratio knob 0..1 → log-mapped 0.5..8× the played note (0.5 on the knob = unison)" },
+            "level":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Mod index for modulators, audio gain for carriers" },
+            "attack":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "decay":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "sustain": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "release": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        },
+        "additionalProperties": false
+    });
     serde_json::json!({
         "$schema": "http://json-schema.org/draft-07/schema",
         "type": "object",
@@ -261,6 +277,24 @@ pub fn param_json_schema() -> serde_json::Value {
                     "mellotron_flutter":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Mellotron flutter depth.  0 = inaudible wobble; 1 = vintage-tape warble (±~40 cents at LFO peak).  Only audible when `mellotron_mode` is true." },
                     "sample_steps":        bool_array,
                     "sample_notes":        { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per sample-instrument step" }
+                },
+                "additionalProperties": false
+            },
+            "fm_ops": {
+                "type": "object",
+                "description": "FM operator synth — 4-op DX7-flavoured voice.  LLM triggers: 'add a DX7 bell', 'FM bass', 'electric piano', 'FM lead', 'metallic stab'.  Per-op envelopes shape the modulator over time (slow modulator decay = bright→mellow bell), so always set per-op ADSR rather than relying on a single global envelope.",
+                "properties": {
+                    "enabled":   { "type": "boolean" },
+                    "volume":    { "type": "number", "minimum": 0.0, "maximum": 1.5 },
+                    "pan":       { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+                    "algorithm": { "type": "integer", "minimum": 0, "maximum": 3, "description": "Operator routing: 0=stack 4→3→2→1 (rich harmonic FM bass/lead), 1=multimod 4→1+3→1+2→1 (bell/mallet), 2=parallel pairs 4→3 + 2→1 (layered tones), 3=additive (organ/Hammond, no FM)" },
+                    "feedback":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Op-4 self-feedback — adds saw-like spectral richness to FM bells; at extreme settings op 4 self-oscillates into noise" },
+                    "op1": fm_op_schema.clone(),
+                    "op2": fm_op_schema.clone(),
+                    "op3": fm_op_schema.clone(),
+                    "op4": fm_op_schema.clone(),
+                    "fm_ops_steps": bool_array,
+                    "fm_ops_notes": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per FM-ops step" }
                 },
                 "additionalProperties": false
             },

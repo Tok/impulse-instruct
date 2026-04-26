@@ -38,6 +38,9 @@ pub use theremin::ThereminState;
 pub mod pendulum;
 pub use pendulum::PendulumState;
 
+pub mod fm_ops;
+pub use fm_ops::{FM_ALGORITHM_COUNT, FmOp, FmOpsState};
+
 pub mod granular;
 pub use granular::GranularState;
 
@@ -247,6 +250,8 @@ pub struct AppState {
     #[serde(default)]
     pub pendulum: PendulumState,
     #[serde(default)]
+    pub fm_ops: FmOpsState,
+    #[serde(default)]
     pub granular: GranularState,
     #[serde(default)]
     pub hoover: HooverState,
@@ -401,6 +406,7 @@ impl Default for AppState {
             noise_voice: Default::default(),
             theremin: Default::default(),
             pendulum: Default::default(),
+            fm_ops: Default::default(),
             granular: Default::default(),
             hoover: Default::default(),
             pluck: Default::default(),

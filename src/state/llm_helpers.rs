@@ -573,6 +573,106 @@ pub(super) fn apply_sample_instrument_update(
     }
 }
 
+/// Apply per-op fields for one FM operator.  Called four times by
+/// `apply_fm_ops_update` with the JSON sub-object for each op.
+fn apply_fm_op(
+    op: &mut crate::state::FmOp,
+    obj: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+    op_path: &str, // e.g. "fm_ops.op1"
+) {
+    op.ratio = unlocked_f32(op.ratio, obj, "ratio", &format!("{op_path}.ratio"), locked);
+    op.level = unlocked_f32(op.level, obj, "level", &format!("{op_path}.level"), locked);
+    op.attack = unlocked_f32(
+        op.attack,
+        obj,
+        "attack",
+        &format!("{op_path}.attack"),
+        locked,
+    );
+    op.decay = unlocked_f32(op.decay, obj, "decay", &format!("{op_path}.decay"), locked);
+    op.sustain = unlocked_f32(
+        op.sustain,
+        obj,
+        "sustain",
+        &format!("{op_path}.sustain"),
+        locked,
+    );
+    op.release = unlocked_f32(
+        op.release,
+        obj,
+        "release",
+        &format!("{op_path}.release"),
+        locked,
+    );
+}
+
+/// Apply FM operator synth voice fields from an LLM JSON update
+/// object.  Voice params + per-op params + sequencer pattern.  Per-
+/// op fields nest one level (`fm_ops.op1.ratio`, etc.) so the
+/// schema stays readable instead of being a flat 24-field block.
+pub(super) fn apply_fm_ops_update(
+    s: &mut AppState,
+    f: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("fm_ops.enabled")
+        && let Some(v) = f.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.fm_ops.enabled = v;
+    }
+    s.fm_ops.volume = unlocked_f32_range(
+        s.fm_ops.volume,
+        f,
+        "volume",
+        "fm_ops.volume",
+        locked,
+        0.0,
+        1.5,
+    );
+    if !locked.contains("fm_ops.pan")
+        && let Some(v) = f.get("pan").and_then(|v| v.as_f64())
+    {
+        s.fm_ops.pan = (v as f32).clamp(-1.0, 1.0);
+    }
+    if !locked.contains("fm_ops.algorithm")
+        && let Some(v) = f.get("algorithm").and_then(|v| v.as_u64())
+    {
+        s.fm_ops.algorithm = (v as u8).min(crate::state::FM_ALGORITHM_COUNT - 1);
+    }
+    s.fm_ops.feedback = unlocked_f32(s.fm_ops.feedback, f, "feedback", "fm_ops.feedback", locked);
+    if let Some(o) = f.get("op1").and_then(|v| v.as_object()) {
+        apply_fm_op(&mut s.fm_ops.op1, o, locked, "fm_ops.op1");
+    }
+    if let Some(o) = f.get("op2").and_then(|v| v.as_object()) {
+        apply_fm_op(&mut s.fm_ops.op2, o, locked, "fm_ops.op2");
+    }
+    if let Some(o) = f.get("op3").and_then(|v| v.as_object()) {
+        apply_fm_op(&mut s.fm_ops.op3, o, locked, "fm_ops.op3");
+    }
+    if let Some(o) = f.get("op4").and_then(|v| v.as_object()) {
+        apply_fm_op(&mut s.fm_ops.op4, o, locked, "fm_ops.op4");
+    }
+    if !locked.contains("sequencer.fm_ops_steps")
+        && let Some(arr) = f.get("fm_ops_steps").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(a) = val.as_bool() {
+                s.sequencer.fm_ops_pattern[i].active = a;
+            }
+        }
+    }
+    if !locked.contains("sequencer.fm_ops_notes")
+        && let Some(arr) = f.get("fm_ops_notes").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.fm_ops_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}
+
 /// Apply AN1X voice fields from an LLM JSON update object.
 pub(super) fn apply_an1x_update(
     s: &mut AppState,

@@ -4,6 +4,100 @@ A detailed log of what's built.
 
 ---
 
+### FM operator synth (kickoff #3)
+
+4-op DX7-flavoured voice — closest gap to the existing AN1X
+subtractive.  DX-flavoured bell / E-piano / FM-bass / metallic
+stab tones that don't reproduce from any other voice.
+
+**DSP shape.**  Four sine oscillators, each with its own ADSR
+envelope, a frequency ratio (knob 0..1 → 0.5..8× the played
+note via a log-symmetric `16^(k-0.5)` map so unison sits at
+the 0.5 detent), and an output level.  Per-op envelopes are
+the key to FM character — modulator decays shorter than
+carriers gives the bright→mellow bell tail, etc.  Modulation
+index `FM_INDEX_MAX = 8.0` (4× the standard DX7 unit), enough
+for bell territory without breaking spectra.  2× oversampling
+not needed because the SVF-style integrator pattern doesn't
+apply — phase-modulation is implicitly band-limited by
+`level * env`.
+
+**Algorithms.**  V1 ships four (DX7 has 32 — extending the
+list only requires growing the match arm in
+`audio/dsp/fm_ops.rs`).  Picked to span the most common shapes:
+
+- **0 — Stack**: 4→3→2→1.  Op 1 is the only carrier.  Rich
+  harmonic cascade — the FM-bass / FM-lead workhorse.
+- **1 — Multimod**: 4→1, 3→1, 2→1.  Op 1 is the carrier
+  with three parallel modulators.  Bell / mallet timbres.
+- **2 — Parallel pairs**: 4→3, 2→1.  Two stacks summed —
+  ops 1 and 3 both carriers, each with one modulator.
+  Layered two-tone patches.
+- **3 — Additive**: all four ops are carriers, no FM.  Pure
+  sine stack — organ / Hammond / clean leads.
+
+Feedback applies to op 4 (the topmost modulator on chain
+algorithms) — adds saw-like spectral richness; at extreme
+settings op 4 self-oscillates into noise.
+
+**Sequencer integration.**  Full sequencer lane mirroring
+the Pluck / Wavetable / Sample lanes — `fm_ops_pattern: Vec<TB303Step>`,
+`fm_ops_steps: usize`, `FmOpsTrigger` / `FmOpsGateOff` events,
+`gate_counter_fm_ops` in `ClockState`, `rack_fm_ops` derived
+flag in `AudioParams`, dispatch arm in `trigger_handler.rs`.
+The voice plays from the sequencer like every other melodic
+voice — drop the module in the rack and dial steps.
+
+**State + LLM.**  `FmOpsState` with 4 nested `FmOp` sub-structs
+(ratio + level + ADSR each).  29 fields total.  Defaults: 2-op
+stack — op 1 carrier full, op 2 modulator 0.5, ops 3-4 silent.
+`apply_llm_update` accepts nested per-op JSON
+(`fm_ops.op1.ratio`, etc.) for readable schema; algorithm
+clamps to valid range; locks honoured per field.  Schema entry
+prompts the LLM to reach for FM ops on bell / E-piano / FM
+bass / lead requests.
+
+**UI.**  6×5 panel.  Header row: ON/OFF + 4 algorithm chips
+(routing diagrams as labels: `4→3→2→1`, `4,3,2 → 1`,
+`4→3 / 2→1`, `1+2+3+4`) + VOLUME / PAN / FEEDBACK.  Then four
+op rows, each glass-grouped: OP-N label + RATIO (φ-bigger) +
+LEVEL (φ-bigger) + ATTACK / DECAY / SUSTAIN / RELEASE.  Per-
+op grouping makes the four ops read as distinct units.
+
+**Tests.**  15 new — DSP-side: silent-before-trigger,
+silent-when-disabled, audible-after-trigger, additive-sums,
+release-eventually-silences, bounded-under-stress.  State-
+side: defaults, apply (global + per-op), lock honouring,
+algorithm clamp, sequencer-lane plumbing, label, alias
+parsing, audio-output / Voice zone.  Full suite **1938 → 1953**.
+
+Files: new `src/state/fm_ops.rs` (state),
+`src/audio/dsp/fm_ops.rs` (DSP), `src/ui/panels/fm_ops.rs`
+(UI), `src/tests/fm_ops_tests.rs` (state tests).  Edits
+across `src/state/mod.rs` (AppState),
+`src/state/sequencer_state.rs` (lane fields + defaults),
+`src/state/module_kind.rs` (variant + 5 exhaustive matches),
+`src/state/modulation.rs` (mod_inputs),
+`src/state/rack.rs` (arrange order + zone matchset),
+`src/state/rack_random.rs` (voice pool),
+`src/state/rack_scope.rs` (label / parse / kind_matches),
+`src/state/rack_wiring.rs` (sequencer-cabled voices),
+`src/state/llm_helpers.rs` (apply helper),
+`src/state/llm_apply.rs` (apply dispatch),
+`src/sequencer/mod.rs` (TriggerEvent + emit + gate counter),
+`src/audio/dsp/mod.rs` (DspState wiring),
+`src/audio/dsp/params.rs` + `params_from.rs` (29 fields +
+`rack_fm_ops`), `src/audio/dsp/process_block.rs` (per-frame
+mix + sends + master pan), `src/audio/dsp/trigger_handler.rs`
+(trigger dispatch), `src/llm/schema.rs` (schema +
+`fm_op_schema` reusable),
+`src/ui/rack_content.rs` (voice dispatch),
+`src/ui/module_card.rs` (title_fill).  Roughly 22 files
+touched — close to the wrap-up memory's "23-file Voice-add
+ritual" estimate.
+
+---
+
 ### DJ filter (kickoff #2)
 
 Single-knob morph FX from the FX wishlist — sweep one

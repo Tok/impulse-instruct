@@ -187,6 +187,21 @@ impl DspState {
                     self.sample_instrument.gate_off();
                 }
             }
+            FmOpsTrigger {
+                note,
+                accent,
+                slide: _,
+            } => {
+                if self.params.rack_fm_ops {
+                    let freq = super::midi_to_hz_tuned(*note, self.params.tuning);
+                    self.fm_ops.trigger(freq, *accent);
+                }
+            }
+            FmOpsGateOff => {
+                if self.params.rack_fm_ops {
+                    self.fm_ops.gate_off();
+                }
+            }
         }
     }
 }

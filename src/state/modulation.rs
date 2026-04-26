@@ -42,6 +42,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // routes LFOs to base_pitch / detune / mix from the back
         // panel without dedicated fixed jacks.
         Pendulum => &[Selector, Selector, Selector],
+        // FM operator synth: 24+ per-op knobs is far too many for
+        // dedicated jacks — selectors let the user route LFOs to
+        // any combination of op level / ratio / ADSR fields.
+        FmOpsVoice => &[Selector, Selector, Selector],
         // ── Voices without a single pan (multi-voice kits / pan-less) ─────
         DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
             &[Selector, Selector, Selector]

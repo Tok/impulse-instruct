@@ -4,6 +4,7 @@ pub mod an1x;
 pub mod bass303;
 pub mod conv_reverb;
 mod dsp_util;
+pub mod fm_ops;
 pub mod formant_shifter;
 pub mod fx;
 pub mod fx_djfilter;
@@ -36,6 +37,7 @@ use bass303::Bass303;
 use conv_reverb::ConvReverb;
 use dsp_util::*;
 pub use dsp_util::{TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_tuned};
+use fm_ops::FmOpsVoice;
 use fx::*;
 use fx_djfilter::DjFilter;
 use fx_extras::*;
@@ -138,6 +140,7 @@ pub struct DspState {
     noise_voice: NoiseVoice,
     theremin: ThereminVoice,
     pendulum: PendulumVoice,
+    fm_ops: FmOpsVoice,
     granular: GranularVoice,
     hoover: HooverVoice,
     pluck: PluckVoice,
@@ -285,6 +288,7 @@ impl DspState {
             noise_voice: NoiseVoice::new(0x4015_EB3D),
             theremin: ThereminVoice::new(),
             pendulum: PendulumVoice::new(),
+            fm_ops: FmOpsVoice::new(),
             granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
             pluck: PluckVoice::new(),

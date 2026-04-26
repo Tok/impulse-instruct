@@ -25,6 +25,7 @@ mod dsp_voice_primitives_tests;
 mod enum_method_tests;
 mod event_stream_heatmap_tests;
 mod few_shot_tests;
+mod fm_ops_tests;
 mod formant_shifter_tests;
 mod fx_djfilter_tests;
 mod fx_freq_shift_tests;

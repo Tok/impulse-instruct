@@ -280,6 +280,7 @@ impl RackState {
                 | ModuleKind::NoiseVoice
                 | ModuleKind::Theremin
                 | ModuleKind::Pendulum
+                | ModuleKind::FmOpsVoice
                 | ModuleKind::An1xVoice
                 | ModuleKind::NeuTts
                 | ModuleKind::FxReverb
@@ -483,6 +484,11 @@ impl RackState {
                 // Pendulum same family — drone voice with no
                 // sequencer trigger, knob-driven beat character.
                 ModuleKind::Pendulum => 17,
+                // FM operator synth — sequencer-driven voice, sits
+                // with the synthesised voices (between AcidBass and
+                // HooverLead range).  Bell / FM-bass / E-piano
+                // territory complements the AN1X subtractive bank.
+                ModuleKind::FmOpsVoice => 13,
                 ModuleKind::GranularTexture => 18,
                 ModuleKind::NeuTts => 19,
                 ModuleKind::FxWaveshaper => 20,

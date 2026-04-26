@@ -34,6 +34,11 @@ pub enum ModuleKind {
     /// acoustically.  Absurd-queue voice; no sequencer hookup,
     /// drone voice driven by knobs (base pitch + detune Hz).
     Pendulum,
+    /// FM operator synth — 4-op DX7-flavoured voice.  Sequencer-
+    /// driven (unlike Theremin / Pendulum which are knob-played).
+    /// Plugs the bell / E-piano / FM-bass gap that the existing
+    /// AN1X subtractive voice and SAMPLER+ recordings can't fill.
+    FmOpsVoice,
     GranularTexture,
     /// Dedicated hardcore-style kick voice — distinct from the 808/909 kicks.
     GabberKick,
@@ -179,6 +184,7 @@ impl ModuleKind {
             Self::NoiseVoice => "NOISE",
             Self::Theremin => "THEREMIN",
             Self::Pendulum => "PENDULUM",
+            Self::FmOpsVoice => "FM OPS",
             Self::GranularTexture => "GRANULAR",
             Self::GabberKick => "GABBER KICK",
             Self::NeuTts => "TTS VOICE",
@@ -283,6 +289,11 @@ impl ModuleKind {
             // MIX / VOL / PAN), bottom row carries the live beat-rate
             // readout label.
             Self::Pendulum => (3, 2),
+            // FM operator synth — header row + 4 op rows (each with
+            // 6 knobs: RATIO / LEVEL / ATTACK / DECAY / SUSTAIN /
+            // RELEASE).  6 cols wide gives the per-op rows breathing
+            // room; 5 rows tall fits header + 4 ops.
+            Self::FmOpsVoice => (6, 5),
             Self::GranularTexture => (3, 2),
             Self::GabberKick => (3, 2),
             Self::LlmAgent => (3, 2),
@@ -395,6 +406,7 @@ impl ModuleKind {
             | Self::NoiseVoice
             | Self::Theremin
             | Self::Pendulum
+            | Self::FmOpsVoice
             | Self::GranularTexture
             | Self::NeuTts
             | Self::GabberKick => Zone::Voice,
@@ -468,6 +480,7 @@ impl ModuleKind {
                 | Self::NoiseVoice
                 | Self::Theremin
                 | Self::Pendulum
+                | Self::FmOpsVoice
                 | Self::An1xVoice
                 | Self::NeuTts
                 | Self::FxReverb
