@@ -1,169 +1,120 @@
-# Impulse Instruct — Roadmap
+## Impulse Instruct — Roadmap
 
 What's already built lives in [docs/features.md](docs/features.md).
-This file lists **future work only** — completed items get moved into
-`features.md` as they ship.
+This file is future work only — items move to features.md as they
+ship, not held here as history.
 
 ---
 
-## Next session — kickoff queue
+## Next session — complete the FX / viz / modulation surface
 
-Spectral gate STFT shipped this session (V1 BPF still the default,
-toggle on the panel).  SampleInstrument V2 made progress on three
-fronts: `.flac` / `.aiff` decode, REC-from-master-output button,
-and the unified `load_audio_to_engine` loader (also used by the SFZ
-region path so multi-format `.sfz` packs work).  Remaining:
+Concrete additions to fill genuine gaps in the current inventory.
+Pick from the top down; each row is one focused commit.
 
-1. **Demo recording — pick one scene**.  Multiple scenarios queued
-   (acid re-record, MC singer, preecho, LFO assignment, parameter
-   ramp, event stream, D&B re-record).  All are non-coding — just
-   capturing audio against the existing scene scripts.
+### FX — new modules
+
+- [ ] **Plate reverb** (`FxPlate`) — algorithmic plate emulation
+  (Dattorro-style allpass network), distinct from the Schroeder
+  comb stack `FxReverb` and the IR-driven `FxConvReverb`.  Vintage
+  studio character (early reflections from a metal plate's
+  diffusion); fills the "I want a plate" gap.
+- [ ] **Trance gate** (`FxTranceGate`) — 16-step pattern-driven
+  gate.  Distinct from the envelope-driven `FxGate`: this one
+  toggles wet/dry on a step grid synced to the sequencer clock.
+  Rhythmic chopping for pads / drones, no LFO involvement.
+- [ ] **Wavefolder** (`FxWaveFolder`) — West Coast fold
+  distortion.  Sine input → multiple harmonics by reflecting the
+  signal back when it crosses ±threshold.  Distinct character
+  from the clip / drive / saturation / waveshaper bank already
+  in place.
+
+### Visualizations — new modules
+
+- [ ] **Voice meter strip** (`VoiceMeterStrip`) — one mini-meter
+  per active voice in the rack.  Currently no way to see "which
+  voice is contributing what" at a glance; LUFS + stereo meter
+  show the sum only.
+- [ ] **Gain reduction history** (`GrHistory`) — rolling 4-bar
+  view of the gain reduction signal from the dynamics modules
+  (FxCompressor, FxLimiter, FxMultibandComp).  Currently those
+  modules expose no visual feedback.
+
+### Modulation — new utilities
+
+- [ ] **Function generator** (`FunctionGen`) — re-triggerable
+  AD/AR envelope with curve shaping (linear / log / exp).
+  Maths-style: gate-in → envelope-out.  Different from `LfoModule`
+  (free-running) and `CvSequencer` (step-table); fills the
+  "transient envelope" gap for drum sounds / plucks.
+- [ ] **Trigger divider** (`TriggerDiv`) — clock divider with
+  configurable ratio (/2, /3, /4, /5, /7).  Fires output gate
+  every N input gates.  Enables polyrhythmic patches without
+  changing pattern length.
+- [ ] **Logic gate** (`LogicGate`) — AND / OR / XOR over two gate
+  inputs.  Combinator for euclidean patches; pairs with
+  TriggerDiv for layered rhythmic logic.
+- [ ] **Crossfader** (`Crossfader`) — single-knob A/B blend
+  between two CV sources.  Mix knob = 0 → A only; 1 → B only.
+  More direct than Math's Blend mode for the common A/B case.
+
+### SF2 follow-up
+
+- [ ] **Modulator / LFO generators**.  Volume envelope + filter
+  shipped.  Remaining: modulation envelope (modEnvToPitch /
+  modEnvToFilterFc), modulation LFO (modLfoToPitch /
+  modLfoToFilterFc / modLfoToVolume), vibrato LFO
+  (vibLfoToPitch).
+- [ ] **Sample modes** — one-shot / loop continuous / loop until
+  release.  Tied to the `sampleModes` (54) generator + the SfzRegion
+  loop fields the parser already populates.
 
 ---
 
-## SampleInstrument V2 — outstanding follow-ups
+## Refactor pass (after the FX / viz / module batch)
 
-The 9 main stages are shipped (see features.md).  Stage 7.5 also
-shipped — drag-to-edit loop markers + SFZ zone selection +
-per-zone inspector all wired (see features.md).  Remaining slice:
+Targeted, pre-emptive — only act when a file is within ~50 lines
+of the 1000-cap or when a duplicated helper has 3+ copies.  Skip
+the speculative reorgs.
 
-- [ ] **`.sf2` — modulator / LFO generators + sample modes**.
-  Volume envelope + filter shipped.  Remaining: modulation
-  envelope (modEnvToPitch / modEnvToFilterFc), modulation LFO
-  (modLfoToPitch / modLfoToFilterFc / modLfoToVolume), vibrato
-  LFO (vibLfoToPitch), sample modes (one-shot / loop continuous
-  / loop until release), generator-to-target modulators.
-- [ ] **Disk streaming for huge banks** — architectural change;
-  V1 fits everything in memory which caps usable bank size.
+- [ ] **Top files near cap** — check after this session's adds:
+  `state/transitions.rs`, `audio/dsp/params.rs`, `llm/lanes.rs`,
+  `sequencer/mod.rs`, `ui/rack_content_fx_extras.rs`,
+  `audio/analysis.rs`, `llm/mod.rs`.  Split sibling-style only
+  when an actual edit pushes one over.
+- [ ] **Shared `resample_mono`** — `audio/audio_load.rs` and
+  `audio/sf2_loader.rs` both carry near-identical linear-interp
+  resamplers.  Lift into a shared helper once a third caller
+  appears (or fold both into `audio/audio_load.rs` if the SF2
+  loader can re-export).
+- [ ] **Glass group helpers** — re-evaluate.  Previous note said
+  "the inline pattern varies too much"; with more panels in
+  place, the shared cases may have stabilised.
 
-(SF2 V1 parsing + preset picker + envelope + filter generators,
-`.flac` / `.aiff` decoding, sample recording from the audio
-input, multi-mic / multi-position SFZ blends, and per-region
-ADSR + filter overrides all shipped — see features.md.)
-
-## FX — still open
-
-- [-] **Phase correlation strip (`CorrMeter`)** — *not separately
-  shipped*; the existing `StereoMeter` already shows correlation +
-  L/R balance as a horizontal strip, which covers the same use
-  case more comprehensively.  Re-open if a slimmed-down
-  correlation-only variant becomes necessary.
-- [-] **Lissajous-3D / oscilloscope-3D depth** — *deferred*.  The
-  shipped `StereoVectorscope` covers the goniometer use case;
-  fading-polyline depth is pure eye-candy and can come back if
-  visual demand surfaces.
-(Shimmer mode on `FxConvReverb` + Spectral gate STFT version both
-shipped — see `features.md`.  V1 BPF stays the default for the
-spectral gate; toggle on the panel switches modes.)
-
-## Integration — open
-
-(Continuous Link bar-phase drift correction shipped — see
-features.md.  No remaining items in this section.)
+---
 
 ## Intelligence
 
-- [ ] **Test additional LLM models** — evaluate
-  DeepSeek-R1-Distill-Qwen-7B / 14B and Qwen3-8B / 14B for JSON
-  accuracy and music theory.  Gemma 4 26B-A4B is now downloadable
-  (three quants); needs a head-to-head vs. E4B on the style + bass
-  + theory suites.
+- [ ] **Test additional LLM models** — DeepSeek-R1-Distill-Qwen
+  (7B / 14B), Qwen3 (8B / 14B), Gemma 4 26B-A4B (three quants
+  available).  Head-to-head vs Gemma 4 E4B on the style + bass +
+  theory suites.
 
-## Refactoring
+---
 
-- [ ] **Glass group helpers** — `glass_label(ui, text)` still to do
-  (the inline pattern varies too much across panels for a single
-  helper).
-- [ ] **Large-file watch list** (none over the 1000-line cap;
-  just noting the largest ones in case a future change pushes
-  one over).  Top after the wishlist-marathon session:
-  `src/state/rack.rs` (988),
-  `src/tests/dsp_fx_tests.rs` (966),
-  `src/llm/lanes.rs` (962),
-  `src/ui/rack_content_fx_extras.rs` (961),
-  `src/ui/rack_content.rs` (955),
-  `src/sequencer/mod.rs` (945),
-  `src/ui/panels/sequencer.rs` (944),
-  `src/audio/dsp/params.rs` (937),
-  `src/state/transitions.rs` (925),
-  `src/audio/analysis.rs` (924),
-  `src/llm/mod.rs` (921),
-  `src/state/fx.rs` (895),
-  `src/audio/mod.rs` (895),
-  `src/state/module_kind.rs` (893).
-  This session's splits: `fx.rs` → `fx_defaults.rs`, `params.rs`
-  → `lfo_target_opcode.rs` + `mod_compile.rs`,
-  `rack_content_fx_extras.rs` → `rack_content_fx_lfo.rs`.  Adding
-  another voice or a new modulator with knob-heavy state will
-  need another split — `rack.rs` is the closest to the cap (988).
+## Demo recording (non-coding, audio capture)
 
-## Voices — wishlist
-
-All previously-listed voice gaps have shipped (FM ops, additive,
-modal, chiptune, vocal — see features.md).  Re-open here if a new
-gap turns up.
-
-## FX — wishlist
-
-All previously-listed FX wishlist items have shipped (tremolo,
-vibrato, ISO EQ, de-esser, resonator bank, tape echo, multiband
-compressor, grain delay, spectral gate — see features.md).  V2
-follow-ups carried per-feature in features.md:
-- `FxSpectralGate` ships as an 8-band parallel-BPF approximation;
-  the textbook STFT version is deferred until FFT machinery lands.
-- Shimmer mode on `FxConvReverb` remains deferred.
-
-## Visualizations — wishlist
-
-(CV sequence visualiser, GRAN pitch-tracking trigger mode, and AI
-patch morph UI dialog all shipped — see `features.md`.)
-
-## Modulation — wishlist
-
-All previously-listed modulation utilities have shipped (CV
-sequencer, Slew, Quantizer, Comparator, Sample-and-hold, Math).
-The CV cable-routing infrastructure (`cv_buf` + per-utility
-compile passes) was built up in Phase 1; each utility now
-participates in the full graph — sources can chain through
-utilities to drive any synth/FX param.
-
-## Absurd / unusual — all shipped
-
-Eurorack patch generator, Theremin, Mellotron mode, AI patch
-morph, Pendulum, Vinyl/cassette FX, bird-song corpus, MIDI
-granuliser — all V1-shipped (see features.md).  Deferred V2
-follow-ups carried in the per-feature sections of features.md;
-re-open here if any of them grow legs.
-
-## Deferred V2 follow-ups (from the absurd-queue ship)
-
-(All shipped — MIDI granuliser file-to-file, Vinyl FX start/stop
-transient, AI patch morph UI dialog, and GRAN pitch-tracking
-trigger mode all landed.  See `features.md`.)
-
-## Demo recording
-
-- [ ] **Next acid demo re-record** — showcase the **two bass voices**
-  (V1 + V2 playing complementary lines), plus FX routes that last
-  session's demo didn't cover (delay / phaser / chorus / ringmod).
-  Use the bigger NeuTTS quant for the MC / vocal line.  **Bonsai
-  references removed** from the demo script (module no longer in
-  the codebase).
-- [ ] **`demo/scenarios/setup-mc-singer.sh`** — Jungle MC + TTS
-  Singer through autotune.  Non-deterministic, 100 % agent-controlled.
-- [ ] **Preecho demo scene** — agent writes anchors into a drum
-  pattern and you hear the build-up ramp into each downbeat.
-- [ ] **LFO assignment scene** — agent schedules filter sweep via
-  the per-voice bass LFO.
-- [ ] **Parameter ramp scene** — gradual cutoff sweep over bars.
-- [ ] **Event stream scene** — Huth-coloured note history scrolling
-  in real time, with the new past-side log preserving past notes.
-- [ ] **Re-record the D&B demo** — amen + reese + drone pad + MC
-  scenario is ready; waiting on a clean recording run.
+- [ ] Acid demo re-record — two bass voices + delay/phaser/chorus/
+  ringmod, bigger NeuTTS quant for the MC line.
+- [ ] `setup-mc-singer.sh` — Jungle MC + TTS Singer through autotune.
+- [ ] Preecho — agent writes drum anchors, build-up audible.
+- [ ] LFO assignment — agent schedules filter sweep via per-voice
+  bass LFO.
+- [ ] Parameter ramp — gradual cutoff sweep across bars.
+- [ ] Event stream — Huth-coloured note history scrolling live.
+- [ ] D&B re-record — amen + reese + drone pad + MC.
 
 ---
 
 ## Known issues
 
-(None currently — the long-standing Hoover-tuning issue shipped
-this session; see `features.md` for what changed.)
+None.
