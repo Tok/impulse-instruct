@@ -295,6 +295,11 @@ pub struct ImpulseApp {
     /// distinguish "user edited bpm" (push to network) from "network
     /// pulled the bpm" (don't push, would create a feedback loop).
     pub(crate) last_link_bpm: f32,
+    /// Wall-clock instant of the last drift re-snap (or session
+    /// start as a sentinel).  Rate-limits the continuous drift
+    /// correction so a thrashing source can't cause a re-snap on
+    /// every UI tick.  None until the first drift check fires.
+    pub(crate) last_link_drift_resnap: Option<std::time::Instant>,
     /// Min/max waveform thumbnail for the SampleInstrument's loaded
     /// single-WAV buffer.  Cached on path so the per-frame paint just
     /// reads the vec.  Empty / stale-path → rebuilt on next paint.
@@ -523,6 +528,7 @@ impl ImpulseApp {
             sample_wave_cache: (String::new(), Vec::new()),
             link_sync: crate::sync::LinkSync::new(120.0),
             last_link_bpm: 0.0,
+            last_link_drift_resnap: None,
             neutts_online: false,
             granular_capture_rx: audio.granular_capture_rx,
             granular_tap: vec![0.0; crate::audio::SAMPLE_RATE_HZ as usize * 3], // 3s ring buffer

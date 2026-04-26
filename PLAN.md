@@ -53,11 +53,8 @@ slice:
 
 ## Integration — open
 
-- [ ] **Continuous Link bar-phase drift correction**.  V2 added
-  bar-phase snap on the off→on transition (see features.md);
-  long-running drift correction during a session is still open —
-  needs a tolerance window and re-snap policy that doesn't
-  disturb a stable performance.
+(Continuous Link bar-phase drift correction shipped — see
+features.md.  No remaining items in this section.)
 
 ## Intelligence
 

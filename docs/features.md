@@ -4,6 +4,59 @@ A detailed log of what's built.
 
 ---
 
+### Continuous Link bar-phase drift correction (V2.1)
+
+V2 shipped the off→on bar-phase snap.  Even after that initial
+snap, the local clock can drift from the network across a long
+session — audio scheduling jitter, paused transports,
+fine-grained phase adjustments Link makes that pure BPM
+tracking misses.  V2.1 closes the loop with a continuous
+re-snap pass.
+
+**Policy.**  Pure helper `drift_resnap_target(local_bar_step,
+expected_bar_step, bar_steps, tolerance, since_last_resnap,
+min_interval)` returns `Some(target_step)` when the caller
+should re-snap.  Two thresholds:
+
+- **Tolerance** (`DRIFT_TOLERANCE_STEPS = 1`): drift of one
+  step at the current grid is below the audible-jitter floor;
+  ignored to prevent perpetual chasing on noisy sources.
+- **Rate limit** (`DRIFT_CHECK_INTERVAL = 1 s`): consecutive
+  re-snaps are spaced at least a second apart so a thrashing
+  network can't cause the sequencer to glitch on every UI
+  tick.  Catastrophic drift (more than `bar_steps / 4`)
+  bypasses the rate limit because something dramatic
+  happened (paused transport, late-joining peer with a
+  wildly different clock).
+
+Drift is computed with a shortest-path metric on the circular
+bar — drifting forward 14 steps and backward 2 steps both
+collapse to "off by 2," so the helper picks the cheaper
+correction.
+
+**Wiring.**  `tick_link_drift_correction` in `link_handler.rs`
+runs every UI tick when Link is enabled and the sequencer is
+running (no point chasing phase while the transport's
+stopped — the local step is frozen and would always look
+drifted).  Snapshots `current_step` + `step_division` from
+`AppState`, asks the network for its phase, calls the pure
+helper, and pushes `AudioCommand::SnapClock { step }` when
+told to.  The off→on snap path is unchanged; it now stamps
+`last_link_drift_resnap` so the drift loop doesn't double-
+snap on the very next tick.
+
+**Tests.**  7 new for the pure helper covering: zero drift,
+drift at exact tolerance, moderate drift past tolerance,
+moderate drift suppressed by rate limit, catastrophic drift
+bypassing rate limit, shortest-path wrap-around, first-ever
+check has no rate limit, defensive zero-bar-steps no-panic.
+Full suite **1955 → 1962**.
+
+Files: `src/ui/link_handler.rs` (helper + dispatch + tests),
+`src/ui/mod.rs` (`last_link_drift_resnap` field + default).
+
+---
+
 ### SampleInstrument V2 — Stage 7.5: drag-to-edit on the viz strip
 
 The visualizer strip was read-only at Stage 7.  Stage 7.5
