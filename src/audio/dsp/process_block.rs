@@ -99,6 +99,56 @@ impl DspState {
             apply_mod_target(&mut p, slot.target, mod_val);
         }
 
+        // ── Slew utility ──────────────────────────────────────────────────────
+        // For each Slew slot: read input from cv_buf at the cable-
+        // resolved source idx, smooth toward it with the slot's
+        // attack/release time constants, write output to
+        // cv_buf[MOD_BUF_SLEW_BASE + i].  The audio thread keeps
+        // a per-slot cached value across blocks so smoothing
+        // continues seamlessly between callbacks.
+        for (i, sp) in p_base.slew.iter().enumerate() {
+            let out_idx = super::params::MOD_BUF_SLEW_BASE + i;
+            if !sp.enabled {
+                // Disabled = passthrough.  Forward the input value
+                // unchanged so cables downstream still see live
+                // modulation.  Reset cached value so re-enabling
+                // doesn't smooth from a stale state.
+                let raw = if sp.cv_in_buf_idx == u8::MAX {
+                    0.0
+                } else {
+                    p.cv_buf[sp.cv_in_buf_idx as usize]
+                };
+                p.cv_buf[out_idx] = raw;
+                self.slew_state[i] = raw;
+                continue;
+            }
+            let target = if sp.cv_in_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[sp.cv_in_buf_idx as usize]
+            };
+            // Knob 0..1 → 0..2 s exponential time constant,
+            // converted to a per-block decay coefficient.  Block
+            // length stays fixed across the call so we can compute
+            // the coefficient once.
+            let block_sec = block_size as f32 / sr;
+            let coef_for = |knob: f32| -> f32 {
+                let t_sec = knob.clamp(0.0, 1.0) * 2.0;
+                if t_sec < 1e-4 {
+                    0.0
+                } else {
+                    (-block_sec / t_sec).exp()
+                }
+            };
+            let coef = if target > self.slew_state[i] {
+                coef_for(sp.attack)
+            } else {
+                coef_for(sp.release)
+            };
+            self.slew_state[i] = target + (self.slew_state[i] - target) * coef;
+            p.cv_buf[out_idx] = self.slew_state[i];
+        }
+
         // ── Apply cable-routed modulation ─────────────────────────────────────
         // All sources have been staged into `cv_buf` by the
         // preceding stages.  Now walk the compiled route list and

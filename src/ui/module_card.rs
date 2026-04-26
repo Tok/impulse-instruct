@@ -116,6 +116,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::OnsetGrid => 20,
         ModuleKind::LfoModule => 18,
         ModuleKind::CvSequencer => 18,
+        ModuleKind::Slew => 18,
         ModuleKind::LlmAgent => 30,
         ModuleKind::LlmConsole => 28,
     };

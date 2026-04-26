@@ -2,107 +2,6 @@
 // AudioParams snapshot — copied from AppState for the audio thread.
 // This module has no side effects; all types are Copy/Clone.
 
-use super::lfo_target_opcode::lfo_target_to_u8;
-use crate::state::{AppState, LfoTarget};
-
-/// Walk the rack's Mod cables and emit a fixed-size array of compiled mod
-/// routes for the audio thread to consume.  Each route resolves the source
-/// LFO module to its slot index (position in the rack's LfoModule order) and
-/// the destination Mod-In jack to its `LfoTarget` (Fixed slot or the user-
-/// picked Selector value).  Routes whose source/target can't be resolved or
-/// whose target is `None` are silently skipped.  The depth defaults to 1.0
-/// (a per-cable depth knob is a future addition).
-pub fn compile_mod_routes(s: &AppState) -> ([ModRouteCopy; MAX_MOD_ROUTES], u8) {
-    use crate::state::{ModInput, ModuleKind, PortKind, mod_inputs};
-    let mut routes = [ModRouteCopy::default(); MAX_MOD_ROUTES];
-    let mut count = 0usize;
-    let lfo_ids: Vec<u32> = s
-        .rack
-        .modules
-        .iter()
-        .filter(|m| m.kind == ModuleKind::LfoModule)
-        .map(|m| m.id)
-        .collect();
-    let cv_seq_ids: Vec<u32> = s
-        .rack
-        .modules
-        .iter()
-        .filter(|m| m.kind == ModuleKind::CvSequencer)
-        .map(|m| m.id)
-        .collect();
-    for cable in &s.rack.cables {
-        if count >= MAX_MOD_ROUTES {
-            break;
-        }
-        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
-            continue;
-        }
-        // Resolve the source — LFO module first, then CV sequencer.
-        // Each kind owns a 4-slot range in `cv_buf`; resolve to a
-        // flat buf index so the audio thread reads the value
-        // without re-checking the source kind.
-        let source_buf_idx: u8 = if let Some(slot_idx) =
-            lfo_ids.iter().position(|id| *id == cable.from.module_id)
-        {
-            if slot_idx >= s.lfo.len() {
-                continue;
-            }
-            (MOD_BUF_LFO_BASE + slot_idx) as u8
-        } else if let Some(slot_idx) = cv_seq_ids.iter().position(|id| *id == cable.from.module_id)
-        {
-            if slot_idx >= crate::state::CV_SEQ_SLOTS {
-                continue;
-            }
-            (MOD_BUF_CV_SEQ_BASE + slot_idx) as u8
-        } else {
-            continue;
-        };
-        let Some(target_module) = s.rack.modules.iter().find(|m| m.id == cable.to.module_id) else {
-            continue;
-        };
-        let inputs = mod_inputs(target_module.kind);
-        let depth_unipolar = target_module
-            .mod_input_depths
-            .get(cable.to.index as usize)
-            .copied()
-            .unwrap_or(1.0)
-            .clamp(0.0, 1.0);
-        let invert = target_module
-            .mod_input_invert
-            .get(cable.to.index as usize)
-            .copied()
-            .unwrap_or(false);
-        let depth = if invert {
-            -depth_unipolar
-        } else {
-            depth_unipolar
-        };
-        // Resolve the slot's effective target list — Fixed = its single
-        // target, Selector = the multi-select Vec the user picked.
-        let targets: &[LfoTarget] = match inputs.get(cable.to.index as usize) {
-            Some(ModInput::Fixed(t)) => std::slice::from_ref(t),
-            Some(ModInput::Selector) => target_module
-                .mod_selectors
-                .get(cable.to.index as usize)
-                .map(|v| v.as_slice())
-                .unwrap_or(&[]),
-            None => continue,
-        };
-        for &t in targets {
-            if t == LfoTarget::None || count >= MAX_MOD_ROUTES {
-                continue;
-            }
-            routes[count] = ModRouteCopy {
-                source_buf_idx,
-                target_u8: lfo_target_to_u8(t),
-                depth,
-            };
-            count += 1;
-        }
-    }
-    (routes, count as u8)
-}
-
 /// Maximum number of cable-declared modulation routes the audio thread
 /// will process per block.  Bounded so the array stays Copy-friendly.
 pub const MAX_MOD_ROUTES: usize = 32;
@@ -128,13 +27,20 @@ pub struct ModRouteCopy {
 }
 
 /// Size of the per-block modulation source buffer.  Indices 0..4
-/// hold LFO slot values; 4..8 hold CV sequencer values; 8..32 are
-/// reserved for future utility modules (slew / quantizer / etc.).
+/// hold LFO slot values; 4..8 hold CV sequencer values; the
+/// utility module ranges (Slew / Quantizer / Comparator / Math /
+/// S&H) start at 8 and walk up by `MOD_UTIL_SLOTS` per kind.
 pub const MOD_BUF_SIZE: usize = 32;
 /// Buf index where the LFO source range starts.
 pub const MOD_BUF_LFO_BASE: usize = 0;
 /// Buf index where the CV sequencer source range starts.
 pub const MOD_BUF_CV_SEQ_BASE: usize = 4;
+/// Number of slots reserved per utility kind.  Each rack instance
+/// of a given utility kind maps to one slot in this range, in
+/// rack order; the 5th instance stacks on the last slot.
+pub const MOD_UTIL_SLOTS: usize = 4;
+/// Slew utility output range starts here.
+pub const MOD_BUF_SLEW_BASE: usize = 8;
 
 /// Per-slot LFO configuration passed to the audio thread (Copy-safe).
 #[derive(Clone, Copy, Debug)]
@@ -165,6 +71,31 @@ impl Default for CvSeqParamsCopy {
             step_values: [0.5; crate::state::CV_SEQ_STEPS],
             depth: 0.0,
             target: 0,
+        }
+    }
+}
+
+/// Per-slot Slew / glide configuration passed to the audio thread.
+/// `cv_in_buf_idx = u8::MAX` means "unwired" — the slot still runs
+/// but reads 0 every block (decays to 0 with the release time).
+#[derive(Clone, Copy, Debug)]
+pub struct SlewParamsCopy {
+    pub enabled: bool,
+    pub attack: f32,
+    pub release: f32,
+    /// `cv_buf` index where this slew's input value is read from
+    /// each block.  Resolved by the cable compile pass; defaults
+    /// to `u8::MAX` (unwired) when no cable lands on this slot.
+    pub cv_in_buf_idx: u8,
+}
+
+impl Default for SlewParamsCopy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            attack: 0.2,
+            release: 0.2,
+            cv_in_buf_idx: u8::MAX,
         }
     }
 }
@@ -524,6 +455,11 @@ pub struct AudioParams {
     // `step_values[current_step % 16]` is read per-block and
     // applied to its target opcode at the configured depth.
     pub cv_seq: [CvSeqParamsCopy; crate::state::CV_SEQ_SLOTS],
+    /// Slew utility slots — smooth incoming CV with separate
+    /// attack / release time constants.  Read input from
+    /// `cv_buf[cv_in_buf_idx]`, write output to
+    /// `cv_buf[MOD_BUF_SLEW_BASE + i]`.
+    pub slew: [SlewParamsCopy; crate::state::SLEW_SLOTS],
     /// Per-block modulation source buffer.  The audio thread fills
     /// the LFO range (0..4), CV-seq range (4..8), and utility
     /// module ranges (8..32) before applying `mod_routes`.

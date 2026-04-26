@@ -263,6 +263,12 @@ pub enum ModuleKind {
     /// waveform): a hand-drawn per-step value table for stepped
     /// filter sweeps, gate-like duck patterns, pitch transposition.
     CvSequencer,
+    /// Slew / glide CV utility — smooths an incoming CV signal
+    /// with separate attack (rise) and release (fall) time
+    /// constants.  Distinct from the bass voice's portamento:
+    /// works on any CV stream cabled into its Mod-In, then the
+    /// smoothed output cables out to a synth / FX param.
+    Slew,
     LlmAgent,
     // ── LLM console (singleton, Global zone) ──────────────────────────────
     LlmConsole,
@@ -354,6 +360,7 @@ impl ModuleKind {
             Self::OnsetGrid => "ONSET GRID",
             Self::LfoModule => "LFO",
             Self::CvSequencer => "CV SEQ",
+            Self::Slew => "SLEW",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
             Self::MasterOutput => "MASTER",
@@ -474,6 +481,8 @@ impl ModuleKind {
             Self::LfoModule => (2, 2),
             // CV sequencer — 16 step bars need horizontal room.
             Self::CvSequencer => (5, 2),
+            // Slew — 2 knobs, compact card.
+            Self::Slew => (2, 1),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
             // Convolution Reverb — 6 knobs in a glass-grouped 2-row
@@ -626,7 +635,8 @@ impl ModuleKind {
             | Self::PatternHeatmap
             | Self::OnsetGrid
             | Self::LfoModule
-            | Self::CvSequencer => Zone::FxMod,
+            | Self::CvSequencer
+            | Self::Slew => Zone::FxMod,
         }
     }
 
@@ -804,6 +814,7 @@ impl ModuleKind {
                 | Self::FxDjFilter
                 | Self::LfoModule
                 | Self::CvSequencer
+                | Self::Slew
                 | Self::LlmAgent
         )
     }

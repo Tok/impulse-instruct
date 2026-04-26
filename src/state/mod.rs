@@ -67,8 +67,10 @@ pub use sequencer_state::{SequencerState, Step, TB303Step};
 pub mod cv_seq;
 pub mod fx;
 mod fx_defaults;
+pub mod slew;
 pub use cv_seq::{CV_SEQ_SLOTS, CV_SEQ_STEPS, CvSeqSlot};
 pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
+pub use slew::{SLEW_SLOTS, SlewSlot};
 
 pub mod chain_advance;
 pub use chain_advance::{LoopBoundaryAction, build_advance_target, classify_loop_boundary};
@@ -261,6 +263,8 @@ pub struct AppState {
     #[serde(default)]
     pub cv_seq: [CvSeqSlot; CV_SEQ_SLOTS],
     #[serde(default)]
+    pub slew: [SlewSlot; SLEW_SLOTS],
+    #[serde(default)]
     pub free_eg: FreeEg,
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
@@ -430,6 +434,7 @@ impl Default for AppState {
             llm: Default::default(),
             lfo: Default::default(),
             cv_seq: std::array::from_fn(|_| CvSeqSlot::default()),
+            slew: std::array::from_fn(|_| SlewSlot::default()),
             free_eg: Default::default(),
             noise_voice: Default::default(),
             theremin: Default::default(),

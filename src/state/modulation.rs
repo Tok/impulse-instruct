@@ -180,6 +180,13 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         | ActivityTimeline | BarOscilloscope | StereoVectorscope | LfoScope | PitchTracker
         | ChordDisplay | Spectrogram | LoudnessMeter | PhaseWheel | EventStream
         | PatternHeatmap | OnsetGrid | CvSequencer => &[],
+        // Slew — one Mod-In jack (CV input).  The compile pass in
+        // params.rs walks `Source.CvOut → Slew.ModIn` cables and
+        // resolves the slot's source_buf_idx; mod_inputs returns
+        // an empty Selector so compile_mod_routes emits zero
+        // direct routes (the module's CV-out cable produces them
+        // separately via the standard mod-route path).
+        Slew => &[Selector],
     }
 }
 
@@ -595,7 +602,10 @@ pub fn apply_llm_mod_cable_entry(rack: &mut crate::state::RackState, v: &serde_j
 pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
     match kind {
         ModuleKind::LlmAgent => PortKind::Control,
-        ModuleKind::LfoModule | ModuleKind::StepSequencer => PortKind::Cv,
+        ModuleKind::LfoModule
+        | ModuleKind::StepSequencer
+        | ModuleKind::CvSequencer
+        | ModuleKind::Slew => PortKind::Cv,
         _ => PortKind::Audio,
     }
 }

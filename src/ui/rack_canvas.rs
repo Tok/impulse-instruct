@@ -711,6 +711,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             draw_lfo_content(app, ui, id);
                         } else if kind == ModuleKind::CvSequencer {
                             crate::ui::rack_content::draw_cv_seq_content(app, ui, id);
+                        } else if kind == ModuleKind::Slew {
+                            crate::ui::rack_content::draw_slew_content(app, ui, id);
                         } else if kind == ModuleKind::SpectrumAnalyzer {
                             crate::ui::panels::draw_spectrum(app, ui);
                         } else if kind == ModuleKind::StereoMeter {

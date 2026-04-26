@@ -773,6 +773,22 @@ pub(super) fn draw_cv_seq_content(app: &mut ImpulseApp, ui: &mut egui::Ui, modul
     crate::ui::panels::draw_cv_seq(app, ui, slot);
 }
 
+pub(super) fn draw_slew_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    // Same per-instance slot mapping as the CV sequencer / LFO.
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::Slew)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_slew(app, ui, slot);
+}
+
 pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     use crate::ui::widgets;
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);

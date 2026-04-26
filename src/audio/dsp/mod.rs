@@ -30,6 +30,7 @@ pub mod gabber_kick;
 pub mod granular_voice;
 mod lfo_target_opcode;
 pub mod mod_apply;
+mod mod_compile;
 pub mod modal;
 pub mod ms_master;
 pub mod param_eq;
@@ -79,11 +80,12 @@ use fx_vinyl::VinylFx;
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 pub use lfo_target_opcode::lfo_target_to_u8;
+pub use mod_compile::{compile_mod_routes, compile_slew_params};
 use ms_master::MsMaster;
 use param_eq::ParamEq;
 pub use params::{
     AudioParams, MAX_MOD_ROUTES, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE, MOD_BUF_SIZE,
-    compile_mod_routes,
+    MOD_BUF_SLEW_BASE, MOD_UTIL_SLOTS,
 };
 use pendulum::PendulumVoice;
 use pitch_shift::PitchShift;
@@ -197,6 +199,10 @@ pub struct DspState {
     // LFO state
     lfo_phases: [f32; 4],
     lfo_sh_held: [f32; 4],
+    /// Cached Slew utility output value per slot.  Tracks the
+    /// smoothed target across blocks so the rise / fall envelope
+    /// is continuous rather than restarting at each callback.
+    slew_state: [f32; crate::state::SLEW_SLOTS],
     lfo_noise: NoiseGen,
     free_eg_phase: f32, // 0..1 through the 8-step EG period
     free_eg_done: bool, // true after one-shot completes
@@ -357,6 +363,7 @@ impl DspState {
             amen: AmenVoice::new(),
             lfo_phases: [0.0; 4],
             lfo_sh_held: [0.0; 4],
+            slew_state: [0.0; crate::state::SLEW_SLOTS],
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
             free_eg_phase: 0.0,
             free_eg_done: false,
