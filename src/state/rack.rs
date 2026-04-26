@@ -640,6 +640,9 @@ impl RackState {
                 // Event stream is melodic / rhythmic activity, parks
                 // next to ActivityTimeline.
                 ModuleKind::EventStream => 49,
+                // Pattern heatmap groups with the activity / event
+                // viz cluster — all sequencer-state readouts.
+                ModuleKind::PatternHeatmap => 50,
             }
         }
         let cols = GRID_COLS as usize;

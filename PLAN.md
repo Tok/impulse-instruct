@@ -105,9 +105,6 @@ deferred (re-open if it grows legs).
 
 ## Visualizations — wishlist
 
-- [ ] **Pattern density heatmap** — 16 steps × N bars grid,
-  brightness = note density per voice.  Quick "where are the
-  busy parts" read across a long song.
 - [ ] **Onset / beat-grid overlay** — detected onsets vs sequencer
   grid (already have `audio/onset.rs`).  Debug tool for groove /
   late-strike discussions.

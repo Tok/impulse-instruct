@@ -111,7 +111,8 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::Spectrogram
         | ModuleKind::LoudnessMeter
         | ModuleKind::PhaseWheel
-        | ModuleKind::EventStream => 20,
+        | ModuleKind::EventStream
+        | ModuleKind::PatternHeatmap => 20,
         ModuleKind::LfoModule => 18,
         ModuleKind::LlmAgent => 30,
         ModuleKind::LlmConsole => 28,

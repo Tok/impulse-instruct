@@ -733,6 +733,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             crate::ui::panels::draw_phase_wheel(app, ui);
                         } else if kind == ModuleKind::EventStream {
                             crate::ui::panels::draw_event_stream_module(app, ui);
+                        } else if kind == ModuleKind::PatternHeatmap {
+                            crate::ui::panels::draw_pattern_heatmap(app, ui);
                         } else {
                             draw_fx_content(app, ui, kind, id);
                         }

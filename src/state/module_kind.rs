@@ -241,6 +241,12 @@ pub enum ModuleKind {
     /// iterations.  V1: one canonical instance reads the global
     /// AppState log buffers.
     EventStream,
+    /// Pattern density heatmap — rows = sequencer voices, columns =
+    /// 16 step positions, brightness = active state of the step.
+    /// Glanceable "where are the busy parts" overview across all
+    /// voices in the current pattern; complementary to the focused
+    /// per-voice sequencer panels.  Pure UI; no DSP, no audio I/O.
+    PatternHeatmap,
     // ── Modulation ────────────────────────────────────────────────────────────
     LfoModule,
     LlmAgent,
@@ -330,6 +336,7 @@ impl ModuleKind {
             Self::LoudnessMeter => "LUFS",
             Self::PhaseWheel => "PHASE",
             Self::EventStream => "EVENT STREAM",
+            Self::PatternHeatmap => "PATTERN MAP",
             Self::LfoModule => "LFO",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
@@ -443,6 +450,9 @@ impl ModuleKind {
             // have horizontal room to scroll past.  Two rows tall so
             // the future / past split is legible.
             Self::EventStream => (6, 2),
+            // Pattern heatmap — 16 step columns + a left label column;
+            // tall enough to show several voice rows comfortably.
+            Self::PatternHeatmap => (5, 3),
             Self::LfoModule => (2, 2),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
@@ -593,6 +603,7 @@ impl ModuleKind {
             | Self::LoudnessMeter
             | Self::PhaseWheel
             | Self::EventStream
+            | Self::PatternHeatmap
             | Self::LfoModule => Zone::FxMod,
         }
     }

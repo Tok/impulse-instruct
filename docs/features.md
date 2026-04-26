@@ -4,6 +4,46 @@ A detailed log of what's built.
 
 ---
 
+### Pattern density heatmap viz (`PatternHeatmap`)
+
+First entry from the Visualizations wishlist.  Glanceable
+"where are the busy parts" overview across all sequencer
+voices in the current pattern; complementary to the focused
+per-voice sequencer panels.
+
+**Layout.**  Rows = each voice with at least one active step
+in the first 16 positions; empty voices are suppressed so the
+heatmap stays dense.  Columns = the canonical 16-step window.
+Each cell is a small grey rect; brightness scales with the
+step's velocity / accent.  Beat markers (every 4 steps) get
+a slight background lift so the user reads bar structure at
+a glance.  Playhead column is highlighted with a top-and-
+bottom band that reads through both empty and active cells.
+
+**Voices covered.**  All 15 drum voices (808 + 909 + Amen +
+Gabber Kick), bass (with per-voice expansion when multiple
+bass voices are enabled), hoover, AN1X, pluck, wavetable,
+sample, FM ops, additive, modal, chiptune, vocal.  Single
+read lock acquires a snapshot of intensities; the renderer
+draws from the snapshot so no borrows leak across the layout
+pass.
+
+**Wiring.**  `ModuleKind::PatternHeatmap` ("PATTERN MAP"
+label, 5×3 grid, FxMod zone, sort-group 50 alongside the
+EventStream / ActivityTimeline cluster).  Aliases
+patternheatmap / patternmap / heatmap / patterndensity /
+patterns.  Pure UI — no DSP, no audio I/O, no modulation
+jacks, no LLM apply path.  Reads `app.state.read().sequencer`
+once per frame.
+
+**Tests.**  +3 — label, zone + no-audio-IO, alias parsing.
+Suite **2119 → 2122**.
+
+Files: new `src/ui/panels/pattern_heatmap.rs`, new
+`src/tests/pattern_heatmap_tests.rs`.
+
+---
+
 ### Spectral Gate FX (`FxSpectralGate`)
 
 Last item on the FX wishlist — per-band amplitude gating

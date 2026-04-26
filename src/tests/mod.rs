@@ -78,6 +78,7 @@ mod music_tests;
 mod osc_tests;
 mod param_eq_tests;
 mod param_mode_tests;
+mod pattern_heatmap_tests;
 mod per_step_velocity_tests;
 mod performance_mode_tests;
 mod persistence_tests;

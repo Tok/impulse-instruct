@@ -66,6 +66,7 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::LoudnessMeter,
     ModuleKind::PhaseWheel,
     ModuleKind::EventStream,
+    ModuleKind::PatternHeatmap,
     ModuleKind::LfoModule,
 ];
 

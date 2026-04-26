@@ -191,6 +191,9 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "spectrogram" | "waterfall" => Some(Spectrogram),
         "loudnessmeter" | "lufs" | "loudness" => Some(LoudnessMeter),
         "phasewheel" | "transport" | "beatwheel" | "bar" => Some(PhaseWheel),
+        "patternheatmap" | "patternmap" | "heatmap" | "patterndensity" | "patterns" => {
+            Some(PatternHeatmap)
+        }
         "neutts" | "tts" | "voice" | "mc" => Some(NeuTts),
         _ => None,
     }
@@ -388,5 +391,9 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::LoudnessMeter => matches!(n.as_str(), "lufs" | "loudness" | "loudnessmeter"),
         ModuleKind::PhaseWheel => matches!(n.as_str(), "phasewheel" | "phase" | "transport"),
         ModuleKind::EventStream => matches!(n.as_str(), "events" | "stream" | "notes"),
+        ModuleKind::PatternHeatmap => matches!(
+            n.as_str(),
+            "patternheatmap" | "patternmap" | "heatmap" | "patterndensity" | "patterns"
+        ),
     }
 }
