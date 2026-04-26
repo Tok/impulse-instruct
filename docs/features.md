@@ -4,6 +4,38 @@ A detailed log of what's built.
 
 ---
 
+### SampleInstrument — `.sf2` preset picker (V2 follow-up)
+
+V1 SF2 loaded only the first preset.  Most SoundFont banks pack
+dozens of presets (drum kit, piano, organ, strings, ...), so a
+combo box on the SampleInstrument panel surfaces the rest.
+
+- New `Sf2PresetInfo { name, bank, preset }` exposed by the
+  loader; `parse_sf2_presets(bytes)` walks the `phdr` chunk and
+  returns one entry per real preset (skipping the EOP sentinel).
+- New `parse_sf2_preset_regions(bytes, idx)` — preset-indexed
+  variant of the V1 byte parser; out-of-range index returns
+  `None` so the caller distinguishes "no such preset" from
+  "preset has no playable regions".
+- New `load_sf2_presets(path)` and `load_sf2_preset(path, idx)`
+  — disk-I/O wrappers used by the panel for the picker render
+  + the on-change reload.
+- ImpulseApp gains `sample_sf2_presets` (list) +
+  `sample_sf2_preset_idx` (selection).  Populated on `.sf2`
+  load, cleared on `.sfz` / single-WAV / REC capture so the
+  picker only renders when an SF2 is actually active.
+- Combo box shows `idx: NAME  (bN/pP)` per entry so the user
+  sees both the human name and the MIDI bank/program for
+  scripting.  Selection change re-parses the bank for the
+  chosen preset and pushes the new region list to the audio
+  thread.
+
+4 new unit tests: preset list returns one entry for the
+single-preset fixture; the indexed entry point at idx=0 matches
+the legacy `parse_sf2_bytes` output bit-for-bit; out-of-range
+idx returns `None`; `preset_name_from_bytes` trims trailing
+nulls correctly.
+
 ### SampleInstrument — `.sf2` SoundFont parsing (V1)
 
 Hand-rolled SF2 parser — no new deps, lives entirely in

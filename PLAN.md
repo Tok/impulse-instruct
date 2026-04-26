@@ -27,10 +27,6 @@ The 9 main stages are shipped (see features.md).  Stage 7.5 also
 shipped — drag-to-edit loop markers + SFZ zone selection +
 per-zone inspector all wired (see features.md).  Remaining slice:
 
-- [ ] **`.sf2` — preset picker (V2)**.  V1 SF2 loads the first
-  preset only.  Most banks pack dozens of presets; a small
-  combo box reading `phdr` records + reloading regions on
-  selection would surface the rest.
 - [ ] **`.sf2` — envelope / filter / modulator generators**.
   V1 honours key/vel range, root key, tune, pan, attenuation —
   envelopes / filters / modulators / LFOs / sample modes still
@@ -39,9 +35,9 @@ per-zone inspector all wired (see features.md).  Remaining slice:
 - [ ] **Disk streaming for huge banks** — architectural change;
   V1 fits everything in memory which caps usable bank size.
 
-(SF2 V1 parsing, `.flac` / `.aiff` decoding, sample recording
-from the audio input, and multi-mic / multi-position SFZ blends
-shipped — see features.md.)
+(SF2 V1 parsing + preset picker, `.flac` / `.aiff` decoding,
+sample recording from the audio input, and multi-mic /
+multi-position SFZ blends all shipped — see features.md.)
 
 ## FX — still open
 
