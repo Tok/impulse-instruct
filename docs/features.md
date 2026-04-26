@@ -4,6 +4,54 @@ A detailed log of what's built.
 
 ---
 
+### MIDI granuliser (absurd queue #8)
+
+Granular but for triggers — scatter an existing sequencer
+pattern with density / repeat / pitch-jitter knobs.  V1 ships
+as an in-place transformation on the running session's
+pattern (not a file-to-file converter) so the user sees the
+result immediately.  File-to-file MIDI input/output deferred —
+the live-session path was the actually-useful version of the
+brief.
+
+DSP / transformation (`sequencer::granuliser`):
+* `granulise_tb303(&mut [TB303Step], opts)` — pure function over
+  any TB303-style melodic pattern (bass / hoover / an1x /
+  pluck / wavetable / sample all use `Vec<TB303Step>`).
+* Per-step pipeline: density gate → pitch jitter → optional
+  repeat into the next slot.
+* Density 0..1 — drop probability per active step.  1.0 is
+  pass-through; 0 silences the pattern.
+* Repeat chance 0..1 — if the next slot is empty, half-accent
+  clone of the current step lands there.  Skips already-active
+  next slots so the user's existing notes survive.
+* Pitch jitter 0..12 — random ±N semitones added to the kept
+  step's note, clamped to MIDI 0..127.
+* Tiny LCG seed — deterministic per `(pattern, opts)`, so an
+  interesting roll can be replayed via `?seed=N`.
+* No allocations.  No audio-thread touches — the transform
+  runs on the UI / API thread, the audio thread reads the
+  rewritten pattern on its next bar.
+
+API: `POST /api/midi/granulise {"voice": "bass", "voice_index":
+0, "density": 0.7, "repeat_chance": 0.2, "pitch_jitter_st": 5,
+"seed": 42}`.  All fields except `voice` are optional with
+sensible pass-through defaults; nanos seed when omitted.
+Documented in CLAUDE.md.
+
+7 new tests cover: density 1.0 pass-through, density 0.0 wipe,
+density 0.5 statistical ratio across seeds, pitch jitter stays
+in MIDI range under ±12 st, repeat populates empty next slots,
+repeat doesn't overwrite existing active slots, deterministic
+output for the same seed.  **1924 tests passing**; clippy clean.
+
+Why "scatter the sequencer pattern" rather than "load a MIDI
+file": the brief's framing ("MIDI granuliser") describes the
+conceptual model (granularise trigger events).  Applying it to
+the running pattern is the most concrete realisation — the user
+hears the change on the next bar without round-tripping through
+a file.  A file-to-file API can layer on top later if needed.
+
 ### Bird-song corpus (absurd queue #7)
 
 Per the brief — "small CC0 corpus, granularised and pitch-mappable.

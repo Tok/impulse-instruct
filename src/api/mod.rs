@@ -128,6 +128,8 @@ pub use resets::{post_patch_morph, post_rack_random, post_rack_reset, post_state
 mod midi_export;
 pub use midi_export::{MidiExportRequest, post_midi_export};
 
+mod midi_granulise;
+pub use midi_granulise::post_midi_granulise;
 mod midi_import;
 pub use midi_import::{MidiImportRequest, MidiImportResponse, post_midi_import};
 
@@ -382,6 +384,7 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/rack/collapse", post(post_collapse))
         .route("/api/midi/export", post(post_midi_export))
         .route("/api/midi/import", post(post_midi_import))
+        .route("/api/midi/granulise", post(post_midi_granulise))
         .route("/api/ui_prefs", post(post_ui_prefs))
         .layer(cors)
         .with_state(api_state)

@@ -7,6 +7,7 @@ use crate::state::{DrumVoice, SequencerState};
 
 // ─── Events emitted by the sequencer ─────────────────────────────────────────
 
+pub mod granuliser;
 pub mod preecho;
 pub use preecho::{
     NoteApproach, NoteOverride, NoteShift, PreechoApply, PreechoConfig, RampCurve, preecho_apply,

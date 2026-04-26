@@ -166,9 +166,9 @@ independently.  Anything left at "unscheduled" goes in last.
    existing GRAN voice (see features.md).  A dedicated module
    isn't justified — GRAN already handles the playback; only
    the corpus needed curating.
-8. [ ] **MIDI granuliser** — input a MIDI clip, scatter the
-   triggers with jitter / density knobs.  Granular but for
-   triggers, not audio.
+8. [x] ~~**MIDI granuliser**~~ — V1 shipped (see features.md);
+   in-place pattern scatter via API.  File-to-file MIDI mode
+   deferred — V1 covers the live-session use case directly.
 
 ## Demo recording
 
