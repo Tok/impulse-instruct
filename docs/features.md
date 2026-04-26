@@ -4,6 +4,34 @@ A detailed log of what's built.
 
 ---
 
+### LfoScope cable-driven LFO selection (V2)
+
+The `LfoScope` rack module picked the *first enabled LFO slot* in
+V1 — useful but ambiguous when multiple LFOs were running.  V2
+makes selection explicit by following the rack cable graph: patch
+a CV cable from any `LfoModule`'s CV-out to the scope's CV-in
+jack and the scope renders that module's slot.
+
+- `module_card_mod::has_cv_in` now returns `true` for `LfoScope`,
+  so the back panel renders a "CV / Gate In" jack the user can
+  drag a cable to.  Existing voice CV-in semantics untouched.
+- New pure helper `viz::lfo_slot_from_cables(state, scope_id)`
+  walks `state.rack.cables` for an incoming CV cable from any
+  `LfoModule` and returns that source's slot index.  Slot index
+  is the source's positional rank among `LfoModule` instances in
+  rack order — same rule the rack canvas uses to publish the
+  back-panel "LFO 1/2/3" label, so the two stay consistent.
+- `draw_lfo_scope` calls the helper before falling back to the V1
+  "first enabled" picker, so unwired scopes (and older sessions
+  saved before this landed) keep displaying their LFO with no
+  user-visible change.
+- 5 new tests cover: no cable → fallback, single LFO patched,
+  positional-rank slot resolution for the second LFO, non-LFO
+  source ignored (StepSequencer's CV out doesn't accidentally
+  steer the scope), and cable-insertion-order tie-break when
+  multiple cables land on the same scope.  Total: **1880 tests
+  passing**.
+
 ### Ableton Link bar-phase alignment (V2)
 
 Tempo sync shipped in V1; V2 adds the bar-phase snap follow-up

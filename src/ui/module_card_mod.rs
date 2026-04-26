@@ -242,7 +242,11 @@ pub fn has_audio_in(kind: ModuleKind) -> bool {
     )
 }
 
-/// True if `kind` exposes a CV-in (gate/pitch) jack — voices.
+/// True if `kind` exposes a CV-in jack on the back panel.  Voices
+/// take a gate/pitch CV from the sequencer; `LfoScope` takes a CV-out
+/// cable from any `LfoModule` to choose which slot it visualises (V1
+/// fell back to "first enabled slot" when no cable was patched —
+/// `draw_lfo_scope` now follows the cable graph instead).
 pub fn has_cv_in(kind: ModuleKind) -> bool {
     use ModuleKind::*;
     matches!(
@@ -255,6 +259,7 @@ pub fn has_cv_in(kind: ModuleKind) -> bool {
             | AmenSampler
             | NoiseVoice
             | NeuTts
+            | LfoScope
     )
 }
 

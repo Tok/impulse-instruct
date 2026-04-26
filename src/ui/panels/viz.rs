@@ -84,16 +84,31 @@ pub fn draw_vectorscope(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
 // ─── LFO scope ───────────────────────────────────────────────────────────────
 
-/// Render the connected LFO module's output waveform across one cycle.
-/// V1: each `LfoScope` rack module shares the *first enabled* LFO slot —
-/// CV-cable wiring (where module_id ↔ slot index) lands in a follow-up
-/// once the rack-side mod-cable types stabilise.  Useful as-is for
-/// confirming an LFO's shape / rate without tabbing back to the LFO panel.
-pub fn draw_lfo_scope(app: &mut ImpulseApp, ui: &mut egui::Ui, _module_id: u32) {
+/// Render an LFO slot's output waveform across one cycle.
+///
+/// V2 (rack-cable aware): walk the rack cable graph for an incoming
+/// CV cable from any `LfoModule` to *this* `LfoScope` instance and
+/// render that module's slot.  When no cable is patched, fall back
+/// to the V1 behaviour ("first enabled slot") so an unwired scope
+/// still shows something useful — and so older sessions saved
+/// before the cable wiring landed keep displaying their LFO.
+///
+/// Slot index for an `LfoModule` is its positional rank among
+/// `LfoModule` modules in `rack.modules` order — same rule used by
+/// `rack_canvas` when it publishes the `egui::Id::new("lfo_slot")`
+/// temp data, so the back-panel label and the scope agree.
+pub fn draw_lfo_scope(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     use crate::audio::dsp::fx_math::lfo_value_at;
 
-    let slots = app.state.read().lfo;
-    let active_slot = slots.iter().enumerate().find(|(_, s)| s.enabled);
+    let (slots, cable_slot) = {
+        let s = app.state.read();
+        let slot = lfo_slot_from_cables(&s, module_id);
+        (s.lfo, slot)
+    };
+    let active_slot = match cable_slot {
+        Some(idx) if idx < slots.len() => Some((idx, &slots[idx])),
+        _ => slots.iter().enumerate().find(|(_, s)| s.enabled),
+    };
 
     let avail_w = ui.available_width().max(64.0);
     let avail_h = ui.available_height().max(40.0);
@@ -155,6 +170,51 @@ pub fn draw_lfo_scope(app: &mut ImpulseApp, ui: &mut egui::Ui, _module_id: u32) 
         egui::FontId::monospace(7.5),
         egui::Color32::from_gray(140),
     );
+}
+
+/// Walk `state.rack.cables` for an incoming CV cable from any
+/// `LfoModule` to the `LfoScope` at `scope_id`, and return that
+/// source module's slot index (its positional rank among `LfoModule`
+/// instances in `rack.modules`).  Returns `None` when no cable is
+/// patched, when the source isn't an `LfoModule`, or when the source
+/// id doesn't resolve — caller then falls back to the V1
+/// "first enabled slot" picker.
+///
+/// Pure read over `&AppState` — no borrows of egui temp data — so
+/// the function is callable from anywhere with a state snapshot,
+/// including future code paths outside the UI thread.
+pub fn lfo_slot_from_cables(state: &crate::state::AppState, scope_id: u32) -> Option<usize> {
+    use crate::state::{ModuleKind, PortKind};
+
+    // Find the first incoming CV cable to this scope.  Multiple
+    // cables would be ambiguous; V2 takes the first by cable
+    // insertion order, which matches the rack canvas's draw order
+    // and the user's mental model of "the cable I just patched in".
+    let src_id = state
+        .rack
+        .cables
+        .iter()
+        .find(|c| {
+            c.to.module_id == scope_id && c.to.kind == PortKind::Cv && c.from.kind == PortKind::Cv
+        })
+        .map(|c| c.from.module_id)?;
+
+    // Resolve the source's slot index by counting LfoModule
+    // instances up to (and including) it in rack order.  Same rule
+    // as `rack_canvas.rs`'s `egui::Id::new("lfo_slot").with(m.id)`
+    // publication so the back-panel "LFO 1/2/3" labels and the
+    // scope output stay consistent.
+    let mut slot_idx = 0usize;
+    for m in &state.rack.modules {
+        if m.kind != ModuleKind::LfoModule {
+            continue;
+        }
+        if m.id == src_id {
+            return Some(slot_idx);
+        }
+        slot_idx += 1;
+    }
+    None
 }
 
 // ─── Pitch tracker / tuner ───────────────────────────────────────────────────
@@ -543,4 +603,117 @@ pub fn draw_phase_wheel(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         egui::FontId::monospace((radius * 0.32).min(13.0)),
         theme::FOG,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{AppState, ModuleKind, PortDir, PortKind, PortRef, RackModule, RackState};
+
+    /// Build an empty rack with `kinds` added in order, IDs 1..=N.
+    /// Cables are not added — caller patches them with `connect`.
+    fn rack_with(kinds: &[ModuleKind]) -> RackState {
+        let mut rack = RackState {
+            modules: Vec::new(),
+            cables: Vec::new(),
+            next_id: (kinds.len() as u32) + 1,
+            dyn_sequencer_rows: None,
+        };
+        for (i, &k) in kinds.iter().enumerate() {
+            rack.modules.push(RackModule::new((i as u32) + 1, k));
+        }
+        rack
+    }
+
+    fn cv_cable(from_id: u32, to_id: u32) -> (PortRef, PortRef) {
+        (
+            PortRef {
+                module_id: from_id,
+                dir: PortDir::Out,
+                kind: PortKind::Cv,
+                index: 0,
+            },
+            PortRef {
+                module_id: to_id,
+                dir: PortDir::In,
+                kind: PortKind::Cv,
+                index: 0,
+            },
+        )
+    }
+
+    #[test]
+    fn lfo_slot_from_cables_returns_none_when_no_cable() {
+        // No cables patched → fall back to the V1 picker.
+        let rack = rack_with(&[ModuleKind::LfoModule, ModuleKind::LfoScope]);
+        let mut s = AppState::default();
+        s.rack = rack;
+        // Scope id is 2 (added second).
+        assert_eq!(lfo_slot_from_cables(&s, 2), None);
+    }
+
+    #[test]
+    fn lfo_slot_from_cables_picks_first_lfo_when_only_one_present() {
+        // Single LFO → slot 0.  Cable: LfoModule(1) → LfoScope(2).
+        let mut rack = rack_with(&[ModuleKind::LfoModule, ModuleKind::LfoScope]);
+        let (a, b) = cv_cable(1, 2);
+        assert!(rack.connect(a, b));
+        let mut s = AppState::default();
+        s.rack = rack;
+        assert_eq!(lfo_slot_from_cables(&s, 2), Some(0));
+    }
+
+    #[test]
+    fn lfo_slot_from_cables_uses_positional_rank_for_second_lfo() {
+        // Two LfoModules; cable from the second → scope.  Slot
+        // index counts LfoModules in rack order, so the second LFO
+        // is slot 1.
+        let mut rack = rack_with(&[
+            ModuleKind::LfoModule, // id=1, slot 0
+            ModuleKind::LfoModule, // id=2, slot 1
+            ModuleKind::LfoScope,  // id=3
+        ]);
+        let (a, b) = cv_cable(2, 3);
+        assert!(rack.connect(a, b));
+        let mut s = AppState::default();
+        s.rack = rack;
+        assert_eq!(lfo_slot_from_cables(&s, 3), Some(1));
+    }
+
+    #[test]
+    fn lfo_slot_from_cables_ignores_non_lfo_sources() {
+        // Cable from StepSequencer → scope is also a CV cable but
+        // the source isn't an LfoModule.  V2 ignores it; the V1
+        // picker takes over.  Same for non-CV cables.
+        let mut rack = rack_with(&[
+            ModuleKind::StepSequencer,
+            ModuleKind::LfoModule,
+            ModuleKind::LfoScope,
+        ]);
+        let (a, b) = cv_cable(1, 3); // seq → scope; not an LfoModule source
+        assert!(rack.connect(a, b));
+        let mut s = AppState::default();
+        s.rack = rack;
+        assert_eq!(lfo_slot_from_cables(&s, 3), None);
+    }
+
+    #[test]
+    fn lfo_slot_from_cables_takes_first_when_multiple_lfo_cables() {
+        // Two cables land on the scope; V2 takes the first by
+        // cable insertion order (matches the rack canvas's draw
+        // order and the user's mental model of "the cable I
+        // patched first wins").
+        let mut rack = rack_with(&[
+            ModuleKind::LfoModule, // id=1, slot 0
+            ModuleKind::LfoModule, // id=2, slot 1
+            ModuleKind::LfoScope,  // id=3
+        ]);
+        let (a1, b1) = cv_cable(2, 3); // patched first → slot 1 wins
+        let (a2, b2) = cv_cable(1, 3);
+        assert!(rack.connect(a1, b1));
+        assert!(rack.connect(a2, b2));
+        let mut s = AppState::default();
+        s.rack = rack;
+        assert_eq!(lfo_slot_from_cables(&s, 3), Some(1));
+    }
 }

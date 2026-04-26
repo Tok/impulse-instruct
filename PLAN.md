@@ -43,12 +43,6 @@ The 9 main stages are shipped (see features.md).  Remaining slices:
   fading-polyline depth is pure eye-candy and can come back if
   visual demand surfaces.
 
-## Visualizations — open
-
-- [ ] **CV-cable wiring of LFO slot ↔ scope module** (LfoScope V1
-  picks the first enabled LFO slot).  Real selection by following
-  the rack cable graph.
-
 ## Integration — open
 
 - [ ] **Continuous Link bar-phase drift correction**.  V2 added
