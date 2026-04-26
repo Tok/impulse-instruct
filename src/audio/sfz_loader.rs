@@ -4,12 +4,13 @@
 //
 // Steps:
 //   1. Read the `.sfz` text + parse via `state::sfz::parse_sfz`.
-//   2. For each region, load + resample the referenced WAV via
-//      `audio::load_wav_to_44100`.  De-duplicate identical paths so the
-//      Salamander-style "10 velocity layers point at the same wav for
-//      RR slots" case doesn't redo the I/O.
-//   3. Drop regions whose WAV failed to load (logged at warn level so a
-//      malformed pack doesn't kill the whole instrument — partial
+//   2. For each region, load + resample the referenced sample via
+//      `audio::load_audio_to_engine`.  V1 only handled .wav; V2 routes
+//      through the unified loader so .flac / .aiff regions also resolve.
+//      De-duplicate identical paths so the Salamander-style "10 velocity
+//      layers point at the same wav for RR slots" case doesn't redo I/O.
+//   3. Drop regions whose sample failed to load (logged at warn level so
+//      a malformed pack doesn't kill the whole instrument — partial
 //      success beats hard failure).
 
 use std::collections::HashMap;
@@ -17,7 +18,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::audio::dsp::sample_instrument::SfzRegionRuntime;
-use crate::audio::load_wav_to_44100;
+use crate::audio::load_audio_to_engine;
 use crate::state::parse_sfz;
 
 /// Parse `path` as an SFZ file and load every referenced sample,
@@ -45,7 +46,7 @@ pub fn load_sfz_file(path: &str) -> Option<Vec<SfzRegionRuntime>> {
             a.clone()
         } else {
             let path_str = region.sample_path.to_string_lossy().to_string();
-            match load_wav_to_44100(&path_str) {
+            match load_audio_to_engine(&path_str) {
                 Some(a) => {
                     cache.insert(region.sample_path.clone(), a.clone());
                     a

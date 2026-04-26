@@ -50,6 +50,11 @@ serde_json = "1"
 # WAV encoding (export)
 hound = "3"
 
+# FLAC decoding for SampleInstrument V2 — pure-Rust, no native deps.
+# AIFF / AIFC parsing is hand-rolled in `audio::mod` (mirrors the
+# WAV parser there); FLAC has compression so we lean on a library.
+claxon = "0.4"
+
 # Lock-free audio↔UI ring buffer (wait-free, no-alloc in callback)
 rtrb = "0.3"
 

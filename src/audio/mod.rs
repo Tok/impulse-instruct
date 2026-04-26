@@ -3,10 +3,13 @@
 // The audio callback is real-time safe: no allocations, no locks.
 
 pub mod analysis;
+pub mod audio_load;
 pub mod dsp;
 pub mod onset;
 pub mod sfz_loader;
 pub mod spectrum;
+
+pub use audio_load::load_audio_to_engine;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
