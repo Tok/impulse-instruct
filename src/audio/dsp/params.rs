@@ -693,6 +693,14 @@ pub struct AudioParams {
     /// per-slot phase-vocoder shifter that does the pitch transform
     /// in the spectral domain with envelope flatten/restore.
     pub sample_formant_preserve: bool,
+    /// Time-stretch ratio decoupled from pitch.  1.0 = source's
+    /// native tempo.  Engages the spectral processor automatically
+    /// when != 1.0 (so the cheap linear-resample path doesn't need
+    /// to be flipped manually).  Combined with formant-preserve via
+    /// formant ratio = pitch_ratio / time_stretch, so output pitch
+    /// stays at the played note while playback speed scales by
+    /// time_stretch.
+    pub sample_time_stretch: f32,
     // Hoover lead
     pub hoover_enabled: bool,
     pub hoover_filter_start: f32,

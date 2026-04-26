@@ -306,6 +306,38 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     app.state.write().sample_instrument.formant_preserve = !fp_on;
                     app.push_audio_params();
                 }
+                // Time-stretch cycle button — picks from a small set of
+                // useful ratios (1.0×, 0.5×, 0.75×, 2.0×).  Auto-engages
+                // the spectral processor when != 1.0× so the cheap path
+                // doesn't need a separate flip.  A continuous knob can
+                // land later if demand appears; this V1 favours quick
+                // access to the common "half / double speed" cases over
+                // a sub-1° drag precision the user probably doesn't
+                // need.
+                let ts = app.state.read().sample_instrument.time_stretch;
+                let ts_label = format!("{:.2}×", ts);
+                let ts_active = (ts - 1.0).abs() > 0.001;
+                let ts_col = if ts_active { theme::CHALK } else { theme::IRON };
+                if ui
+                    .add_sized(
+                        [38.0, 18.0],
+                        egui::Button::new(
+                            egui::RichText::new(ts_label)
+                                .monospace()
+                                .size(8.0)
+                                .color(ts_col),
+                        ),
+                    )
+                    .on_hover_text(
+                        "Time-stretch: cycle through 1.0× → 0.5× → 0.75× → 2.0×.  \
+                         Pitch stays at the played note; phase vocoder compensates.",
+                    )
+                    .clicked()
+                {
+                    let next = next_time_stretch(ts);
+                    app.state.write().sample_instrument.time_stretch = next;
+                    app.push_audio_params();
+                }
             });
         });
     });
@@ -387,5 +419,57 @@ fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
         let _ = app.audio_tx.push(AudioCommand::LoadSampleInstrument(data));
         app.state.write().sample_instrument.sample_path = path.to_string();
         app.last_sample_instrument_path = path.to_string();
+    }
+}
+
+/// Pick the next time-stretch ratio for the cycle button.  The
+/// preset order on the cycle is `1.0 → 0.5 → 0.75 → 2.0 → 1.0`.
+/// When `current` is *exactly* a preset the function returns the
+/// next entry; when it's an off-grid value (e.g. set by the LLM /
+/// API at 0.6 or 1.5) the function returns the first preset
+/// strictly greater than `current` in the **sorted** preset order
+/// (0.5, 0.75, 1.0, 2.0).  No nearest-snap — sorted-next is more
+/// predictable when the user clicks repeatedly.  Wraps to the
+/// smallest preset (0.5) once `current` exceeds the largest.
+fn next_time_stretch(current: f32) -> f32 {
+    const CYCLE: [f32; 4] = [1.0, 0.5, 0.75, 2.0];
+    // Exact-match preset → take the next cycle entry.
+    for (i, &v) in CYCLE.iter().enumerate() {
+        if (current - v).abs() < 1e-4 {
+            return CYCLE[(i + 1) % CYCLE.len()];
+        }
+    }
+    // Off-grid current → next preset strictly greater than it
+    // when scanned in sorted order; wrap if past the largest.
+    const SORTED: [f32; 4] = [0.5, 0.75, 1.0, 2.0];
+    for &v in &SORTED {
+        if v > current + 1e-4 {
+            return v;
+        }
+    }
+    SORTED[0]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn next_time_stretch_cycles_through_presets() {
+        assert_eq!(next_time_stretch(1.0), 0.5);
+        assert_eq!(next_time_stretch(0.5), 0.75);
+        assert_eq!(next_time_stretch(0.75), 2.0);
+        assert_eq!(next_time_stretch(2.0), 1.0);
+    }
+
+    #[test]
+    fn next_time_stretch_off_grid_advances_in_sorted_order() {
+        // Off-grid values picked from the LLM / API land on the
+        // next-greater preset in sorted order (0.5, 0.75, 1.0,
+        // 2.0).  Wrap to the smallest once past the largest.
+        assert_eq!(next_time_stretch(0.6), 0.75); // 0.6 < 0.75 → 0.75
+        assert_eq!(next_time_stretch(1.5), 2.0); // 1.5 < 2.0 → 2.0
+        assert_eq!(next_time_stretch(0.3), 0.5); // 0.3 < 0.5 → 0.5
+        assert_eq!(next_time_stretch(3.0), 0.5); // past max → wrap
     }
 }

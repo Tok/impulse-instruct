@@ -4,6 +4,41 @@ A detailed log of what's built.
 
 ---
 
+### SampleInstrument time-stretch decoupled from pitch
+
+V2 Stage 8 shipped formant-preserving pitch shift; this follow-up
+adds the second axis of the same FFT scaffolding — playback speed
+as a separate dimension from pitch.  Drop a sustained loop in
+SAMPLER+, hit the 0.5× button on the front panel, and the loop
+plays back at half tempo with the played note's pitch unchanged.
+
+- New `SampleInstrumentState.time_stretch: f32` (default 1.0,
+  range 0.25–4.0, persisted via `#[serde(default)]` so older
+  sessions pick it up at default).
+- Plumbed through `AudioParams.sample_time_stretch` and the
+  `params_from` snapshot with the same clamp.
+- DSP path in `process_slot`: when `time_stretch != 1.0`, the
+  read-rate becomes `time_stretch` (not 1.0) and the
+  `FormantShifter` ratio becomes `pitch_ratio / time_stretch` so
+  the spectral shifter compensates for the read-rate's pitch
+  change — net output pitch lands on the played note while
+  duration scales by `1/time_stretch`.  Auto-engages the spectral
+  processor when active so the cheap linear-resample path doesn't
+  need a separate flip.
+- UI: a 38-pixel cycle button next to FRMT, labelled with the
+  current ratio (e.g. `0.50×`, dimmed when 1.0×).  Click cycles
+  through 1.0 → 0.5 → 0.75 → 2.0; off-grid values from the LLM /
+  API land on the next-greater preset in sorted order, then wrap.
+- LLM API: `sample.time_stretch` (number, 0.25–4.0) added to the
+  JSON schema with a description targeting the "sustained loop at
+  a different tempo without retuning" use case.  `sample.formant_preserve`
+  was also missing from the schema — added at the same time.
+- 2 new tests over `next_time_stretch` cover the cycle order and
+  the off-grid sorted-advance.  Total: **1882 tests passing**.
+- Continuous-knob version (logarithmic 0.25–4.0) deferred until
+  demand surfaces; the 4-preset cycle covers the original PLAN's
+  "half / double speed" cases.
+
 ### LfoScope cable-driven LFO selection (V2)
 
 The `LfoScope` rack module picked the *first enabled LFO slot* in

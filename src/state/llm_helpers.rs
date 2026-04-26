@@ -538,6 +538,11 @@ pub(super) fn apply_sample_instrument_update(
     {
         s.sample_instrument.formant_preserve = v;
     }
+    if !locked.contains("sample.time_stretch")
+        && let Some(v) = w.get("time_stretch").and_then(|v| v.as_f64())
+    {
+        s.sample_instrument.time_stretch = (v as f32).clamp(0.25, 4.0);
+    }
     if !locked.contains("sequencer.sample_steps")
         && let Some(arr) = w.get("sample_steps").and_then(|v| v.as_array())
     {

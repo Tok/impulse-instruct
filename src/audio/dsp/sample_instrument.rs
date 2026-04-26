@@ -412,16 +412,35 @@ impl SampleInstrumentVoice {
         }
         Self::step_adsr(slot, sr, p);
 
-        // Formant-preserve path reads the source at rate=1 (no
-        // resample → formants are preserved within each STFT frame)
-        // and routes through the phase-vocoder shifter, which
-        // applies the pitch shift via spectral bin movement +
-        // envelope flatten/restore.  Cheap path (flag off) keeps
-        // V1.1's linear resample.
-        let rate = if p.sample_formant_preserve {
-            1.0
+        // Three read-rate / pitch-shift modes:
+        //
+        //   * Cheap path (formant_preserve OFF, time_stretch == 1.0):
+        //     read at `pitch_ratio`, no spectral processing.  Pitch
+        //     and tempo are coupled — V1.1 behaviour.
+        //
+        //   * Formant-preserve path (formant_preserve ON,
+        //     time_stretch == 1.0): read at rate=1, FormantShifter at
+        //     `pitch_ratio` does the spectral pitch shift with
+        //     envelope flatten/restore.
+        //
+        //   * Time-stretch path (time_stretch != 1.0): read at
+        //     `time_stretch` and FormantShifter at
+        //     `pitch_ratio / time_stretch`.  Reading at rate r already
+        //     pitch-shifts the input by r, so the shifter compensates
+        //     to land on the played note's pitch_ratio.  Net effect:
+        //     playback duration scales by 1/time_stretch while output
+        //     pitch stays at the played note.  Engages the spectral
+        //     processor automatically — the cheap path can't decouple
+        //     pitch from speed.
+        let stretch_active = (p.sample_time_stretch - 1.0).abs() > 0.001;
+        let use_spectral = p.sample_formant_preserve || stretch_active;
+        let (rate, shift_ratio) = if !use_spectral {
+            (slot.pitch_ratio, 1.0)
+        } else if !stretch_active {
+            (1.0, slot.pitch_ratio)
         } else {
-            slot.pitch_ratio
+            let ts = p.sample_time_stretch.clamp(0.25, 4.0);
+            (ts, slot.pitch_ratio / ts)
         };
 
         let ls = (p.sample_loop_start.clamp(0.0, 1.0) * n as f32) as usize;
@@ -449,11 +468,12 @@ impl SampleInstrumentVoice {
             }
         }
 
-        // Apply formant-preserving shift (when the flag is on) before
-        // ADSR + accent so the envelope shapes the post-shift signal
-        // — matches the V1.1 path's tone (filter / amp envelope last).
-        let voiced = if p.sample_formant_preserve {
-            slot.formant.process(sample, slot.pitch_ratio)
+        // Apply spectral pitch shift (formant-preserving + optional
+        // time-stretch compensation) before ADSR + accent so the
+        // envelope shapes the post-shift signal — matches the V1.1
+        // path's tone (filter / amp envelope last).
+        let voiced = if use_spectral {
+            slot.formant.process(sample, shift_ratio)
         } else {
             sample
         };

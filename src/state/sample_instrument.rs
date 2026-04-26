@@ -82,6 +82,18 @@ pub struct SampleInstrumentState {
     /// pick up the real implementation transparently when it ships.
     #[serde(default)]
     pub formant_preserve: bool,
+    /// Time-stretch ratio decoupled from pitch.  1.0 = play the
+    /// source at its native tempo; 0.5 = half speed (twice as long);
+    /// 2.0 = double speed (half as long).  Pitch stays at the
+    /// played note regardless — implemented by reading the source
+    /// at `time_stretch` and compensating with a phase-vocoder
+    /// pitch shift of `pitch_ratio / time_stretch` so the output
+    /// pitch lands on `pitch_ratio` (the played note).  Requires the
+    /// formant-preserve path's spectral processor; the cheap
+    /// linear-resample path ignores this knob (its read rate is
+    /// the pitch ratio).  Default 1.0 = no stretch.
+    #[serde(default = "default_time_stretch")]
+    pub time_stretch: f32,
 }
 
 fn default_attack() -> f32 {
@@ -105,6 +117,9 @@ fn default_loop_enabled() -> bool {
 fn default_filter_cutoff() -> f32 {
     1.0 // fully open — no audible filter when the user just enables the mix
 }
+fn default_time_stretch() -> f32 {
+    1.0 // play at source's native tempo — no stretch
+}
 
 impl Default for SampleInstrumentState {
     fn default() -> Self {
@@ -127,6 +142,7 @@ impl Default for SampleInstrumentState {
             filter_mode: 0,
             filter_mix: 0.0,
             formant_preserve: false,
+            time_stretch: default_time_stretch(),
         }
     }
 }

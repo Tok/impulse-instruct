@@ -255,6 +255,8 @@ pub fn param_json_schema() -> serde_json::Value {
                     "loop_start":          { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Loop start as fraction of buffer length" },
                     "loop_end":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Loop end as fraction of buffer length" },
                     "loop_enabled":        { "type": "boolean", "description": "true = loop between loop_start..loop_end while gate held; false = one-shot" },
+                    "formant_preserve":    { "type": "boolean", "description": "Phase-vocoder pitch shift that preserves the source's spectral envelope (formants stay put as pitch moves).  Costlier than the cheap linear-resample path; ideal for vocal samples." },
+                    "time_stretch":        { "type": "number", "minimum": 0.25, "maximum": 4.0, "description": "Playback-speed multiplier decoupled from pitch.  1.0 = source's native tempo; 0.5 = half speed (twice as long); 2.0 = double speed (half as long).  Pitch stays at the played note; phase vocoder compensates.  Auto-engages the spectral processor — costlier than the cheap path.  Use for sustained loops at a different tempo without retuning." },
                     "sample_steps":        bool_array,
                     "sample_notes":        { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per sample-instrument step" }
                 },
