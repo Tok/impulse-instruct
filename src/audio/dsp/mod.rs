@@ -3,6 +3,7 @@
 pub mod additive;
 pub mod an1x;
 pub mod bass303;
+pub mod chiptune;
 pub mod conv_reverb;
 mod dsp_util;
 pub mod fm_ops;
@@ -38,6 +39,7 @@ pub mod wavetable;
 use additive::AdditiveVoice;
 use an1x::An1xVoice;
 use bass303::Bass303;
+use chiptune::ChiptuneVoice;
 use conv_reverb::ConvReverb;
 use dsp_util::*;
 pub use dsp_util::{TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_tuned};
@@ -149,6 +151,7 @@ pub struct DspState {
     fm_ops: FmOpsVoice,
     additive: AdditiveVoice,
     modal: ModalVoice,
+    chiptune: ChiptuneVoice,
     granular: GranularVoice,
     hoover: HooverVoice,
     pluck: PluckVoice,
@@ -299,6 +302,7 @@ impl DspState {
             fm_ops: FmOpsVoice::new(),
             additive: AdditiveVoice::new(),
             modal: ModalVoice::new(),
+            chiptune: ChiptuneVoice::new(),
             granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
             pluck: PluckVoice::new(),

@@ -11,6 +11,7 @@ mod audio_analysis_tests;
 mod automation_overlay_tests;
 mod bass_lfo_pan_tests;
 mod chain_advance_tests;
+mod chiptune_tests;
 mod compile_mod_routes_tests;
 mod conditional_trigger_tests;
 mod conv_reverb_tests;

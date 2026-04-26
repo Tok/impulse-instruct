@@ -50,6 +50,11 @@ pub enum ModuleKind {
     /// the harmonic-stack voices (Additive, AN1X) can't reach.
     /// Sequencer-driven.
     ModalVoice,
+    /// Chiptune voice — SID-flavoured (Commodore 64) 3-osc
+    /// (saw / triangle / pulse / noise) with per-osc ADSR,
+    /// shared pulse-width + resonant filter, ring-mod and
+    /// hard-sync.  Sequencer-driven.
+    ChiptuneVoice,
     GranularTexture,
     /// Dedicated hardcore-style kick voice — distinct from the 808/909 kicks.
     GabberKick,
@@ -198,6 +203,7 @@ impl ModuleKind {
             Self::FmOpsVoice => "FM OPS",
             Self::AdditiveVoice => "ADDITIVE",
             Self::ModalVoice => "MODAL",
+            Self::ChiptuneVoice => "CHIPTUNE",
             Self::GranularTexture => "GRANULAR",
             Self::GabberKick => "GABBER KICK",
             Self::NeuTts => "TTS VOICE",
@@ -318,6 +324,11 @@ impl ModuleKind {
             // histogram sliders comfortable to drag without
             // dominating the rack.
             Self::ModalVoice => (6, 3),
+            // Chiptune voice — header row (ON/OFF + flags) +
+            // 3 oscillator rows + 1 filter row.  6 cols wide
+            // gives each oscillator's WAVE+LEVEL+ADSR (6 knobs)
+            // breathing room.
+            Self::ChiptuneVoice => (6, 5),
             Self::GranularTexture => (3, 2),
             Self::GabberKick => (3, 2),
             Self::LlmAgent => (3, 2),
@@ -433,6 +444,7 @@ impl ModuleKind {
             | Self::FmOpsVoice
             | Self::AdditiveVoice
             | Self::ModalVoice
+            | Self::ChiptuneVoice
             | Self::GranularTexture
             | Self::NeuTts
             | Self::GabberKick => Zone::Voice,
@@ -509,6 +521,7 @@ impl ModuleKind {
                 | Self::FmOpsVoice
                 | Self::AdditiveVoice
                 | Self::ModalVoice
+                | Self::ChiptuneVoice
                 | Self::An1xVoice
                 | Self::NeuTts
                 | Self::FxReverb

@@ -37,6 +37,7 @@ const VOICE_POOL: &[ModuleKind] = &[
     ModuleKind::FmOpsVoice,
     ModuleKind::AdditiveVoice,
     ModuleKind::ModalVoice,
+    ModuleKind::ChiptuneVoice,
 ];
 
 /// Curated pool of FX modules.  Includes both the cheap-and-cheerful

@@ -714,6 +714,26 @@ pub struct AudioParams {
     pub modal_brightness: f32,
     pub modal_decay_scale: f32,
     pub modal_ratio_preset: u8,
+    // Chiptune voice — SID-flavoured 3-osc.  Per-osc fields
+    // bundled as flat slabs (waveform / level / ADSR each as
+    // [u8/f32; 3]) so the audio thread can index them with the
+    // osc loop without an indirection per field.
+    pub chiptune_enabled: bool,
+    pub chiptune_volume: f32,
+    pub chiptune_pan: f32,
+    pub chiptune_osc_waveform: [u8; crate::state::CHIPTUNE_OSCS],
+    pub chiptune_osc_level: [f32; crate::state::CHIPTUNE_OSCS],
+    pub chiptune_osc_attack: [f32; crate::state::CHIPTUNE_OSCS],
+    pub chiptune_osc_decay: [f32; crate::state::CHIPTUNE_OSCS],
+    pub chiptune_osc_sustain: [f32; crate::state::CHIPTUNE_OSCS],
+    pub chiptune_osc_release: [f32; crate::state::CHIPTUNE_OSCS],
+    pub chiptune_pulse_width: f32,
+    pub chiptune_filter_cutoff: f32,
+    pub chiptune_filter_resonance: f32,
+    pub chiptune_filter_mode: u8,
+    pub chiptune_filter_mix: f32,
+    pub chiptune_ring_mod: bool,
+    pub chiptune_sync: bool,
     // Granular texture
     pub granular_enabled: bool,
     pub granular_volume: f32,
@@ -749,6 +769,7 @@ pub struct AudioParams {
     pub rack_fm_ops: bool,
     pub rack_additive: bool,
     pub rack_modal: bool,
+    pub rack_chiptune: bool,
     // ADSR envelope
     pub sample_attack: f32,
     pub sample_decay: f32,

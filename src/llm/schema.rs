@@ -23,6 +23,21 @@ pub fn param_json_schema() -> serde_json::Value {
         "items": { "type": "integer", "minimum": 0, "maximum": 3 },
         "maxItems": 64
     });
+    // Per-chiptune-osc parameter block — reused across the 3 oscs
+    // on the SID-flavoured chiptune voice.
+    let chiptune_osc_schema = serde_json::json!({
+        "type": "object",
+        "description": "One of the three SID-style oscillator slots.",
+        "properties": {
+            "waveform": { "type": "integer", "minimum": 0, "maximum": 3, "description": "0=Saw, 1=Triangle (16-step staircase), 2=Pulse, 3=Noise (LFSR).  Saws are bright + harmonic-rich; triangles are mellower + buzzy from the staircase quantisation; pulses pair with the shared `pulse_width` for PWM character; noise pitches with the played note for metallic crackle." },
+            "level":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "attack":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "decay":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "sustain":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+            "release":  { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        },
+        "additionalProperties": false
+    });
     // Per-FM-op parameter block — reused across the 4 ops on the
     // FM operator synth.  Six knobs per op (ratio + level + ADSR);
     // each maps 0..1 like every other voice's ADSR knobs.
@@ -295,6 +310,28 @@ pub fn param_json_schema() -> serde_json::Value {
                     "op4": fm_op_schema.clone(),
                     "fm_ops_steps": bool_array,
                     "fm_ops_notes": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per FM-ops step" }
+                },
+                "additionalProperties": false
+            },
+            "chiptune": {
+                "type": "object",
+                "description": "SID-flavoured (Commodore 64) chiptune voice.  3 oscillators (saw / triangle / pulse / noise) + per-osc ADSR + shared resonant filter (LP/BP/HP) + ring-mod and hard-sync flags.  LLM triggers: 'add a SID lead', 'C64 chiptune', '8-bit synth', 'tracker bass', 'sync sweep'.  For SID-classic leads use a saw on osc 1 + a slightly-detuned (or pulse-mode + PWM) osc 2; engage `sync` for the sync-sweep timbre, `ring_mod` for clangy bell timbres.  The 16-step triangle staircase is the SID's actual triangle behaviour — that grit is intentional.",
+                "properties": {
+                    "enabled":         { "type": "boolean" },
+                    "volume":          { "type": "number", "minimum": 0.0, "maximum": 1.5 },
+                    "pan":             { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+                    "osc1":            chiptune_osc_schema.clone(),
+                    "osc2":            chiptune_osc_schema.clone(),
+                    "osc3":            chiptune_osc_schema.clone(),
+                    "pulse_width":     { "type": "number", "minimum": 0.05, "maximum": 0.95, "description": "Shared pulse width for any oscillator in pulse mode.  0.5 = square (odd harmonics only); off-centre values produce the classic SID PWM character." },
+                    "filter_cutoff":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Filter cutoff: 0 ≈ 80 Hz, 1 ≈ 16 kHz (log-mapped)." },
+                    "filter_resonance":{ "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Filter Q.  Higher values produce the SID's signature filter sweep emphasis." },
+                    "filter_mode":     { "type": "integer", "minimum": 0, "maximum": 2, "description": "0=Lowpass, 1=Bandpass, 2=Highpass." },
+                    "filter_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Filter wet/dry; 0 = bypass.  Default 0 — chiptune patches sound bright + raw before the filter is dialled in." },
+                    "ring_mod":        { "type": "boolean", "description": "Ring-modulate osc 1 by sign(osc 2) — clangy / metallic / bell-like timbres.  SID-authentic." },
+                    "sync":            { "type": "boolean", "description": "Hard-sync osc 2's phase to osc 1.  Combined with osc 2 at a non-integer ratio (or different waveform) produces the classic SID sync-sweep lead." },
+                    "chiptune_steps":  bool_array,
+                    "chiptune_notes":  { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 127 }, "maxItems": 64, "description": "MIDI note per chiptune step" }
                 },
                 "additionalProperties": false
             },

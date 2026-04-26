@@ -93,9 +93,6 @@ features.md.  No remaining items in this section.)
 
 Modules that would plug a real gap in the current voice palette.
 
-- [ ] **Chiptune voice** — 2× pulse + triangle + LFSR noise +
-  optional 1-bit DPCM, NES-authentic.  Pairs well with the existing
-  step sequencer for tracker workflows.
 - [ ] **Vocal formant synth** — formant filter bank around an
   oscillator.  Distinct from `NeuTts` — sings vowels without
   needing a phoneme model.

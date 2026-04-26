@@ -233,6 +233,21 @@ impl DspState {
                     self.modal.gate_off();
                 }
             }
+            ChiptuneTrigger {
+                note,
+                accent,
+                slide: _,
+            } => {
+                if self.params.rack_chiptune {
+                    let freq = super::midi_to_hz_tuned(*note, self.params.tuning);
+                    self.chiptune.trigger(freq, *accent);
+                }
+            }
+            ChiptuneGateOff => {
+                if self.params.rack_chiptune {
+                    self.chiptune.gate_off();
+                }
+            }
         }
     }
 }

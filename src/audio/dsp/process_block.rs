@@ -157,6 +157,7 @@ impl DspState {
         let sends_fm_ops = snap_sends(ModuleKind::FmOpsVoice);
         let sends_additive = snap_sends(ModuleKind::AdditiveVoice);
         let sends_modal = snap_sends(ModuleKind::ModalVoice);
+        let sends_chiptune = snap_sends(ModuleKind::ChiptuneVoice);
         let sends_granular = snap_sends(ModuleKind::GranularTexture);
         let sends_tts = snap_sends(ModuleKind::NeuTts);
         let have_voice_routes = !self.fx_plan.voice_routes.is_empty();
@@ -276,6 +277,7 @@ impl DspState {
             let fm_ops_out = self.fm_ops.process(sr, &p);
             let additive_out = self.additive.process(sr, &p);
             let modal_out = self.modal.process(sr, &p);
+            let chiptune_out = self.chiptune.process(sr, &p);
             let hoover_out = if p.hoover_enabled {
                 self.hoover.process(sr, &p)
             } else {
@@ -353,6 +355,7 @@ impl DspState {
             let bus_fm_ops = fm_ops_out;
             let bus_additive = additive_out;
             let bus_modal = modal_out;
+            let bus_chiptune = chiptune_out;
             let bus_granular = granular_out;
 
             // Sidechain compression: kick ducks bass/pad/hoover/granular
@@ -390,6 +393,7 @@ impl DspState {
                 + bus_fm_ops
                 + bus_additive
                 + bus_modal
+                + bus_chiptune
                 + bus_granular)
                 * 0.60;
             self.reverb_gate_env = gated_reverb_envelope_step(
@@ -467,6 +471,7 @@ impl DspState {
                 let routed_fm_ops = route_or_dry!(bus_fm_ops, sends_fm_ops);
                 let routed_additive = route_or_dry!(bus_additive, sends_additive);
                 let routed_modal = route_or_dry!(bus_modal, sends_modal);
+                let routed_chiptune = route_or_dry!(bus_chiptune, sends_chiptune);
                 let routed_granular = route_or_dry!(bus_granular, sends_granular);
                 let routed_pluck = route_or_dry!(bus_pluck, sends_pluck);
                 let routed_wavetable = route_or_dry!(bus_wavetable, sends_wavetable);
@@ -486,6 +491,7 @@ impl DspState {
                     + routed_fm_ops
                     + routed_additive
                     + routed_modal
+                    + routed_chiptune
                     + routed_granular)
                     * 0.60;
                 // Global chain after per-voice mixing
@@ -567,7 +573,8 @@ impl DspState {
                 + pendulum_out * p.pendulum_pan * 0.5
                 + fm_ops_out * p.fm_ops_pan * 0.5
                 + additive_out * p.additive_pan * 0.5
-                + modal_out * p.modal_pan * 0.5;
+                + modal_out * p.modal_pan * 0.5
+                + chiptune_out * p.chiptune_pan * 0.5;
             // Decay the Pan FxStep side-contribution when the step
             // hasn't run this sample, so switching it off stops the
             // auto-pan cleanly instead of latching the last side value.

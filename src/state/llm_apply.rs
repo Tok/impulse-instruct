@@ -4,11 +4,13 @@ use super::llm_apply_seq::{
     apply_melodic_lane_lens, apply_preecho_voices, apply_sequencer_globals,
 };
 use super::llm_helpers::{
-    apply_additive_update, apply_an1x_update, apply_bass_update, apply_fm_ops_update,
-    apply_hoover_update, apply_modal_update, apply_pluck_update, apply_sample_instrument_update,
-    apply_wavetable_update, unlocked_f32,
+    apply_an1x_update, apply_bass_update, apply_hoover_update, apply_pluck_update,
+    apply_sample_instrument_update, apply_wavetable_update, unlocked_f32,
 };
 use super::llm_helpers_fx::apply_fx_update;
+use super::llm_helpers_voices_v2::{
+    apply_additive_update, apply_chiptune_update, apply_fm_ops_update, apply_modal_update,
+};
 use super::transitions::{set_drum_step_probability, set_drum_step_ratchet, set_drum_voice_steps};
 use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS};
 
@@ -700,6 +702,12 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
         && let Some(m) = update.get("modal").and_then(|v| v.as_object())
     {
         apply_modal_update(&mut s, m, locked);
+    }
+
+    if in_scope("chiptune")
+        && let Some(c) = update.get("chiptune").and_then(|v| v.as_object())
+    {
+        apply_chiptune_update(&mut s, c, locked);
     }
 
     if in_scope("an1x")

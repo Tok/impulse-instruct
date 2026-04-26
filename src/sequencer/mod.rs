@@ -118,6 +118,15 @@ pub enum TriggerEvent {
         slide: f32,
     },
     ModalGateOff,
+    /// Chiptune voice trigger — fires every osc's ADSR and sets
+    /// the played fundamental.  `slide` reserved (chiptune
+    /// voices don't legato today).
+    ChiptuneTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    ChiptuneGateOff,
 }
 
 impl TriggerEvent {
@@ -140,6 +149,7 @@ impl TriggerEvent {
                 | TriggerEvent::FmOpsGateOff
                 | TriggerEvent::AdditiveGateOff
                 | TriggerEvent::ModalGateOff
+                | TriggerEvent::ChiptuneGateOff
         )
     }
 }
@@ -178,6 +188,7 @@ pub struct ClockState {
     pub gate_counter_fm_ops: u32, // samples remaining in FM-ops gate
     pub gate_counter_additive: u32, // samples remaining in additive-voice gate
     pub gate_counter_modal: u32, // samples remaining in modal-voice gate
+    pub gate_counter_chiptune: u32, // samples remaining in chiptune-voice gate
     // Ratchet sub-hit tracking — fixed arrays, no allocation
     pub ratchet_remaining: [u8; NUM_DRUM_VOICES], // sub-hits left per voice
     pub ratchet_acc: [f64; NUM_DRUM_VOICES],      // sample accumulator since step fire
@@ -201,6 +212,7 @@ impl Default for ClockState {
             gate_counter_fm_ops: 0,
             gate_counter_additive: 0,
             gate_counter_modal: 0,
+            gate_counter_chiptune: 0,
             ratchet_remaining: [0; NUM_DRUM_VOICES],
             ratchet_acc: [0.0; NUM_DRUM_VOICES],
             ratchet_interval: [0.0; NUM_DRUM_VOICES],
@@ -248,6 +260,7 @@ pub fn advance_clock(
     let mut gate_counter_fm_ops = clock.gate_counter_fm_ops;
     let mut gate_counter_additive = clock.gate_counter_additive;
     let mut gate_counter_modal = clock.gate_counter_modal;
+    let mut gate_counter_chiptune = clock.gate_counter_chiptune;
     let mut ratchet_remaining = clock.ratchet_remaining;
     let mut ratchet_acc = clock.ratchet_acc;
     let mut ratchet_interval = clock.ratchet_interval;
@@ -351,6 +364,16 @@ pub fn advance_clock(
             gate_counter_modal = 0;
         } else {
             gate_counter_modal -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for chiptune voice
+    if gate_counter_chiptune > 0 {
+        if block_size as u32 >= gate_counter_chiptune {
+            events.push(TriggerEvent::ChiptuneGateOff);
+            gate_counter_chiptune = 0;
+        } else {
+            gate_counter_chiptune -= block_size as u32;
         }
     }
 
@@ -756,6 +779,19 @@ pub fn advance_clock(
                 slide: ms_step.slide,
             });
         }
+
+        // Chiptune voice trigger.
+        let cstep = step % seq.chiptune_steps.max(1);
+        let cs_step = seq.chiptune_pattern.get(cstep).copied().unwrap_or_default();
+        if cs_step.active && cond_gate(step / seq.chiptune_steps.max(1), cs_step.cond) {
+            let gate_samples = (sps * cs_step.gate as f64) as u32;
+            gate_counter_chiptune = gate_samples;
+            events.push(TriggerEvent::ChiptuneTrigger {
+                note: cs_step.note,
+                accent: cs_step.accent,
+                slide: cs_step.slide,
+            });
+        }
     }
 
     let new_clock = ClockState {
@@ -771,6 +807,7 @@ pub fn advance_clock(
         gate_counter_fm_ops,
         gate_counter_additive,
         gate_counter_modal,
+        gate_counter_chiptune,
         ratchet_remaining,
         ratchet_acc,
         ratchet_interval,

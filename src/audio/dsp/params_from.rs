@@ -352,6 +352,58 @@ impl AudioParams {
                 .modal
                 .ratio_preset
                 .min(crate::state::MODAL_RATIO_PRESETS - 1),
+            chiptune_enabled: s.chiptune.enabled,
+            chiptune_volume: s.chiptune.volume.clamp(0.0, 1.5),
+            chiptune_pan: s.chiptune.pan.clamp(-1.0, 1.0),
+            chiptune_osc_waveform: [
+                s.chiptune
+                    .osc1
+                    .waveform
+                    .min(crate::state::CHIPTUNE_WAVEFORMS - 1),
+                s.chiptune
+                    .osc2
+                    .waveform
+                    .min(crate::state::CHIPTUNE_WAVEFORMS - 1),
+                s.chiptune
+                    .osc3
+                    .waveform
+                    .min(crate::state::CHIPTUNE_WAVEFORMS - 1),
+            ],
+            chiptune_osc_level: [
+                s.chiptune.osc1.level.clamp(0.0, 1.0),
+                s.chiptune.osc2.level.clamp(0.0, 1.0),
+                s.chiptune.osc3.level.clamp(0.0, 1.0),
+            ],
+            chiptune_osc_attack: [
+                s.chiptune.osc1.attack.clamp(0.0, 1.0),
+                s.chiptune.osc2.attack.clamp(0.0, 1.0),
+                s.chiptune.osc3.attack.clamp(0.0, 1.0),
+            ],
+            chiptune_osc_decay: [
+                s.chiptune.osc1.decay.clamp(0.0, 1.0),
+                s.chiptune.osc2.decay.clamp(0.0, 1.0),
+                s.chiptune.osc3.decay.clamp(0.0, 1.0),
+            ],
+            chiptune_osc_sustain: [
+                s.chiptune.osc1.sustain.clamp(0.0, 1.0),
+                s.chiptune.osc2.sustain.clamp(0.0, 1.0),
+                s.chiptune.osc3.sustain.clamp(0.0, 1.0),
+            ],
+            chiptune_osc_release: [
+                s.chiptune.osc1.release.clamp(0.0, 1.0),
+                s.chiptune.osc2.release.clamp(0.0, 1.0),
+                s.chiptune.osc3.release.clamp(0.0, 1.0),
+            ],
+            chiptune_pulse_width: s.chiptune.pulse_width.clamp(0.05, 0.95),
+            chiptune_filter_cutoff: s.chiptune.filter_cutoff.clamp(0.0, 1.0),
+            chiptune_filter_resonance: s.chiptune.filter_resonance.clamp(0.0, 1.0),
+            chiptune_filter_mode: s
+                .chiptune
+                .filter_mode
+                .min(crate::state::CHIPTUNE_FILTER_MODES - 1),
+            chiptune_filter_mix: s.chiptune.filter_mix.clamp(0.0, 1.0),
+            chiptune_ring_mod: s.chiptune.ring_mod,
+            chiptune_sync: s.chiptune.sync,
             granular_enabled: s.granular.enabled,
             granular_volume: s.granular.volume,
             granular_density: s.granular.density,
@@ -407,6 +459,11 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::ModalVoice && m.enabled),
+            rack_chiptune: s
+                .rack
+                .modules
+                .iter()
+                .any(|m| m.kind == ModuleKind::ChiptuneVoice && m.enabled),
             sample_attack: s.sample_instrument.attack.clamp(0.0, 1.0),
             sample_decay: s.sample_instrument.decay.clamp(0.0, 1.0),
             sample_sustain: s.sample_instrument.sustain.clamp(0.0, 1.0),

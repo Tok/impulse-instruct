@@ -53,6 +53,9 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // Modal: same problem — 8 per-mode levels + voice fields
         // → selectors let the user pick which fields to drive.
         ModalVoice => &[Selector, Selector, Selector],
+        // Chiptune: 3 oscs × 6 fields each + filter + flags →
+        // selectors throughout.
+        ChiptuneVoice => &[Selector, Selector, Selector],
         // ── Voices without a single pan (multi-voice kits / pan-less) ─────
         DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
             &[Selector, Selector, Selector]

@@ -44,6 +44,7 @@ impl RackState {
             ModuleKind::FmOpsVoice,
             ModuleKind::AdditiveVoice,
             ModuleKind::ModalVoice,
+            ModuleKind::ChiptuneVoice,
         ]
         .iter()
         .filter_map(|&k| find(&self.modules, k))

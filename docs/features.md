@@ -4,6 +4,91 @@ A detailed log of what's built.
 
 ---
 
+### Chiptune (SID-flavoured) voice
+
+3-oscillator chiptune voice modelled on the Commodore 64's
+SID 6581/8580.  PLAN.md called for a "2× pulse + triangle +
+LFSR noise" NES-style voice; user requested the SID flavour
+instead, which the implementation prioritises.
+
+**DSP shape.**  Three independent oscillators, each freely
+selectable between four waveforms:
+- **Saw** — bright + harmonic-rich (the SID-classic lead).
+- **Triangle** — 16-step staircase quantisation reproducing
+  the SID's defining triangle character (the straight-edge
+  pieces make the wave more buzzy than a smooth analogue
+  triangle).
+- **Pulse** — variable duty cycle via the shared `pulse_width`
+  knob.  0.5 = square; off-centre values produce the SID's
+  PWM character.
+- **Noise** — 23-bit-style LFSR with `x^23 + x^18 + 1` taps.
+  Pitches with the played note (the LFSR clock advances at
+  the played frequency, not the audio rate) — faithful to
+  the SID's frequency-synced noise generator.
+
+Per-osc ADSR (independent envelopes — what makes SID
+percussion arrangements possible from a single voice).  Single
+shared resonant filter (LP / BP / HP) reusing the standard
+`Svf` from `fx_extras` — same SVF the FX module + SAMPLER+'s
+per-voice filter use, so chiptune patches inherit familiar
+filter character.  Filter is bypassed by default (mix = 0)
+so a freshly-enabled patch sounds bright and raw before the
+user dials it in.
+
+**Ring-mod and hard-sync** — the SID's signature flags.  Ring
+mod multiplies osc 1's output by `sign(osc 2)` for clangy /
+metallic / bell timbres.  Hard sync resets osc 2's phase
+when osc 1 wraps; combined with osc 2 at a non-integer ratio
+(or different waveform / pulse width) this is the
+sync-sweep lead Hubbard / Galway / Tel built so much of the
+C64 catalogue around.
+
+**State.**  `ChiptuneState` with 3× `SidOsc` (waveform u8,
+level, ADSR — 6 fields per osc), shared `pulse_width`,
+filter (cutoff, resonance, mode, mix), `ring_mod` and `sync`
+flags, voice volume + pan + enabled.  Default = saw on osc 1
++ pulse on osc 2 (slight detune lead) + osc 3 silent.
+
+**Sequencer integration.**  Full lane mirroring the other
+melodic voices — `chiptune_pattern`, `chiptune_steps`,
+`ChiptuneTrigger` / `ChiptuneGateOff` events,
+`gate_counter_chiptune`, `rack_chiptune` derived flag.
+
+**LLM apply + schema.**  `apply_chiptune_update` reads
+nested per-osc objects (`chiptune.osc1.waveform`, etc.),
+clamps waveform / filter_mode out-of-range values, honours
+locks per-field.  Reusable `chiptune_osc_schema` cloned
+across the 3 osc slots in the JSON schema (matches the
+FM-ops / additive pattern).  Schema description prompts the
+LLM toward SID-classic patches: "saw on osc 1 + slightly-
+detuned (or pulse-mode + PWM) osc 2; engage `sync` for the
+sync-sweep timbre, `ring_mod` for clangy bell timbres."
+
+**UI.**  6×5 panel.  Header row: ON/OFF + VOLUME + PAN +
+RING/SYNC toggle buttons (the SID-defining flags, exposed
+upfront rather than buried in a menu).  3 oscillator rows,
+each glass-grouped: OSC-N label + WAVE cycle button (SAW →
+TRI → PULSE → NOISE) + LEVEL + ATTACK / DECAY / SUSTAIN /
+RELEASE.  Filter row: CUTOFF + RESONANCE + MIX + MODE
+cycle (LP → BP → HP) + PULSE WIDTH.
+
+**Tests.**  17 new — DSP-side: silence-before-trigger /
+when-disabled, audible-after-trigger, every-waveform-
+produces-output (catches a regression where the noise
+dispatch falls through to silence), output-bounded-under-
+full-drive, release-eventually-silences, sync-resets-osc2-
+phase-when-osc1-wraps.  State-side: defaults / apply-knobs
+/ apply-per-osc / waveform clamp / filter mode clamp / lock
+/ sequencer lane / label / alias parsing / zone +
+audio-output.  Full suite **1993 → 2010**.
+
+Files: new `src/state/chiptune.rs`, `src/audio/dsp/chiptune.rs`,
+`src/ui/panels/chiptune.rs`, `src/tests/chiptune_tests.rs`.
+~22 files touched — voice-add ritual unchanged from the
+Modal / Additive ships.
+
+---
+
 ### Modal / struck physical-model voice
 
 Cheap N-mode resonator from the Voices wishlist.  Plugs the

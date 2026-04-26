@@ -47,6 +47,11 @@ pub use additive::{ADDITIVE_HARMONICS, AdditiveState};
 pub mod modal;
 pub use modal::{MODAL_MODES, MODAL_RATIO_PRESETS, ModalState};
 
+pub mod chiptune;
+pub use chiptune::{
+    CHIPTUNE_FILTER_MODES, CHIPTUNE_OSCS, CHIPTUNE_WAVEFORMS, ChiptuneState, SidOsc,
+};
+
 pub mod granular;
 pub use granular::GranularState;
 
@@ -262,6 +267,8 @@ pub struct AppState {
     #[serde(default)]
     pub modal: ModalState,
     #[serde(default)]
+    pub chiptune: ChiptuneState,
+    #[serde(default)]
     pub granular: GranularState,
     #[serde(default)]
     pub hoover: HooverState,
@@ -419,6 +426,7 @@ impl Default for AppState {
             fm_ops: Default::default(),
             additive: Default::default(),
             modal: Default::default(),
+            chiptune: Default::default(),
             granular: Default::default(),
             hoover: Default::default(),
             pluck: Default::default(),
@@ -829,6 +837,7 @@ pub mod llm_apply;
 pub mod llm_apply_seq;
 pub(crate) mod llm_helpers;
 pub(crate) mod llm_helpers_fx;
+pub(crate) mod llm_helpers_voices_v2;
 pub(crate) mod llm_rack;
 pub mod transitions;
 pub mod transitions_presets;
