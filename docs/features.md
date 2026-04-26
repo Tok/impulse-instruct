@@ -4,6 +4,58 @@ A detailed log of what's built.
 
 ---
 
+### Vibrato FX (`FxVibrato`)
+
+Pitch-modulation cousin of the shipped `FxTremolo`.  Single
+delay-line tap whose read offset is modulated by an internal
+LFO, producing pitch wobble without level swing.  Distinct
+from `FxChorus` — chorus mixes multiple delay taps with the
+dry to thicken; vibrato is one tap, no internal dry blend in
+the wet path so the user hears pure pitch wobble.
+
+**DSP shape.**  1024-sample static delay line (10 ms at 96 kHz —
+the highest the engine ever runs at).  Write index advances
+each sample; read offset = baseline (5 ms) + depth × LFO ×
+max swing (5 ms), linearly interpolated.  Same sine→square
+LFO morph as the tremolo for visual + sonic consistency.
+No allocations.
+
+**Knobs.**
+- `vibrato_rate` 0..1 → 0.1..10 Hz log-mapped.  Caps lower
+  than tremolo (12 Hz) — hyper-fast pitch wobble crosses into
+  FM-sideband territory where the effect stops reading as a
+  vibrato.
+- `vibrato_depth` 0..1 → 0..±5 ms peak delay-time deviation
+  (≈ 0..50 cents pitch swing at 5 Hz).
+- `vibrato_shape` 0..1.  Sine (smooth pitch curve) → near-
+  square (warbly two-pitch hop) via the same 16× tanh-clamped
+  sine lerp the tremolo uses.
+- `vibrato_mix` 0..1 wet/dry with cheap-bypass fast path.
+
+**Wiring.**  Same FX add ritual as Tremolo — `FxStep::Vibrato`
+(idx 35, `FX_STEP_COUNT` bumped to 36), `ModuleKind::FxVibrato`
+("VIBRATO" label, 2×1 grid, sort-group 36 alongside Tremolo /
+Pan).  `FxState::vibrato_*` flat fields with defaults
+rate=0.45 / depth=0.5 / shape=0 / mix=0.  Aliases vibrato /
+vib / fxvibrato / pitchmod / pitchwobble.  4 modulation
+selectors so every knob can ride an LFO (slow rate sweep
+yields a "warming-up vibrato" patch).
+
+**LLM apply + schema.**  Standard `apply_fx_update` macro
+expansion + flat schema entries.
+
+**Tests.**  +4 DSP (mix=0 bypass, depth=0 transparency on a
+warmed buffer, audible pitch modulation at full depth, output
+bounded), +6 state-side (defaults, llm-apply, lock honoured,
+FxStep mapping, label, alias parsing).  Suite **2035 → 2045**
+lib tests passing.
+
+Files: new `src/audio/dsp/fx_vibrato.rs`, new
+`src/tests/fx_vibrato_tests.rs`.  ~14 files touched — same
+short FX add ritual as Tremolo.
+
+---
+
 ### Tremolo FX (`FxTremolo`)
 
 First entry from the FX wishlist.  Internal-LFO amplitude

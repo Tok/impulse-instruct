@@ -190,6 +190,10 @@ impl AudioParams {
             tremolo_depth: s.fx.tremolo_depth.clamp(0.0, 1.0),
             tremolo_shape: s.fx.tremolo_shape.clamp(0.0, 1.0),
             tremolo_mix: s.fx.tremolo_mix.clamp(0.0, 1.0),
+            vibrato_rate: s.fx.vibrato_rate.clamp(0.0, 1.0),
+            vibrato_depth: s.fx.vibrato_depth.clamp(0.0, 1.0),
+            vibrato_shape: s.fx.vibrato_shape.clamp(0.0, 1.0),
+            vibrato_mix: s.fx.vibrato_mix.clamp(0.0, 1.0),
             param_eq_ms_mode: s.fx.param_eq_ms_mode,
             conv_reverb_mix: s.fx.conv_reverb_mix.clamp(0.0, 1.0),
             // Cabinet mode caps the IR length at 10 % of the loaded

@@ -136,6 +136,12 @@ pub enum ModuleKind {
     /// and from chorus/flanger (delay-line modulation).  Sine →
     /// square morph covers slow swell through helicopter-chop.
     FxTremolo,
+    /// Vibrato — periodic pitch modulation via a small modulated
+    /// delay line.  Pitch-domain cousin of `FxTremolo`.  Distinct
+    /// from `FxChorus` (multiple delay taps mixed with dry for
+    /// thickening) — vibrato is a single tap with no dry blend in
+    /// the wet path so the user hears pure pitch wobble.
+    FxVibrato,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -254,6 +260,7 @@ impl ModuleKind {
             Self::FxVinyl => "VINYL",
             Self::FxDjFilter => "DJ FILTER",
             Self::FxTremolo => "TREMOLO",
+            Self::FxVibrato => "VIBRATO",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -431,7 +438,8 @@ impl ModuleKind {
             | Self::FxWiden
             | Self::FxVinyl
             | Self::FxDjFilter
-            | Self::FxTremolo => (2, 1),
+            | Self::FxTremolo
+            | Self::FxVibrato => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -501,6 +509,7 @@ impl ModuleKind {
             | Self::FxVinyl
             | Self::FxDjFilter
             | Self::FxTremolo
+            | Self::FxVibrato
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -579,6 +588,7 @@ impl ModuleKind {
                 | Self::FxVinyl
                 | Self::FxDjFilter
                 | Self::FxTremolo
+                | Self::FxVibrato
         )
     }
 
@@ -632,6 +642,7 @@ impl ModuleKind {
                 | Self::FxVinyl
                 | Self::FxDjFilter
                 | Self::FxTremolo
+                | Self::FxVibrato
         )
     }
 

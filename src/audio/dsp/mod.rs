@@ -17,6 +17,7 @@ pub mod fx_math;
 pub mod fx_sidechain;
 mod fx_step;
 pub mod fx_tremolo;
+pub mod fx_vibrato;
 pub mod fx_vinyl;
 pub mod gabber_kick;
 pub mod granular_voice;
@@ -58,6 +59,7 @@ use vocal::VocalVoice;
 // inside the extracted `process_block.rs`; pulled in there directly.
 use fx_sidechain::{Gate, Vocoder};
 use fx_tremolo::TremoloFx;
+use fx_vibrato::VibratoFx;
 use fx_vinyl::VinylFx;
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
@@ -142,6 +144,7 @@ pub struct DspState {
     vinyl: VinylFx,
     dj_filter: DjFilter,
     tremolo: TremoloFx,
+    vibrato: VibratoFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -296,6 +299,7 @@ impl DspState {
             vinyl: VinylFx::new(sample_rate),
             dj_filter: DjFilter::new(),
             tremolo: TremoloFx::new(),
+            vibrato: VibratoFx::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

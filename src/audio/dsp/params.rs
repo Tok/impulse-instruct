@@ -663,6 +663,11 @@ pub struct AudioParams {
     pub tremolo_depth: f32,
     pub tremolo_shape: f32,
     pub tremolo_mix: f32,
+    // Vibrato — internal-LFO pitch modulation via a small delay line.
+    pub vibrato_rate: f32,
+    pub vibrato_depth: f32,
+    pub vibrato_shape: f32,
+    pub vibrato_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,

@@ -332,6 +332,14 @@ impl DspState {
                 p.tremolo_mix,
                 sr,
             ),
+            FxStep::Vibrato => self.vibrato.process(
+                sig,
+                p.vibrato_rate,
+                p.vibrato_depth,
+                p.vibrato_shape,
+                p.vibrato_mix,
+                sr,
+            ),
         }
     }
 

@@ -446,6 +446,27 @@ pub struct FxState {
     /// this value first.
     #[serde(default)]
     pub tremolo_mix: f32,
+    // ── Vibrato ──────────────────────────────────────────────────────────
+    /// LFO rate 0..1 → 0.1..10 Hz log-mapped.  Vibrato tops out
+    /// lower than tremolo because hyper-fast pitch wobble crosses
+    /// into FM-sideband territory where the effect stops reading
+    /// as a vibrato.
+    #[serde(default = "default_vibrato_rate")]
+    pub vibrato_rate: f32,
+    /// Modulation depth 0..1 → 0..±5 ms peak delay-time deviation
+    /// (≈ 0..50 cents at 5 Hz).  At 0 the delay line has zero
+    /// modulation (signal passes through with a static delay).
+    #[serde(default = "default_vibrato_depth")]
+    pub vibrato_depth: f32,
+    /// Waveshape morph 0..1 — 0 = sine (smooth pitch curve),
+    /// 1 = near-square (warbly pitch hops).  Same tanh-lerp as
+    /// tremolo's `shape` for visual + sonic consistency.
+    #[serde(default)]
+    pub vibrato_shape: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).  Cheap-bypass fast path
+    /// checks this first.
+    #[serde(default)]
+    pub vibrato_mix: f32,
     // ── Convolution Reverb ───────────────────────────────────────────────
     /// Wet/dry mix (0 = dry, 1 = 100 % wet).
     #[serde(default)]
@@ -683,6 +704,14 @@ fn default_tremolo_depth() -> f32 {
     0.6 // Audible swell on first engagement without going to silence.
 }
 
+fn default_vibrato_rate() -> f32 {
+    0.45 // ~5 Hz — natural-sounding vocal / string vibrato rate.
+}
+
+fn default_vibrato_depth() -> f32 {
+    0.5 // ~25 cents peak swing — audible without sounding seasick.
+}
+
 impl Default for FxState {
     fn default() -> Self {
         Self {
@@ -808,6 +837,10 @@ impl Default for FxState {
             tremolo_depth: default_tremolo_depth(),
             tremolo_shape: 0.0,
             tremolo_mix: 0.0,
+            vibrato_rate: default_vibrato_rate(),
+            vibrato_depth: default_vibrato_depth(),
+            vibrato_shape: 0.0,
+            vibrato_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

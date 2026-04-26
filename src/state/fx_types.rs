@@ -46,13 +46,14 @@ pub enum FxStep {
     Vinyl,
     DjFilter,
     Tremolo,
+    Vibrato,
 }
 
 /// Total FxStep variants — sized to pack dense per-FX audio-thread
 /// caches (e.g. previous-sample outputs for feedback routes) without
 /// allocating a HashMap every block.  Bump this when adding a new
 /// `FxStep` variant so its `idx()` value has a slot in the cache.
-pub const FX_STEP_COUNT: usize = 35;
+pub const FX_STEP_COUNT: usize = 36;
 
 impl FxStep {
     /// Dense 0..`FX_STEP_COUNT` index — stable; keep in lock-step with
@@ -95,6 +96,7 @@ impl FxStep {
             FxStep::Vinyl => 32,
             FxStep::DjFilter => 33,
             FxStep::Tremolo => 34,
+            FxStep::Vibrato => 35,
         }
     }
 }

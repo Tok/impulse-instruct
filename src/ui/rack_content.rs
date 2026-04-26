@@ -321,6 +321,24 @@ pub(super) fn draw_fx_content(
                 pad_pair = new_pair;
             }
         }
+        ModuleKind::FxTremolo | ModuleKind::FxVibrato => {
+            // Internal-LFO modulation cluster lives in
+            // `rack_content_fx_lfo.rs` — same split-for-LOC
+            // pattern as the bigger fx_extras file.
+            if let Some(new_pair) = crate::ui::rack_content_fx_lfo::try_draw_fx_lfo_content(
+                app,
+                ui,
+                kind,
+                module_id,
+                ctrl,
+                &locked,
+                &focused,
+                pad_expanded,
+                pad_pair,
+            ) {
+                pad_pair = new_pair;
+            }
+        }
         ModuleKind::FxEq => {
             let (mut lo, mut mi, mut hi) = {
                 let s = app.state.read();

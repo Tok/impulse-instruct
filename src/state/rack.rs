@@ -305,6 +305,7 @@ impl RackState {
                 | ModuleKind::FxWiden
                 | ModuleKind::FxFreqShift
                 | ModuleKind::FxTremolo
+                | ModuleKind::FxVibrato
         );
         if !has_audio_out {
             return true;
@@ -579,6 +580,9 @@ impl RackState {
                 // to Pan / Chorus / Phaser — all internal-LFO-
                 // driven movement effects.
                 ModuleKind::FxTremolo => 36,
+                // Vibrato joins the same cluster — pitch-modulation
+                // cousin of Tremolo's amplitude modulation.
+                ModuleKind::FxVibrato => 36,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

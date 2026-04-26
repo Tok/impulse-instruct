@@ -77,6 +77,8 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // selectors so the user can route LFOs to any of them
         // (e.g. one LFO sweeping the rate for "speeding-up" effects).
         FxTremolo => &[Selector, Selector, Selector, Selector],
+        // Vibrato: same 4 knobs as tremolo, same routing freedom.
+        FxVibrato => &[Selector, Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],

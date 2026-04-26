@@ -265,6 +265,10 @@ pub(super) fn apply_fx_update(
     u!(s.fx.tremolo_depth, "tremolo_depth", "fx.tremolo_depth");
     u!(s.fx.tremolo_shape, "tremolo_shape", "fx.tremolo_shape");
     u!(s.fx.tremolo_mix, "tremolo_mix", "fx.tremolo_mix");
+    u!(s.fx.vibrato_rate, "vibrato_rate", "fx.vibrato_rate");
+    u!(s.fx.vibrato_depth, "vibrato_depth", "fx.vibrato_depth");
+    u!(s.fx.vibrato_shape, "vibrato_shape", "fx.vibrato_shape");
+    u!(s.fx.vibrato_mix, "vibrato_mix", "fx.vibrato_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {

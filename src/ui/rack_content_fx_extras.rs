@@ -50,8 +50,7 @@ pub(super) fn try_draw_fx_extras_content(
         | ModuleKind::FxWiden
         | ModuleKind::FxFreqShift
         | ModuleKind::FxVinyl
-        | ModuleKind::FxDjFilter
-        | ModuleKind::FxTremolo => {}
+        | ModuleKind::FxDjFilter => {}
         _ => return None,
     }
 
@@ -911,54 +910,6 @@ pub(super) fn try_draw_fx_extras_content(
                 st.fx.dj_filter_morph = morph;
                 st.fx.dj_filter_resonance = res;
                 st.fx.dj_filter_mix = mix;
-            }
-        }
-        ModuleKind::FxTremolo => {
-            // RATE / DEPTH on the first row; SHAPE / MIX on the
-            // second.  Same compact 4-knob shape as the chorus /
-            // phaser cards.  No detents needed — every knob is
-            // unipolar and the audible effect of each is
-            // immediate, so users dial them by ear.
-            let (mut r, mut d, mut sh, mut m) = {
-                let st = app.state.read();
-                (
-                    st.fx.tremolo_rate,
-                    st.fx.tremolo_depth,
-                    st.fx.tremolo_shape,
-                    st.fx.tremolo_mix,
-                )
-            };
-            hk!(
-                ui,
-                ("RATE", &mut r, pm("fx.tremolo_rate")),
-                ("DEPTH", &mut d, pm("fx.tremolo_depth")),
-                ("SHAPE", &mut sh, pm("fx.tremolo_shape")),
-                ("MIX", &mut m, pm("fx.tremolo_mix"))
-            );
-            if pad_expanded {
-                ui.add_space(PAD_SECTION_TOP_GAP);
-                let (vc, _) = render_three_pad(
-                    ui,
-                    &format!("tremolo_xy_{module_id}"),
-                    ["RATE", "DEPTH", "MIX"],
-                    &mut pad_pair,
-                    (&mut r, &mut d, &mut m),
-                    [
-                        user_owned("fx.tremolo_rate"),
-                        user_owned("fx.tremolo_depth"),
-                        user_owned("fx.tremolo_mix"),
-                    ],
-                );
-                if vc {
-                    changed = true;
-                }
-            }
-            if changed || r != app.state.read().fx.tremolo_rate {
-                let mut st = app.state.write();
-                st.fx.tremolo_rate = r;
-                st.fx.tremolo_depth = d;
-                st.fx.tremolo_shape = sh;
-                st.fx.tremolo_mix = m;
             }
         }
         _ => unreachable!("guarded by the early return above"),

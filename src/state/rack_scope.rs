@@ -86,7 +86,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxFreqShift
         | ModuleKind::FxVinyl
         | ModuleKind::FxDjFilter
-        | ModuleKind::FxTremolo => Some("fx".to_string()),
+        | ModuleKind::FxTremolo
+        | ModuleKind::FxVibrato => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         _ => None,
     }
@@ -157,6 +158,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxvinyl" | "vinyl" | "cassette" | "tapevinyl" => Some(FxVinyl),
         "fxdjfilter" | "djfilter" | "dj" | "morphfilter" | "djkill" => Some(FxDjFilter),
         "fxtremolo" | "tremolo" | "trem" | "amplmod" | "ampmod" => Some(FxTremolo),
+        "fxvibrato" | "vibrato" | "vib" | "pitchmod" | "pitchwobble" => Some(FxVibrato),
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
@@ -244,6 +246,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxTremolo => matches!(
             n.as_str(),
             "tremolo" | "trem" | "ampmod" | "ampl_mod" | "fx"
+        ),
+        ModuleKind::FxVibrato => matches!(
+            n.as_str(),
+            "vibrato" | "vib" | "pitchmod" | "pitch_mod" | "fx"
         ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),

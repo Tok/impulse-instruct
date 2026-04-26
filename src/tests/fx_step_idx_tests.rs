@@ -50,6 +50,7 @@ const ALL_FX_STEPS: &[FxStep] = &[
     FxStep::Vinyl,
     FxStep::DjFilter,
     FxStep::Tremolo,
+    FxStep::Vibrato,
 ];
 
 #[test]
