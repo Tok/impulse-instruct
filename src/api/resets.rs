@@ -39,6 +39,71 @@ pub async fn post_state_reset(AxumState(api): AxumState<ApiState>) -> Json<OkRes
     })
 }
 
+/// AI patch morph — schedule a sequence of LLM "nudge" prompts
+/// that evolve the FX chain along a textual prompt across N bars.
+/// Body: `{ "prompt": "...", "bars": 8, "calls": 8 }` — `calls`
+/// defaults to `bars` (one nudge per bar).  The scheduler lives in
+/// `ui::patch_morph_handler::tick_patch_morph` and fires on bar
+/// boundaries via the existing LLM input channel.
+pub async fn post_patch_morph(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<serde_json::Value>,
+) -> Json<OkResponse> {
+    use crate::ui::patch_morph_handler::compute_step_interval;
+
+    let prompt = req
+        .get("prompt")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if prompt.trim().is_empty() {
+        return Json(OkResponse {
+            ok: false,
+            message: Some("morph requires a non-empty prompt".into()),
+        });
+    }
+    let bars = req
+        .get("bars")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(8)
+        .clamp(1, 64) as u32;
+    let total_calls = req
+        .get("calls")
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32)
+        .unwrap_or(bars)
+        .clamp(1, bars * 4); // soft cap at 4 calls per bar to avoid LLM flood
+
+    let mut s = api.app_state.write();
+    let step_division = s.sequencer.step_division;
+    let now = s.global_step_count;
+    s.patch_morph = crate::state::PatchMorphState {
+        active: true,
+        prompt: prompt.clone(),
+        total_calls,
+        calls_done: 0,
+        start_global_step: now,
+        // Seed `last_step_fired` so the first nudge fires
+        // immediately on the next tick (no waiting one bar before
+        // the morph starts to act).
+        last_step_fired: now.saturating_sub(compute_step_interval(
+            bars,
+            step_division,
+            total_calls,
+        )),
+        step_interval: compute_step_interval(bars, step_division, total_calls),
+    };
+    drop(s);
+    api_log(
+        &api,
+        format!("[API] morph: \"{prompt}\" over {bars} bars × {total_calls} calls"),
+    );
+    Json(OkResponse {
+        ok: true,
+        message: Some(format!("morph started: {bars} bars, {total_calls} calls")),
+    })
+}
+
 /// Eurorack-style "patch generator" — wipes the rack to its minimal
 /// shape, then rebuilds it from a randomised layout (random voices /
 /// FX / LFOs picked from curated pools, deterministic per seed).

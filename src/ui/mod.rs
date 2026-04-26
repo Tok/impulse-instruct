@@ -9,6 +9,7 @@ pub(crate) mod header;
 pub(crate) mod header_menu;
 mod link_handler;
 mod llm_drain;
+pub mod patch_morph_handler;
 mod llm_log_color;
 mod llm_strip;
 mod midi_handler;

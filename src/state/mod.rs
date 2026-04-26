@@ -53,6 +53,9 @@ pub use chain_advance::{LoopBoundaryAction, build_advance_target, classify_loop_
 pub mod morph;
 pub use morph::{ChainMorph, bit_reverse_rank, morph_tick, step_swapped};
 
+pub mod patch_morph;
+pub use patch_morph::PatchMorphState;
+
 pub mod persona_preset;
 pub use persona_preset::{
     PersonaPreset, list_presets, list_presets_in, load_preset_from_path, personas_dir, save_preset,
@@ -336,6 +339,14 @@ pub struct AppState {
     /// `current_step` advances. Used for bar-based ramp timing.
     #[serde(skip)]
     pub global_step_count: u64,
+    /// AI patch-morph orchestration state — set by `/api/morph` or
+    /// the UI menu, polled by `tick_patch_morph` each UI frame to
+    /// fire the next LLM nudge when the bar interval elapses.
+    /// `#[serde(skip)]` because morph progress is ephemeral —
+    /// reloading a session shouldn't resurrect a half-finished
+    /// arc.
+    #[serde(skip)]
+    pub patch_morph: PatchMorphState,
     /// API-requested zone collapse: (ai, global, voice, fxmod). None = no change.
     #[serde(skip)]
     pub collapse_requested: Option<(bool, bool, bool, bool)>,
@@ -411,6 +422,7 @@ impl Default for AppState {
             scroll_target: None,
             rack_flip_requested: None,
             global_step_count: 0,
+            patch_morph: Default::default(),
             collapse_requested: None,
             audio_snapshot: String::new(),
             mpe: MpeExpression::default(),

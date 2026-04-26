@@ -157,6 +157,7 @@ POST /api/sample         { "random": true }     load a random sample from sample
 POST /api/flip           { "show_back": true }   (true=cables, false=knobs)
 POST /api/rack/reset                              strip to sequencer + master + console
 POST /api/rack/random    { "seed": 42 }            wipe + drop random voices/FX/LFOs (Eurorack patch generator); seed optional
+POST /api/morph          { "prompt": "evolve from cathedral to dystopia", "bars": 8, "calls": 8 }   AI patch morph — schedules N LLM nudges across N bars (calls defaults to bars; capped at 4× bars)
 POST /api/rack/add       { "kind": "808" }        add module, returns { "id": N }
 POST /api/rack/agent     { "persona": "BASS", "scope": ["bass"], "model": "gemma", "mode": "mc", "tts": true }
 POST /api/rack/cable     { "from": 1, "to": 5, "kind": "audio", "audio_gain": 0.4 }  connect modules (default kind: control; audio_gain 0..1.5, optional)

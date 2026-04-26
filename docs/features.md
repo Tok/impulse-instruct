@@ -4,6 +4,59 @@ A detailed log of what's built.
 
 ---
 
+### AI patch morph (absurd queue #4)
+
+Schedule a sequence of LLM "nudge" prompts that evolve the patch
+along a textual prompt across N bars.  POST one prompt + a bar
+count; the scheduler fires one LLM call per bar (configurable),
+each tagged with progress context ("step 3 of 8") so the model
+knows where in the arc it is.  Builds on the existing
+`apply_llm_update` + `locked_params` machinery — every nudge
+honours the user's locked params, so a morph can't trample
+on knobs the user is actively touching.
+
+State + plumbing:
+* New `state::patch_morph::PatchMorphState` (active / prompt /
+  total_calls / calls_done / start_global_step /
+  last_step_fired / step_interval).  `#[serde(skip)]` on
+  AppState — morph progress is ephemeral, reloading a session
+  shouldn't resurrect a half-finished arc.  Distinct file from
+  the existing `morph::ChainMorph` (pattern crossfade), so the
+  two evolve independently.
+* `next_nudge_prompt()` formats the user prompt with a "step N
+  of M" header.
+* `compute_step_interval(bars, step_division, total_calls)`
+  is the pure mapping bar-count → `global_step_count` ticks.
+  Defends against zero / overflow inputs.
+
+Scheduler:
+* `ui::patch_morph_handler::tick_patch_morph` runs once per UI
+  tick alongside `tick_link_sync`.  Polls
+  `state.global_step_count`; when it crosses
+  `last_step_fired + step_interval`, sends the next nudge via
+  the shared `send_llm_infer` helper (same path the LLM strip
+  uses, so the morph nudge gets identical apply_llm_update
+  treatment).  Decrements `calls_done`; deactivates when the
+  total is reached.
+* First nudge fires immediately on the next tick by seeding
+  `last_step_fired = now - step_interval` at start time — no
+  one-bar wait before the morph begins to act.
+
+API:
+* `POST /api/morph {"prompt": "...", "bars": 8, "calls": 8}` —
+  `calls` defaults to `bars` (one nudge per bar), soft-capped
+  at `bars * 4` to avoid LLM flood.  Documented in CLAUDE.md.
+
+8 new tests: 3 over `PatchMorphState` (in_progress predicate,
+nudge prompt format, divide-by-zero defense) + 5 over
+`compute_step_interval` (default-grid one-bar-per-call, 2-bar
+spacing, 8th-note grid, pathological inputs, more-calls-than-
+steps).  1909 tests passing; clippy clean on stub +
+--features link.
+
+Dedicated UI dialog deferred — for V1 the morph is API-driven;
+a panel-style dialog can come later if desired.
+
 ### Mellotron mode on SAMPLER+ (absurd queue #3)
 
 Per the brief — "uses the SampleInstrument scaffolding" — V1
