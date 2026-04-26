@@ -633,6 +633,10 @@ impl RackState {
                 ModuleKind::StereoVectorscope => 41,
                 // LFO scope groups with the LFO modules.
                 ModuleKind::LfoScope => 42,
+                // CV-seq scope sits next to the LFO scope — both
+                // are dedicated viz companions for modulation
+                // sources.
+                ModuleKind::CvSeqScope => 42,
                 // Tuner + chord display group with the spectrum cluster.
                 ModuleKind::PitchTracker => 43,
                 ModuleKind::ChordDisplay => 44,

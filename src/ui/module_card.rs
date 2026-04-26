@@ -106,6 +106,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::BarOscilloscope
         | ModuleKind::StereoVectorscope
         | ModuleKind::LfoScope
+        | ModuleKind::CvSeqScope
         | ModuleKind::PitchTracker
         | ModuleKind::ChordDisplay
         | ModuleKind::Spectrogram

@@ -263,6 +263,17 @@ pub enum ModuleKind {
     /// waveform): a hand-drawn per-step value table for stepped
     /// filter sweeps, gate-like duck patterns, pitch transposition.
     CvSequencer,
+    /// CV-sequence visualiser — focused, dedicated viz for a
+    /// CvSequencer slot's per-step output.  Renders the
+    /// scaled/bipolar value (`(step - 0.5) * 2 * depth`) as a
+    /// stair-step waveform with a live playhead, picking up its
+    /// source slot via incoming CV cable from a `CvSequencer`
+    /// (or falling back to the first enabled slot when unwired).
+    /// V2 polish — the existing CvSequencer panel already shows
+    /// 16 step bars in-place; this is the dedicated companion
+    /// for users who want a clean focused readout while
+    /// performing.
+    CvSeqScope,
     /// Slew / glide CV utility — smooths an incoming CV signal
     /// with separate attack (rise) and release (fall) time
     /// constants.  Distinct from the bass voice's portamento:
@@ -380,6 +391,7 @@ impl ModuleKind {
             Self::OnsetGrid => "ONSET GRID",
             Self::LfoModule => "LFO",
             Self::CvSequencer => "CV SEQ",
+            Self::CvSeqScope => "CV SCOPE",
             Self::Slew => "SLEW",
             Self::Quantizer => "QUANTIZER",
             Self::Comparator => "COMPARATOR",
@@ -505,6 +517,9 @@ impl ModuleKind {
             Self::LfoModule => (2, 2),
             // CV sequencer — 16 step bars need horizontal room.
             Self::CvSequencer => (5, 2),
+            // CV-seq scope — same shape as LfoScope (4×2) so the
+            // companion viz reads as a sibling.
+            Self::CvSeqScope => (4, 2),
             // Slew — 2 knobs, compact card.
             Self::Slew => (2, 1),
             // Quantizer — root + scale dropdowns, 2×1 fits.
@@ -668,6 +683,7 @@ impl ModuleKind {
             | Self::OnsetGrid
             | Self::LfoModule
             | Self::CvSequencer
+            | Self::CvSeqScope
             | Self::Slew
             | Self::Quantizer
             | Self::Comparator
@@ -850,6 +866,7 @@ impl ModuleKind {
                 | Self::FxDjFilter
                 | Self::LfoModule
                 | Self::CvSequencer
+                | Self::CvSeqScope
                 | Self::Slew
                 | Self::Quantizer
                 | Self::Comparator

@@ -217,6 +217,137 @@ pub fn lfo_slot_from_cables(state: &crate::state::AppState, scope_id: u32) -> Op
     None
 }
 
+// ─── CV-seq scope ────────────────────────────────────────────────────────────
+
+/// Render a CV-sequencer slot's per-step output as a stair-step waveform
+/// over the 16 steps, with a live playhead that tracks
+/// `sequencer.current_step`.  V2 polish — companion to the in-place 16
+/// step bars on the `CvSequencer` panel itself, scaled / bipolar so the
+/// user sees the actual mod value going to the target rather than the
+/// raw 0..1 step input.
+///
+/// Source-slot picking mirrors `draw_lfo_scope`: walk the cable graph
+/// for an incoming CV cable from any `CvSequencer`; fall back to the
+/// first enabled slot when unwired so a freshly-dropped scope still
+/// shows something useful.
+pub fn draw_cv_seq_scope(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let (slots, cable_slot, playhead) = {
+        let s = app.state.read();
+        let slot = cv_seq_slot_from_cables(&s, module_id);
+        (
+            s.cv_seq.clone(),
+            slot,
+            (s.sequencer.current_step % crate::state::CV_SEQ_STEPS) as i32,
+        )
+    };
+    let active = match cable_slot {
+        Some(idx) if idx < slots.len() => Some((idx, &slots[idx])),
+        _ => slots.iter().enumerate().find(|(_, s)| s.enabled),
+    };
+
+    let avail_w = ui.available_width().max(64.0);
+    let avail_h = ui.available_height().max(40.0);
+    let (rect, _) = ui.allocate_exact_size(egui::Vec2::new(avail_w, avail_h), egui::Sense::hover());
+    if !ui.is_rect_visible(rect) {
+        return;
+    }
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+    // Zero-line for the bipolar mapping.
+    painter.line_segment(
+        [
+            egui::Pos2::new(rect.left(), rect.center().y),
+            egui::Pos2::new(rect.right(), rect.center().y),
+        ],
+        egui::Stroke::new(1.0, egui::Color32::from_gray(30)),
+    );
+
+    let Some((slot_idx, slot)) = active else {
+        painter.text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "(no enabled CV seq)",
+            egui::FontId::monospace(8.0),
+            egui::Color32::from_gray(60),
+        );
+        return;
+    };
+
+    // Stair-step trace over the 16 steps.  Bipolar value =
+    // `(step - 0.5) * 2 * depth` — same mapping the modulation
+    // pipeline applies, so the visualiser tracks what the audio
+    // thread actually sends to the target.
+    let depth = slot.depth.clamp(0.0, 1.0);
+    let n = crate::state::CV_SEQ_STEPS as f32;
+    let step_w = avail_w / n;
+    for (i, raw) in slot.step_values.iter().enumerate() {
+        let v = ((raw.clamp(0.0, 1.0) - 0.5) * 2.0) * depth;
+        let x0 = rect.left() + i as f32 * step_w;
+        let x1 = x0 + step_w;
+        let y = rect.center().y - v * (rect.height() * 0.45);
+        let bar_col = if i as i32 == playhead {
+            theme::CHALK
+        } else {
+            egui::Color32::from_rgb(140, 180, 220)
+        };
+        // Horizontal step segment + vertical drop to the centre line.
+        painter.line_segment(
+            [egui::Pos2::new(x0, y), egui::Pos2::new(x1, y)],
+            egui::Stroke::new(1.5, bar_col),
+        );
+        painter.line_segment(
+            [egui::Pos2::new(x1, y), egui::Pos2::new(x1, rect.center().y)],
+            egui::Stroke::new(0.5, egui::Color32::from_gray(40)),
+        );
+        // Highlight the playhead column with a subtle vertical band.
+        if i as i32 == playhead {
+            let band = egui::Rect::from_min_size(
+                egui::Pos2::new(x0, rect.top()),
+                egui::Vec2::new(step_w, rect.height()),
+            );
+            painter.rect_filled(band, 0.0, egui::Color32::from_white_alpha(8));
+        }
+    }
+
+    // Slot index + target name in the top-left.
+    painter.text(
+        egui::Pos2::new(rect.left() + 4.0, rect.top() + 2.0),
+        egui::Align2::LEFT_TOP,
+        format!("CV {} · {:?}", slot_idx + 1, slot.target),
+        egui::FontId::monospace(7.5),
+        egui::Color32::from_gray(140),
+    );
+}
+
+/// Walk `state.rack.cables` for an incoming CV cable from any
+/// `CvSequencer` to the `CvSeqScope` at `scope_id`, and return that
+/// source module's slot index (its positional rank among `CvSequencer`
+/// instances in `rack.modules`).  Mirror of `lfo_slot_from_cables`.
+pub fn cv_seq_slot_from_cables(state: &crate::state::AppState, scope_id: u32) -> Option<usize> {
+    use crate::state::{ModuleKind, PortKind};
+
+    let src_id = state
+        .rack
+        .cables
+        .iter()
+        .find(|c| {
+            c.to.module_id == scope_id && c.to.kind == PortKind::Cv && c.from.kind == PortKind::Cv
+        })
+        .map(|c| c.from.module_id)?;
+
+    let mut slot_idx = 0usize;
+    for m in &state.rack.modules {
+        if m.kind != ModuleKind::CvSequencer {
+            continue;
+        }
+        if m.id == src_id {
+            return Some(slot_idx);
+        }
+        slot_idx += 1;
+    }
+    None
+}
+
 // ─── Pitch tracker / tuner ───────────────────────────────────────────────────
 
 /// Big note name + cents-off needle, driven by `detect_pitch_hz` over the
@@ -715,5 +846,57 @@ mod tests {
         let mut s = AppState::default();
         s.rack = rack;
         assert_eq!(lfo_slot_from_cables(&s, 3), Some(1));
+    }
+
+    #[test]
+    fn cv_seq_slot_from_cables_returns_none_when_no_cable() {
+        let rack = rack_with(&[ModuleKind::CvSequencer, ModuleKind::CvSeqScope]);
+        let mut s = AppState::default();
+        s.rack = rack;
+        assert_eq!(cv_seq_slot_from_cables(&s, 2), None);
+    }
+
+    #[test]
+    fn cv_seq_slot_from_cables_picks_cable_source() {
+        // Cable: CvSequencer(1) → CvSeqScope(2).
+        let mut rack = rack_with(&[ModuleKind::CvSequencer, ModuleKind::CvSeqScope]);
+        let (a, b) = cv_cable(1, 2);
+        assert!(rack.connect(a, b));
+        let mut s = AppState::default();
+        s.rack = rack;
+        assert_eq!(cv_seq_slot_from_cables(&s, 2), Some(0));
+    }
+
+    #[test]
+    fn cv_seq_slot_from_cables_uses_positional_rank() {
+        // Two CvSequencers; cable from the second → scope counts
+        // it as slot 1.
+        let mut rack = rack_with(&[
+            ModuleKind::CvSequencer, // id=1, slot 0
+            ModuleKind::CvSequencer, // id=2, slot 1
+            ModuleKind::CvSeqScope,  // id=3
+        ]);
+        let (a, b) = cv_cable(2, 3);
+        assert!(rack.connect(a, b));
+        let mut s = AppState::default();
+        s.rack = rack;
+        assert_eq!(cv_seq_slot_from_cables(&s, 3), Some(1));
+    }
+
+    #[test]
+    fn cv_seq_slot_from_cables_ignores_non_cv_seq_sources() {
+        // Cable from a non-CvSequencer source is ignored — same
+        // contract as `lfo_slot_from_cables` so the V1 picker
+        // takes over.
+        let mut rack = rack_with(&[
+            ModuleKind::LfoModule,
+            ModuleKind::CvSequencer,
+            ModuleKind::CvSeqScope,
+        ]);
+        let (a, b) = cv_cable(1, 3); // LFO → scope; ignored
+        assert!(rack.connect(a, b));
+        let mut s = AppState::default();
+        s.rack = rack;
+        assert_eq!(cv_seq_slot_from_cables(&s, 3), None);
     }
 }

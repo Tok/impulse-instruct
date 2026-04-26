@@ -260,6 +260,7 @@ pub fn has_cv_in(kind: ModuleKind) -> bool {
             | NoiseVoice
             | NeuTts
             | LfoScope
+            | CvSeqScope
     )
 }
 

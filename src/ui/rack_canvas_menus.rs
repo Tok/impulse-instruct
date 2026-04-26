@@ -60,6 +60,7 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::BarOscilloscope,
     ModuleKind::StereoVectorscope,
     ModuleKind::LfoScope,
+    ModuleKind::CvSeqScope,
     ModuleKind::PitchTracker,
     ModuleKind::ChordDisplay,
     ModuleKind::Spectrogram,

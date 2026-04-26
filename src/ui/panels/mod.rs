@@ -95,8 +95,8 @@ pub use theremin::draw_theremin;
 pub use timeline::draw_timeline;
 pub use tts::draw_tts;
 pub use viz::{
-    draw_chord_display, draw_lfo_scope, draw_loudness_meter, draw_phase_wheel, draw_pitch_tracker,
-    draw_spectrogram, draw_vectorscope,
+    draw_chord_display, draw_cv_seq_scope, draw_lfo_scope, draw_loudness_meter, draw_phase_wheel,
+    draw_pitch_tracker, draw_spectrogram, draw_vectorscope,
 };
 pub use vocal::draw_vocal;
 pub use wavetable::draw_wavetable;

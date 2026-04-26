@@ -733,6 +733,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             crate::ui::panels::draw_vectorscope(app, ui);
                         } else if kind == ModuleKind::LfoScope {
                             crate::ui::panels::draw_lfo_scope(app, ui, id);
+                        } else if kind == ModuleKind::CvSeqScope {
+                            crate::ui::panels::draw_cv_seq_scope(app, ui, id);
                         } else if kind == ModuleKind::PitchTracker {
                             crate::ui::panels::draw_pitch_tracker(app, ui);
                         } else if kind == ModuleKind::ChordDisplay {

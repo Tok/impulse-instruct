@@ -198,6 +198,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "activitytimeline" | "timeline" | "activity" | "log" => Some(ActivityTimeline),
         "stereovectorscope" | "vectorscope" | "goniometer" | "lissajous" => Some(StereoVectorscope),
         "lfoscope" => Some(LfoScope),
+        "cvseqscope" | "cvscope" | "cvseqviz" | "cv_scope" => Some(CvSeqScope),
         "pitchtracker" | "tuner" | "pitchdetect" => Some(PitchTracker),
         "chorddisplay" | "chord" | "key" => Some(ChordDisplay),
         "spectrogram" | "waterfall" => Some(Spectrogram),
@@ -406,6 +407,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             "vectorscope" | "goniometer" | "lissajous" | "stereoscope"
         ),
         ModuleKind::LfoScope => matches!(n.as_str(), "lfoscope" | "lfo_scope"),
+        ModuleKind::CvSeqScope => matches!(
+            n.as_str(),
+            "cvseqscope" | "cv_seq_scope" | "cvscope" | "cv_scope"
+        ),
         ModuleKind::PitchTracker => matches!(n.as_str(), "tuner" | "pitch" | "pitchtracker"),
         ModuleKind::ChordDisplay => matches!(n.as_str(), "chord" | "key" | "chords"),
         ModuleKind::Spectrogram => matches!(n.as_str(), "spectrogram" | "waterfall"),
