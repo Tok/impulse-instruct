@@ -131,6 +131,11 @@ pub enum ModuleKind {
     /// surface than `FxFilter` (which has separate cutoff / mode
     /// controls), and the cutoff sweep is baked into the morph.
     FxDjFilter,
+    /// Tremolo — periodic amplitude modulation by an internal LFO.
+    /// Distinct from `FxPan` (left/right balance LFO, no level swing)
+    /// and from chorus/flanger (delay-line modulation).  Sine →
+    /// square morph covers slow swell through helicopter-chop.
+    FxTremolo,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
     StereoMeter,
@@ -248,6 +253,7 @@ impl ModuleKind {
             Self::FxFreqShift => "FREQSHIFT",
             Self::FxVinyl => "VINYL",
             Self::FxDjFilter => "DJ FILTER",
+            Self::FxTremolo => "TREMOLO",
             Self::SpectrumAnalyzer => "SPECTRUM",
             Self::StereoMeter => "STEREO METER",
             Self::ActivityTimeline => "TIMELINE",
@@ -424,7 +430,8 @@ impl ModuleKind {
             | Self::FxPan
             | Self::FxWiden
             | Self::FxVinyl
-            | Self::FxDjFilter => (2, 1),
+            | Self::FxDjFilter
+            | Self::FxTremolo => (2, 1),
             // Gate has 4 knobs (threshold / attack / release / depth) +
             // mix — 2 rows.
             Self::FxGate => (2, 2),
@@ -493,6 +500,7 @@ impl ModuleKind {
             | Self::FxFreqShift
             | Self::FxVinyl
             | Self::FxDjFilter
+            | Self::FxTremolo
             | Self::SpectrumAnalyzer
             | Self::StereoMeter
             | Self::ActivityTimeline
@@ -570,6 +578,7 @@ impl ModuleKind {
                 | Self::FxFreqShift
                 | Self::FxVinyl
                 | Self::FxDjFilter
+                | Self::FxTremolo
         )
     }
 
@@ -622,6 +631,7 @@ impl ModuleKind {
                 | Self::FxFreqShift
                 | Self::FxVinyl
                 | Self::FxDjFilter
+                | Self::FxTremolo
         )
     }
 

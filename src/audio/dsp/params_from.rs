@@ -186,6 +186,10 @@ impl AudioParams {
             dj_filter_morph: s.fx.dj_filter_morph.clamp(0.0, 1.0),
             dj_filter_resonance: s.fx.dj_filter_resonance.clamp(0.0, 1.0),
             dj_filter_mix: s.fx.dj_filter_mix.clamp(0.0, 1.0),
+            tremolo_rate: s.fx.tremolo_rate.clamp(0.0, 1.0),
+            tremolo_depth: s.fx.tremolo_depth.clamp(0.0, 1.0),
+            tremolo_shape: s.fx.tremolo_shape.clamp(0.0, 1.0),
+            tremolo_mix: s.fx.tremolo_mix.clamp(0.0, 1.0),
             param_eq_ms_mode: s.fx.param_eq_ms_mode,
             conv_reverb_mix: s.fx.conv_reverb_mix.clamp(0.0, 1.0),
             // Cabinet mode caps the IR length at 10 % of the loaded

@@ -427,6 +427,25 @@ pub struct FxState {
     /// Wet/dry mix 0..1 (0 = bypass).
     #[serde(default)]
     pub dj_filter_mix: f32,
+    // ── Tremolo ──────────────────────────────────────────────────────────
+    /// LFO rate 0..1 → 0.1..12 Hz log-mapped.  Covers slow swelling
+    /// at one end through helicopter-chop at the other.
+    #[serde(default = "default_tremolo_rate")]
+    pub tremolo_rate: f32,
+    /// Modulation depth 0..1.  At 0 the LFO is unity (no AM); at 1
+    /// the wet signal swings between full volume and silence.
+    #[serde(default = "default_tremolo_depth")]
+    pub tremolo_depth: f32,
+    /// Waveshape morph 0..1 — 0 = sine (smooth swell), 1 = square
+    /// (hard chop).  Implemented as tanh-clamping a scaled sine so
+    /// the morph is continuous rather than a mode flag.
+    #[serde(default)]
+    pub tremolo_shape: f32,
+    /// Wet/dry mix 0..1 (0 = bypass).  Acts as the engaged-or-not
+    /// switch alongside `depth`; the cheap-bypass fast path checks
+    /// this value first.
+    #[serde(default)]
+    pub tremolo_mix: f32,
     // ── Convolution Reverb ───────────────────────────────────────────────
     /// Wet/dry mix (0 = dry, 1 = 100 % wet).
     #[serde(default)]
@@ -656,6 +675,14 @@ fn default_dj_filter_resonance() -> f32 {
     0.4 // Audible peak at the BP crossover without screaming.
 }
 
+fn default_tremolo_rate() -> f32 {
+    0.4 // ~3 Hz — classic "slow tremolo" guitar-amp feel.
+}
+
+fn default_tremolo_depth() -> f32 {
+    0.6 // Audible swell on first engagement without going to silence.
+}
+
 impl Default for FxState {
     fn default() -> Self {
         Self {
@@ -777,6 +804,10 @@ impl Default for FxState {
             dj_filter_morph: default_dj_filter_morph(),
             dj_filter_resonance: default_dj_filter_resonance(),
             dj_filter_mix: 0.0,
+            tremolo_rate: default_tremolo_rate(),
+            tremolo_depth: default_tremolo_depth(),
+            tremolo_shape: 0.0,
+            tremolo_mix: 0.0,
             conv_reverb_mix: 0.0,
             conv_reverb_size: default_conv_reverb_size(),
             conv_reverb_predelay: 0.0,

@@ -73,6 +73,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // selectors — auto-morph patches need an LFO on the morph
         // jack, but users may also want resonance riding the LFO.
         FxDjFilter => &[Selector, Selector, Selector],
+        // Tremolo: 4 knobs (rate / depth / shape / mix); all
+        // selectors so the user can route LFOs to any of them
+        // (e.g. one LFO sweeping the rate for "speeding-up" effects).
+        FxTremolo => &[Selector, Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],

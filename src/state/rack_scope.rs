@@ -85,7 +85,8 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxWiden
         | ModuleKind::FxFreqShift
         | ModuleKind::FxVinyl
-        | ModuleKind::FxDjFilter => Some("fx".to_string()),
+        | ModuleKind::FxDjFilter
+        | ModuleKind::FxTremolo => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
         _ => None,
     }
@@ -155,6 +156,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxfreqshift" | "freqshift" | "frequencyshifter" | "ssbshift" | "bode" => Some(FxFreqShift),
         "fxvinyl" | "vinyl" | "cassette" | "tapevinyl" => Some(FxVinyl),
         "fxdjfilter" | "djfilter" | "dj" | "morphfilter" | "djkill" => Some(FxDjFilter),
+        "fxtremolo" | "tremolo" | "trem" | "amplmod" | "ampmod" => Some(FxTremolo),
         "lfomodule" | "lfo" => Some(LfoModule),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
@@ -238,6 +240,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxDjFilter => matches!(
             n.as_str(),
             "djfilter" | "dj_filter" | "dj filter" | "dj" | "morphfilter" | "fx"
+        ),
+        ModuleKind::FxTremolo => matches!(
+            n.as_str(),
+            "tremolo" | "trem" | "ampmod" | "ampl_mod" | "fx"
         ),
         ModuleKind::FxConvReverb => matches!(
             n.as_str(),

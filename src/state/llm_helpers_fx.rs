@@ -258,6 +258,13 @@ pub(super) fn apply_fx_update(
         "fx.dj_filter_resonance"
     );
     u!(s.fx.dj_filter_mix, "dj_filter_mix", "fx.dj_filter_mix");
+    u!(s.fx.vinyl_noise, "vinyl_noise", "fx.vinyl_noise");
+    u!(s.fx.vinyl_wear, "vinyl_wear", "fx.vinyl_wear");
+    u!(s.fx.vinyl_mix, "vinyl_mix", "fx.vinyl_mix");
+    u!(s.fx.tremolo_rate, "tremolo_rate", "fx.tremolo_rate");
+    u!(s.fx.tremolo_depth, "tremolo_depth", "fx.tremolo_depth");
+    u!(s.fx.tremolo_shape, "tremolo_shape", "fx.tremolo_shape");
+    u!(s.fx.tremolo_mix, "tremolo_mix", "fx.tremolo_mix");
     if !locked.contains("fx.param_eq_ms_mode")
         && let Some(v) = fx.get("param_eq_ms_mode").and_then(|v| v.as_bool())
     {

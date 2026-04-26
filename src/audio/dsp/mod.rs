@@ -16,6 +16,7 @@ pub mod fx_glitch;
 pub mod fx_math;
 pub mod fx_sidechain;
 mod fx_step;
+pub mod fx_tremolo;
 pub mod fx_vinyl;
 pub mod gabber_kick;
 pub mod granular_voice;
@@ -56,6 +57,7 @@ use vocal::VocalVoice;
 // sidechain_envelope_step, gated_reverb_envelope_step) are only used
 // inside the extracted `process_block.rs`; pulled in there directly.
 use fx_sidechain::{Gate, Vocoder};
+use fx_tremolo::TremoloFx;
 use fx_vinyl::VinylFx;
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
@@ -139,6 +141,7 @@ pub struct DspState {
     freq_shift: FreqShift,
     vinyl: VinylFx,
     dj_filter: DjFilter,
+    tremolo: TremoloFx,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -292,6 +295,7 @@ impl DspState {
             freq_shift: FreqShift::new(),
             vinyl: VinylFx::new(sample_rate),
             dj_filter: DjFilter::new(),
+            tremolo: TremoloFx::new(),
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),

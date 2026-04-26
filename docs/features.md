@@ -4,6 +4,62 @@ A detailed log of what's built.
 
 ---
 
+### Tremolo FX (`FxTremolo`)
+
+First entry from the FX wishlist.  Internal-LFO amplitude
+modulation — the dedicated module users reach for when they
+type "add a tremolo".  Distinct from `FxPan` (left/right
+balance LFO with no level swing) and from chorus / flanger
+(delay-line modulation, not AM).
+
+**DSP shape.**  One sample per phase advance + a sine eval +
+a tanh + a single multiply per channel.  No buffers, no
+lookups.  Phase is kept across `process` calls so the LFO
+stays continuous when the user sweeps `rate` or toggles bypass.
+
+**Knobs.**
+- `tremolo_rate` 0..1 → 0.1..12 Hz log-mapped.  Slow swell
+  at one end through helicopter-chop at the other.
+- `tremolo_depth` 0..1.  At 0 the LFO has no effect; at 1 the
+  gain swings between 0 and 2 (full chop on one side, +6 dB
+  boost on the other).  Centre stays at unity regardless of
+  the depth knob.
+- `tremolo_shape` 0..1.  Lerps between pure sine (smooth
+  swell) and a 16× tanh-clamped sine (near-square hard chop).
+  Continuous across the whole knob — no mode flag.
+- `tremolo_mix` 0..1 wet/dry.  0 triggers the cheap-bypass
+  fast path so an inserted-but-disengaged tremolo costs ~zero.
+
+**Wiring.**  Standard FX add ritual — `FxStep::Tremolo` (idx
+34, `FX_STEP_COUNT` bumped to 35), `ModuleKind::FxTremolo`
+("TREMOLO" label, 2×1 grid, sort-group 36 next to `FxPan`),
+`FxState::tremolo_*` flat fields, `parse_module_kind`
+aliases (`tremolo` / `trem` / `ampmod` / `ampl_mod`),
+modulation jacks (4 × Selector — every knob can ride an LFO,
+including rate for "speeding-up" effects).
+
+**LLM apply + schema.**  `apply_fx_update` writes all four
+knobs through the standard `unlocked_f32` macro; schema
+entries describe the rate range and depth swing for the LLM.
+While in here, plugged a pre-existing gap — `vinyl_*` knobs
+were missing from the apply path; added them too so the
+LLM can drive vinyl/cassette character via the `fx` object.
+
+**Tests.**  +6 — DSP-side (mix=0 bypass, full-depth swing
+near 0..2× input, depth=0 transparency, square shape dwells
+at extremes, output bounded under full drive).  State-side
+(defaults are engaged-neutral, llm apply writes all 4 knobs,
+locked mix is honoured, ModuleKind ↔ FxStep mapping, label,
+alias parsing).  Suite **2024 → 2035** lib tests passing.
+
+Files: new `src/audio/dsp/fx_tremolo.rs`, new
+`src/tests/fx_tremolo_tests.rs`.  ~13 files touched — FX
+add ritual is much shorter than the voice ritual since FX
+share the flat `FxState` rather than each having their own
+struct + sequencer lane.
+
+---
+
 ### Vocal formant synth voice
 
 Last entry on the Voices wishlist — closes the "sing a vowel

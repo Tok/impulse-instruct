@@ -112,9 +112,8 @@ new gap turns up.
 - [ ] **Tape echo** — dedicated, with wow / flutter + saturation
   inside the feedback loop.  Distinct from `FxTapeSat` (no
   delay) and `FxDelay` (no character).
-- [ ] **Tremolo** + **vibrato** as their own modules.  Currently
-  approximated via Chorus / Pan; users typing "add a tremolo"
-  expect a dedicated knob.
+- [ ] **Vibrato** as its own module — pitch-modulation cousin of the
+  shipped `FxTremolo`.  Currently approximated via Chorus.
 - [ ] **Shimmer mode flag on `FxConvReverb`** (already deferred
   above — repeated here so the FX wishlist scans complete).
 

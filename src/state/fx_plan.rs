@@ -44,6 +44,7 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxPitchShift => Some(FxStep::PitchShift),
         ModuleKind::FxVinyl => Some(FxStep::Vinyl),
         ModuleKind::FxDjFilter => Some(FxStep::DjFilter),
+        ModuleKind::FxTremolo => Some(FxStep::Tremolo),
         _ => None,
     }
 }

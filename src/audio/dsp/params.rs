@@ -658,6 +658,11 @@ pub struct AudioParams {
     pub dj_filter_morph: f32,
     pub dj_filter_resonance: f32,
     pub dj_filter_mix: f32,
+    // Tremolo — internal-LFO amplitude modulation.
+    pub tremolo_rate: f32,
+    pub tremolo_depth: f32,
+    pub tremolo_shape: f32,
+    pub tremolo_mix: f32,
     // Pendulum — two near-tuned sines that beat acoustically.
     pub pendulum_enabled: bool,
     pub pendulum_base_pitch: f32,

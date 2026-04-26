@@ -304,6 +304,7 @@ impl RackState {
                 | ModuleKind::FxPan
                 | ModuleKind::FxWiden
                 | ModuleKind::FxFreqShift
+                | ModuleKind::FxTremolo
         );
         if !has_audio_out {
             return true;
@@ -574,6 +575,10 @@ impl RackState {
                 // control surfaces (DJ filter is one-knob morph,
                 // FxFilter has cutoff + mode + drive).
                 ModuleKind::FxDjFilter => 19,
+                // Tremolo lives in the modulation-FX cluster next
+                // to Pan / Chorus / Phaser — all internal-LFO-
+                // driven movement effects.
+                ModuleKind::FxTremolo => 36,
                 ModuleKind::SpectrumAnalyzer => 32,
                 ModuleKind::StereoMeter => 33,
                 ModuleKind::ActivityTimeline => 34,

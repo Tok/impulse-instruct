@@ -324,6 +324,14 @@ impl DspState {
                 p.dj_filter_mix,
                 sr,
             ),
+            FxStep::Tremolo => self.tremolo.process(
+                sig,
+                p.tremolo_rate,
+                p.tremolo_depth,
+                p.tremolo_shape,
+                p.tremolo_mix,
+                sr,
+            ),
         }
     }
 
