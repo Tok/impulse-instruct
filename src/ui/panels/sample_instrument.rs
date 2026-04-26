@@ -396,11 +396,20 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         crate::ui::panels::sample_instrument_viz::draw_zone_map(
             ui,
             &app.sample_sfz_regions,
+            &mut app.sample_selected_region,
             viz_w,
             viz_h,
         );
+        // Inspector for the currently selected region — V1 read-only.
+        // Lives directly under the zone map so eye travel from the
+        // band the user clicked to its details is short.
+        if let Some(idx) = app.sample_selected_region
+            && let Some(region) = app.sample_sfz_regions.get(idx)
+        {
+            crate::ui::panels::sample_instrument_viz::draw_zone_inspector(ui, region);
+        }
     } else {
-        let (loop_start, loop_end, loop_enabled) = {
+        let (mut loop_start, mut loop_end, loop_enabled) = {
             let s = app.state.read();
             (
                 s.sample_instrument.loop_start,
@@ -408,15 +417,22 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 s.sample_instrument.loop_enabled,
             )
         };
-        crate::ui::panels::sample_instrument_viz::draw_waveform(
+        let changed = crate::ui::panels::sample_instrument_viz::draw_waveform(
             ui,
             &app.sample_wave_cache.1,
-            loop_start,
-            loop_end,
+            &mut loop_start,
+            &mut loop_end,
             loop_enabled,
             viz_w,
             viz_h,
         );
+        if changed {
+            let mut s = app.state.write();
+            s.sample_instrument.loop_start = loop_start;
+            s.sample_instrument.loop_end = loop_end;
+            drop(s);
+            app.push_audio_params();
+        }
     }
 }
 
@@ -439,6 +455,9 @@ fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
             // thread owns the runtime list, but the UI needs to read
             // the metadata for paint.
             app.sample_sfz_regions = regions.clone();
+            // Fresh SFZ — drop any stale region selection so the
+            // inspector doesn't index the previous bank's regions.
+            app.sample_selected_region = None;
             let _ = app
                 .audio_tx
                 .push(AudioCommand::LoadSampleInstrumentSfz(regions));
@@ -456,6 +475,7 @@ fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
         // Single-WAV mode replaces SFZ regions; clear the UI-side
         // cache + rebuild the waveform thumbnail for paint.
         app.sample_sfz_regions.clear();
+        app.sample_selected_region = None;
         let thumb = crate::ui::panels::sample_instrument_viz::build_thumbnail(&data, 128);
         app.sample_wave_cache = (path.to_string(), thumb);
         let _ = app.audio_tx.push(AudioCommand::LoadSampleInstrument(data));

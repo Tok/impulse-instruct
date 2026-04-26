@@ -23,12 +23,11 @@ voice doesn't cover.
 
 ## SampleInstrument V2 — outstanding follow-ups
 
-The 9 main stages are shipped (see features.md).  Remaining slices:
+The 9 main stages are shipped (see features.md).  Stage 7.5
+also shipped — drag-to-edit loop markers + SFZ zone selection +
+per-zone inspector all wired (see features.md).  Remaining
+slice:
 
-- [ ] **Drag-to-edit on the visualizer strip** (Stage 7.5).  Drag
-  loop-start / loop-end markers on the waveform thumb; click a
-  region in the SFZ zone-map to select it + open a per-zone
-  parameter inspector.  V1 of the strip is read-only.
 - [ ] **Out-of-scope V1 items revisited** (per the original
   PLAN's "deliberately deferred" list): multi-mic / multi-position
   blends in SFZ, `.flac` / `.aiff` formats, `.sf2` parsing, disk

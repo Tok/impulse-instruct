@@ -279,6 +279,12 @@ pub struct ImpulseApp {
     /// loaded (single-WAV mode shows the waveform thumbnail instead).
     /// Cheap copy because each entry's `samples` is an `Arc`.
     pub(crate) sample_sfz_regions: Vec<crate::audio::dsp::sample_instrument::SfzRegionRuntime>,
+    /// Index into `sample_sfz_regions` for the currently selected
+    /// SFZ region — drives the per-zone parameter inspector beneath
+    /// the zone map.  UI-only state (not persisted to AppState).
+    /// Cleared when a fresh SFZ loads or a single-WAV swap empties
+    /// the region list.
+    pub(crate) sample_selected_region: Option<usize>,
     /// Ableton Link bidirectional tempo sync.  Disabled by default;
     /// the user toggles via Preferences → Sync.  When enabled +
     /// built with the `link` feature, `update()` polls every frame
@@ -513,6 +519,7 @@ impl ImpulseApp {
             last_wavetable_path: String::new(),
             last_sample_instrument_path: String::new(),
             sample_sfz_regions: Vec::new(),
+            sample_selected_region: None,
             sample_wave_cache: (String::new(), Vec::new()),
             link_sync: crate::sync::LinkSync::new(120.0),
             last_link_bpm: 0.0,

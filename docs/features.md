@@ -4,6 +4,63 @@ A detailed log of what's built.
 
 ---
 
+### SampleInstrument V2 — Stage 7.5: drag-to-edit on the viz strip
+
+The visualizer strip was read-only at Stage 7.  Stage 7.5
+makes both modes interactive.
+
+**Single-WAV mode — loop-marker drag.**  `draw_waveform` now
+takes `&mut loop_start` / `&mut loop_end` and sense
+`click_and_drag`.  Hovering within 6 px of either boundary
+brightens + thickens that stem and switches the cursor to
+`ResizeHorizontal`.  Click-and-drag updates the corresponding
+fraction in real time, clamped so `loop_start + 0.001 ≤ loop_end`
+(the markers can't cross).  Drag target latches into egui's
+per-id memory at `drag_started` so the user can pull the
+cursor away from the boundary mid-drag and the action still
+resolves to the right stem.  Caller writes the new fractions
+back to `state.sample_instrument` only when the helper
+reports a change.
+
+**SFZ mode — click-to-select region.**  `draw_zone_map` takes
+`&mut Option<usize>` for the selected region.  Pre-computes
+every band rect so the click hit-test reuses the exact paint
+geometry; first band hit wins, clicking outside any band
+clears the selection.  Selected band renders at `gray(220)`
+with a `gray(255)` outline; its `pitch_keycenter` tick flips
+dark so it stays visible against the brighter shade.  Stale
+selection (index past the new region list after an SFZ
+swap) is auto-cleared inside the helper so the inspector
+never indexes a missing region.
+
+**Per-zone inspector.**  When a region is selected,
+`draw_zone_inspector` renders a 3-line read-only readout
+beneath the zone map: line 1 the sample filename basename;
+line 2 `lokey-hikey  vel L-H  root N` using a new `midi_label`
+helper that converts MIDI numbers to scientific-pitch labels
+(C4, A#3, etc.); line 3 the per-region opcodes (`±X.X dB`,
+`tune ±Yc`, `transp ±Zst` only when non-zero, `RR P/L` only
+when round-robin is active).  V1 is read-only — future
+iteration can add inline edit.
+
+**State.**  `ImpulseApp.sample_selected_region: Option<usize>`
+holds the UI-only selection (not persisted to `AppState`).
+Cleared when a fresh SFZ loads or a single-WAV swap empties
+the region list.
+
+Tests: 2 new for `midi_label` covering the well-known anchor
+notes (C4 = 60, A4 = 69 = 440 Hz) and a chromatic walk
+through C4–B4 confirming sharps land where expected.  Full
+suite **1953 → 1955**.
+
+Files: `src/ui/panels/sample_instrument_viz.rs` (interactive
+helpers + `midi_label` + inspector + tests),
+`src/ui/panels/sample_instrument.rs` (call sites),
+`src/ui/mod.rs` (`sample_selected_region` field +
+default).
+
+---
+
 ### FM operator synth (kickoff #3)
 
 4-op DX7-flavoured voice — closest gap to the existing AN1X
