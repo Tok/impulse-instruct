@@ -58,6 +58,7 @@ Reference-only (prints curated source URLs):
   textures           Granular textures → samples/textures/
   wavetables         Serum-style wavetables → samples/wavetables/
   impulses           IRs for convolution reverb → samples/impulses/
+  birds              CC0 bird-call corpus → samples/birds/ (granular voice)
 
 See samples/README.md for the long-form pack notes.
 EOF
@@ -235,6 +236,39 @@ Workflow:
 EOF
 }
 
+print_birds() {
+  local abs_birds="${REPO_ROOT}/samples/birds"
+  cat <<EOF
+─── Bird-song corpus ──────────────────────────────────────────────────────────
+
+  PLACE FILES HERE:  ${abs_birds}/
+
+The GRAN granular texture module reads .wav files from any of the
+sample folders; for bird-song material drop curated calls into the
+dedicated  samples/birds/  dir so they're easy to find later (the
+LOAD button can browse there directly).
+
+Curated sources (all CC-licensed; check per-clip terms):
+
+  https://xeno-canto.org                 huge community-curated bird-call archive
+  https://archive.org/details/birdsong   public-domain field recordings
+  https://freesound.org                  search for: birds, calls, tweet, dawn
+
+Workflow:
+  1. Pick a clean clip (3–30 s) from one of the sources above.
+  2. Drop it into  ${abs_birds}/
+  3. Load via the GRAN card's LOAD button.  Set DENSITY high +
+     PITCH-SCATTER moderate for chirpy / chorus textures.
+
+Why a separate folder rather than a new module: the granular voice
+already does the heavy lifting (grain extraction, pitch scatter,
+density).  A dedicated "BIRD" module would just be GRAN with a
+different default folder — cleaner to curate the corpus location
+and let GRAN handle the playback.
+
+EOF
+}
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 case "$PACK" in
   salamander)
@@ -255,6 +289,7 @@ case "$PACK" in
   textures)   print_textures ;;
   wavetables) print_wavetables ;;
   impulses)   print_impulses ;;
+  birds)      print_birds ;;
   ""|help|-h|--help)
     show_usage
     exit 0

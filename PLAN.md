@@ -161,8 +161,11 @@ independently.  Anything left at "unscheduled" goes in last.
 6. [x] ~~**Vinyl / cassette simulator**~~ — V1 shipped (see
    features.md).  Start/stop transient deferred — `FxTapeStop`
    covers that family.
-7. [ ] **Bird-songs voice** — small CC0 corpus, granularised and
-   pitch-mappable.  Pairs with `samples/textures/`.
+7. [x] ~~**Bird-songs voice**~~ — V1 shipped as a curated source
+   pointer + `samples/birds/` corpus dir, played through the
+   existing GRAN voice (see features.md).  A dedicated module
+   isn't justified — GRAN already handles the playback; only
+   the corpus needed curating.
 8. [ ] **MIDI granuliser** — input a MIDI clip, scatter the
    triggers with jitter / density knobs.  Granular but for
    triggers, not audio.

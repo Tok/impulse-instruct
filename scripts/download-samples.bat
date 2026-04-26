@@ -30,6 +30,7 @@ if not exist "samples\amen" mkdir "samples\amen"
 if not exist "samples\textures" mkdir "samples\textures"
 if not exist "samples\wavetables" mkdir "samples\wavetables"
 if not exist "samples\impulses" mkdir "samples\impulses"
+if not exist "samples\birds" mkdir "samples\birds"
 
 rem Absolute paths so users know exactly where files belong on disk —
 rem the script always cd's to the repo root, so %CD% is canonical.
@@ -55,6 +56,7 @@ if /i "%PACK%"=="amen"            goto print_amen
 if /i "%PACK%"=="textures"        goto print_textures
 if /i "%PACK%"=="wavetables"      goto print_wavetables
 if /i "%PACK%"=="impulses"        goto print_impulses
+if /i "%PACK%"=="birds"           goto print_birds
 
 echo Unknown pack: '%PACK%'
 echo.
@@ -74,6 +76,7 @@ echo   amen               Amen breaks ^-^> samples\amen\
 echo   textures           Granular textures ^-^> samples\textures\
 echo   wavetables         Serum-style wavetables ^-^> samples\wavetables\
 echo   impulses           IRs for convolution reverb ^-^> samples\impulses\
+echo   birds              CC0 bird-call corpus ^-^> samples\birds\ [granular voice]
 echo.
 echo See samples\README.md for the long-form pack notes.
 exit /b 0
@@ -254,6 +257,28 @@ echo Workflow:
 echo   1. Download an IR .wav [any sample rate; the loader resamples].
 echo   2. Drop it into  %ABS_IMPULSES%\
 echo   3. Load via the ConvReverb card's LOAD IR button or POST /api/conv_reverb.
+goto license
+
+:print_birds
+echo ---- Bird-song corpus ------------------------------------------------------
+echo.
+echo   PLACE FILES HERE:  %REPO_ROOT%\samples\birds\
+echo.
+echo The GRAN granular texture module reads .wav files; for bird-song
+echo material drop curated calls into  samples\birds\  so they're easy
+echo to find later [LOAD button can browse there directly].
+echo.
+echo Curated sources [all CC-licensed; check per-clip terms]:
+echo.
+echo   https://xeno-canto.org                 huge community-curated bird-call archive
+echo   https://archive.org/details/birdsong   public-domain field recordings
+echo   https://freesound.org                  search for: birds, calls, tweet, dawn
+echo.
+echo Workflow:
+echo   1. Pick a clean clip [3-30 s] from one of the sources above.
+echo   2. Drop it into  %REPO_ROOT%\samples\birds\
+echo   3. Load via the GRAN card's LOAD button.  Set DENSITY high +
+echo      PITCH-SCATTER moderate for chirpy / chorus textures.
 goto license
 
 :license

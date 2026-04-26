@@ -4,6 +4,37 @@ A detailed log of what's built.
 
 ---
 
+### Bird-song corpus (absurd queue #7)
+
+Per the brief — "small CC0 corpus, granularised and pitch-mappable.
+Pairs with samples/textures/" — V1 ships as a **curated source
+pointer + dedicated corpus folder**, played through the existing
+GRAN granular voice.  A dedicated `BIRD` module isn't justified:
+GRAN already does the heavy lifting (grain extraction, pitch
+scatter, density), so a new module would be GRAN with a different
+default folder.  Curating the corpus location is the actual win.
+
+What shipped:
+* New `samples/birds/` directory (with `.gitkeep` so it survives
+  fresh clones, ignored otherwise via the existing
+  `samples/**/*.wav` rule).
+* `download-samples.sh birds` (+ `.bat` mirror) — printer
+  sub-command listing curated CC-licensed sources:
+  - `https://xeno-canto.org` — community-curated bird-call
+    archive
+  - `https://archive.org/details/birdsong` — public-domain
+    field recordings
+  - `https://freesound.org` — search for: birds, calls, tweet,
+    dawn
+* Workflow doc: drop a clean clip (3–30 s) into the dir, load
+  via the GRAN card's LOAD button, set DENSITY high +
+  PITCH-SCATTER moderate for chirpy / chorus textures.
+
+If demand surfaces for note-tracking pitch on bird grains
+(triggered playback at a specific note), a follow-up could add
+a `pitch_mappable` flag on GRAN — but that's a separate request
+from "ship a bird corpus" and gets queued separately.
+
 ### Vinyl / cassette FX (absurd queue #6)
 
 Steady-state analog-tape character — surface noise + dull EQ
