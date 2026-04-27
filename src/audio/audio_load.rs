@@ -65,7 +65,7 @@ fn load_flac_to_engine(path: &str) -> Option<Arc<Vec<f32>>> {
     }
     let n_frames = mono.len();
 
-    let out = resample_mono_linear(mono, src_rate);
+    let out = resample_mono_linear(&mono, src_rate);
     log::info!(
         "Loaded FLAC: {} ({} Hz, {} ch, {} bits, {} frames → {} samples at {} Hz)",
         path,
@@ -166,7 +166,7 @@ fn load_aiff_to_engine(path: &str) -> Option<Arc<Vec<f32>>> {
         mono.push(sum / channels as f32);
     }
 
-    let out = resample_mono_linear(mono, src_rate);
+    let out = resample_mono_linear(&mono, src_rate);
     log::info!(
         "Loaded AIFF: {} ({} Hz, {} ch, {} frames → {} samples at {} Hz)",
         path,
@@ -180,11 +180,14 @@ fn load_aiff_to_engine(path: &str) -> Option<Arc<Vec<f32>>> {
 }
 
 /// Linear-interp resample a mono buffer from `src_rate` to the
-/// engine rate.  Pure helper — same algorithm the WAV path uses,
-/// extracted here so FLAC and AIFF share it.
-fn resample_mono_linear(mono: Vec<f32>, src_rate: u32) -> Vec<f32> {
+/// engine rate.  Pure helper — shared between the FLAC / AIFF / WAV
+/// paths in this module and the SF2 sample decoder in
+/// `sf2_loader.rs` (re-imported as `crate::audio::audio_load::resample_mono_linear`).
+/// Slice input + owned `Vec` output so the SF2 caller (which works
+/// off a borrowed cache slice) doesn't have to clone first.
+pub(crate) fn resample_mono_linear(mono: &[f32], src_rate: u32) -> Vec<f32> {
     if src_rate == SAMPLE_RATE_HZ {
-        return mono;
+        return mono.to_vec();
     }
     let ratio = src_rate as f32 / SAMPLE_RATE;
     let new_len = (mono.len() as f32 / ratio) as usize;
@@ -272,6 +275,49 @@ mod tests {
     fn aiff_extended_zero_returns_zero() {
         let bytes = [0u8; 10];
         assert_eq!(aiff_extended_to_u32(&bytes), Some(0));
+    }
+
+    /// `resample_mono_linear` short-circuits when the source rate
+    /// already matches the engine rate — the output should be a
+    /// bit-equal copy of the input.
+    #[test]
+    fn resample_mono_linear_passthrough_at_engine_rate() {
+        let input: Vec<f32> = (0..32).map(|i| i as f32 * 0.01).collect();
+        let out = resample_mono_linear(&input, SAMPLE_RATE_HZ);
+        assert_eq!(out, input);
+    }
+
+    /// Halving the source rate (relative to the engine rate) should
+    /// roughly double the output length — linear interp halves the
+    /// stride per output sample.  Exact length depends on the
+    /// floor() in the new_len calc; assert the length is in the
+    /// expected ballpark and the endpoints land near the input.
+    #[test]
+    fn resample_mono_linear_doubles_length_when_src_is_half_engine() {
+        let input: Vec<f32> = vec![0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0];
+        let half = SAMPLE_RATE_HZ / 2;
+        let out = resample_mono_linear(&input, half);
+        assert_eq!(out.len(), input.len() * 2);
+        // First sample lines up with input[0].
+        assert!((out[0] - input[0]).abs() < 1e-5);
+        // Mid-points fall between input samples (linear interp).
+        assert!((out[1] - 0.5).abs() < 1e-5);
+        assert!((out[3] - 1.5).abs() < 1e-5);
+    }
+
+    /// Doubling the source rate (relative to the engine rate) should
+    /// roughly halve the output length — linear interp doubles the
+    /// stride.
+    #[test]
+    fn resample_mono_linear_halves_length_when_src_is_double_engine() {
+        let input: Vec<f32> = (0..16).map(|i| i as f32).collect();
+        let double = SAMPLE_RATE_HZ * 2;
+        let out = resample_mono_linear(&input, double);
+        assert_eq!(out.len(), input.len() / 2);
+        // Stride 2 → out[0] = input[0], out[1] = input[2], etc.
+        assert_eq!(out[0], 0.0);
+        assert_eq!(out[1], 2.0);
+        assert_eq!(out[3], 6.0);
     }
 
     #[test]

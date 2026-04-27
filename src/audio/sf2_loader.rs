@@ -26,8 +26,9 @@
 
 use std::sync::Arc;
 
+use crate::audio::SAMPLE_RATE_HZ;
+use crate::audio::audio_load::resample_mono_linear;
 use crate::audio::dsp::sample_instrument::SfzRegionRuntime;
-use crate::audio::{SAMPLE_RATE, SAMPLE_RATE_HZ};
 use crate::state::sfz::SfzRegion;
 
 /// One entry in the SoundFont's preset table.  Banks ship dozens of
@@ -399,7 +400,7 @@ fn build_region(
         let resampled = if sample_rate == SAMPLE_RATE_HZ {
             mono
         } else {
-            resample_mono(&mono, sample_rate)
+            resample_mono_linear(&mono, sample_rate)
         };
         let arc = Arc::new(resampled);
         sample_cache.insert(sample_idx, arc.clone());
@@ -553,29 +554,6 @@ fn sf2_timecents_to_secs(tc: Option<i16>) -> f32 {
         Some(v) if v > -12000 => 2.0_f32.powf(v as f32 / 1200.0),
         _ => 0.0,
     }
-}
-
-/// Linear-interp resample a mono buffer to the engine rate.  Same
-/// algorithm `audio_load::resample_mono_linear` uses; duplicated here
-/// rather than re-exported because the call site is internal to the
-/// SF2 loader and the helper would otherwise need a `pub(crate)`
-/// promotion.
-fn resample_mono(mono: &[f32], src_rate: u32) -> Vec<f32> {
-    if src_rate == SAMPLE_RATE_HZ {
-        return mono.to_vec();
-    }
-    let ratio = src_rate as f32 / SAMPLE_RATE;
-    let new_len = (mono.len() as f32 / ratio) as usize;
-    (0..new_len)
-        .map(|i| {
-            let src = i as f32 * ratio;
-            let idx = src as usize;
-            let frac = src - idx as f32;
-            let a = mono.get(idx).copied().unwrap_or(0.0);
-            let b = mono.get(idx + 1).copied().unwrap_or(0.0);
-            a + (b - a) * frac
-        })
-        .collect()
 }
 
 /// Find a sub-chunk inside a RIFF list body.  Returns the chunk's

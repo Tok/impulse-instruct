@@ -37,11 +37,10 @@ the speculative reorgs.
   resolved by lifting the modulation surface — `RegionLfos` +
   `LfoSlotState` + `RegionModEnv` + `ModEnvState` — into a sibling
   `sample_instrument_modulation.rs`, leaving the voice file at 984.)
-- [ ] **Shared `resample_mono`** — `audio/audio_load.rs` and
-  `audio/sf2_loader.rs` both carry near-identical linear-interp
-  resamplers.  Lift into a shared helper once a third caller
-  appears (or fold both into `audio/audio_load.rs` if the SF2
-  loader can re-export).
+- [x] ~~**Shared `resample_mono`**~~ — folded: `sf2_loader.rs`
+  now imports `audio_load::resample_mono_linear` (`pub(crate)`,
+  slice input).  Single source, three unit tests covering the
+  pass-through + half/double-rate cases.
 - [ ] **Glass group helpers** — re-evaluate.  Previous note said
   "the inline pattern varies too much"; with more panels in
   place, the shared cases may have stabilised.
