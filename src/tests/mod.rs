@@ -5,6 +5,7 @@
 
 mod additive_tests;
 mod agent_budget_sleep_tests;
+mod amen_sequencer_tests;
 mod analysis_tests;
 mod api_tests;
 mod audio_analysis_tests;
