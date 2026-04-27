@@ -1,3 +1,4 @@
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
 // ─── audio/dsp/fx_djfilter.rs ────────────────────────────────────────────────
 // DJ filter — single-knob morph LP↔HP through BP with the classic
@@ -44,7 +45,7 @@ impl DjFilter {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         let m = morph.clamp(0.0, 1.0);

@@ -61,8 +61,9 @@ use chiptune::ChiptuneVoice;
 use conv_reverb::ConvReverb;
 use dsp_util::*;
 pub use dsp_util::{
-    ATTACK_HANDOVER_VALUE, NYQUIST_GUARD_FACTOR, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD,
-    TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_f32, midi_to_hz_tuned, nyquist_guard,
+    ATTACK_HANDOVER_VALUE, MIX_BYPASS_THRESHOLD, NYQUIST_GUARD_FACTOR, RELEASE_OFF_VALUE,
+    SUSTAIN_REACH_THRESHOLD, TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_f32,
+    midi_to_hz_tuned, nyquist_guard,
 };
 use fm_ops::FmOpsVoice;
 use fx::*;

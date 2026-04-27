@@ -18,6 +18,7 @@
 // is transparent.  At `transient=0` (the default) the buffer is
 // still written but read at unity rate — V1 tone is preserved.
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::fx::Biquad;
 
 /// 0.5 s @ 48 kHz — long enough to host a perceptible spin-down
@@ -90,7 +91,7 @@ impl VinylFx {
         mix: f32,
         transient: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 

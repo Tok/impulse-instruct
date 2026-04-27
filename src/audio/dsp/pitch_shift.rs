@@ -16,6 +16,7 @@
 // harmonies ladder up naturally when the user sets high mix + fbk.
 
 /// Ring-buffer length — 16 384 samples = ~340 ms @ 48 kHz.
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 const PITCH_BUF: usize = 16_384;
 
 /// Grain period — samples between envelope wraps.  2048 at 48 kHz is
@@ -71,7 +72,7 @@ impl PitchShift {
         self.write = self.write.wrapping_add(1);
 
         let total_semi = semi + cents * 0.01;
-        if mix < 0.001 || total_semi.abs() < 0.005 {
+        if mix < MIX_BYPASS_THRESHOLD || total_semi.abs() < 0.005 {
             self.last_wet = 0.0;
             return input;
         }

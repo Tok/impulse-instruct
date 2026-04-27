@@ -16,6 +16,7 @@
 // band).  The mid band needs no filter at all — it's just
 // `dry - low - high`.  Allocation-free.
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
 use std::f32::consts::TAU;
 
@@ -143,7 +144,7 @@ impl IsoEqFx {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         // Recompute the biquads only when the engine sample rate

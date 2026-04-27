@@ -13,6 +13,7 @@
 
 /// Number of cells in the gate pattern.  Fixed at 16 to match the
 /// sequencer's standard step grid.
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 pub(crate) const TG_CELLS: usize = 16;
 
 /// Rate selector encoding.  Stored as a u8 in `FxState`; each value
@@ -83,7 +84,7 @@ impl TranceGateFx {
         bpm: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return sig;
         }
 

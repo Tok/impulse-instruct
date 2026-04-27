@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use rustfft::{Fft, FftPlanner, num_complex::Complex};
 
 // ─── Tape stop ───────────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ impl TapeStop {
         }
         self.last_mix = mix;
 
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 
@@ -138,7 +139,7 @@ impl Stutter {
         bpm: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             self.period_pos = 0;
             self.play_pos = 0;
             return input;
@@ -340,7 +341,7 @@ impl Freeze {
         if self.last_mix < 0.001 && mix > 0.001 {
             // Engaging — schedule a capture on the next hop boundary.
             self.captured = false;
-        } else if mix < 0.001 {
+        } else if mix < MIX_BYPASS_THRESHOLD {
             // Disengaging — clear the captured snapshot and silence the
             // pending output so the next engagement starts fresh.
             self.captured = false;
@@ -370,7 +371,7 @@ impl Freeze {
             }
         }
 
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             input
         } else {
             input * (1.0 - mix) + wet * mix

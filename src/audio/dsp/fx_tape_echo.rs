@@ -21,6 +21,7 @@
 // 160 000 for headroom around the wow/flutter swing.  Allocated
 // once at construction (Vec<f32>) — no per-block allocations.
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use std::f32::consts::TAU;
 
 /// Maximum delay buffer length.  144 000 = 1.5 s at 96 kHz; 160k
@@ -70,7 +71,7 @@ impl TapeEchoFx {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 

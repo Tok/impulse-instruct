@@ -24,6 +24,7 @@
 use std::f32::consts::TAU;
 use std::sync::Arc;
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
 use rustfft::num_complex::Complex;
 use rustfft::{Fft, FftPlanner};
@@ -218,7 +219,7 @@ impl SpectralGateFx {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 

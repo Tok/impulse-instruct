@@ -16,6 +16,7 @@
 /// Buffer sizing — every Dattorro tank delay scaled by `size` peaks at
 /// ~4500 samples × ~1.5 = ~6750 samples at 48 kHz.  Round up to the
 /// next pow-of-two for cheap modulo (mask).  Per-buffer cost: 32 KB.
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 const PLATE_DELAY_LEN: usize = 8192;
 const PLATE_DELAY_MASK: usize = PLATE_DELAY_LEN - 1;
 
@@ -234,7 +235,7 @@ impl PlateFx {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         if (sr - self.cached_sr).abs() > 0.5 {

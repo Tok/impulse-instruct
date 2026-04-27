@@ -15,6 +15,7 @@
 /// Threshold the fold reflects around.  Fixed at 1.0 because audio
 /// signals are conventionally normalised to ±1; the user reaches
 /// further into the fold by turning DRIVE up.
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 const FOLD_THRESHOLD: f32 = 1.0;
 
 pub(crate) struct WaveFolderFx;
@@ -43,7 +44,7 @@ impl WaveFolderFx {
         symmetry: f32,
         mix: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 

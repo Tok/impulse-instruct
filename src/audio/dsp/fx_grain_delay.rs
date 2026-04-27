@@ -22,6 +22,7 @@
 // (Vec<f32> on heap) and the four grain structs live in a fixed
 // array.
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use std::f32::consts::TAU;
 
 /// Maximum delay buffer length — 1.5 s at 96 kHz + headroom for
@@ -115,7 +116,7 @@ impl GrainDelayFx {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 

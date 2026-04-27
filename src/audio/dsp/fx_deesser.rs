@@ -21,6 +21,7 @@
 // Allocation-free.  Coefficients refresh lazily when freq or sr
 // move appreciably.
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
 use std::f32::consts::TAU;
 
@@ -133,7 +134,7 @@ impl DeEsserFx {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         // Lazy re-tune: freq knob moves ≪ audio rate; only refresh

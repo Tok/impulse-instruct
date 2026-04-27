@@ -26,6 +26,7 @@ use std::sync::Arc;
 use rustfft::num_complex::Complex;
 use rustfft::{Fft, FftPlanner};
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::pitch_shift::PitchShift;
 
 /// Predelay ring buffer length — covers the full 0..200 ms knob range at
@@ -263,7 +264,7 @@ impl ConvReverb {
     ) -> f32 {
         let pd_len = self.predelay_buf.len();
 
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             self.side = 0.0;
             self.last_wet_for_shimmer = 0.0;
             // Keep the delay line advancing so the first non-zero mix

@@ -14,6 +14,7 @@
 // automation feels live.  The Compressor's sidechain mode is a flag
 // added to the existing struct in `fx.rs`, not a new type.
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use crate::state::{FxStep, ModuleKind, SidechainSource};
 
 /// Max sidechain routes the audio thread tracks per block.  4 covers
@@ -144,7 +145,7 @@ impl Gate {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 || depth < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD || depth < 0.001 {
             return input;
         }
         // Detector envelope on the sidechain.  Attack/release are matched
@@ -290,7 +291,7 @@ impl Vocoder {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         // Envelope follower time constant — fixed at 20 ms attack / 80 ms

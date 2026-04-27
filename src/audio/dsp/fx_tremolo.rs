@@ -18,6 +18,7 @@
 // Allocation-free.  One FX instance keeps a single phase counter
 // and a tiny LCG-free advance — no buffers, no lookups.
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use std::f32::consts::TAU;
 
 pub(crate) struct TremoloFx {
@@ -46,7 +47,7 @@ impl TremoloFx {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         // Log-mapped rate so the knob is musical: 0.0 = 0.1 Hz

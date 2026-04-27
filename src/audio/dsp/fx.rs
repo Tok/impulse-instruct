@@ -1,3 +1,4 @@
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
 // ─── FX DSP structs ───────────────────────────────────────────────────────────
 // Pure numeric DSP — no allocations inside process().
@@ -226,7 +227,7 @@ impl Chorus {
     /// Two-voice BBD-style chorus: base ±10ms modulated by two phase-offset LFOs.
     /// `rate`: 0–1 → 0.1–8 Hz, `depth`: 0–1 → 0–10ms, `mix`: 0–1 wet/dry.
     pub(crate) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         self.buf[self.write] = input;
@@ -487,7 +488,7 @@ impl Compressor {
         reverse: bool,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         // Single-band path: track detector envelope, derive gain
@@ -537,7 +538,7 @@ impl Compressor {
         reverse: bool,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 
@@ -597,7 +598,7 @@ impl TapeSat {
         flutter: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         // Wow/flutter: ±4% amplitude modulation at ~2.5 Hz
@@ -638,7 +639,7 @@ impl Phaser {
     /// `depth`: 0–1 sweep width (0 = narrow, 1 = full 300–4000 Hz sweep).
     /// `mix`: 0–1 wet/dry.
     pub(crate) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 
@@ -703,7 +704,7 @@ impl Autotune {
 
     /// Process one sample.  `amount`: 0–1.  `mix`: 0–1 wet/dry.
     pub(crate) fn process(&mut self, input: f32, amount: f32, mix: f32) -> f32 {
-        if mix < 0.001 || amount < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD || amount < 0.001 {
             return input;
         }
 

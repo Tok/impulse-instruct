@@ -80,6 +80,14 @@ pub fn nyquist_guard(sr: f32) -> f32 {
     sr * NYQUIST_GUARD_FACTOR
 }
 
+/// FX-bypass threshold for wet/dry mix knobs.  Below this the wet
+/// path computation is skipped and `process` returns the dry input
+/// unchanged — the historical "if `mix < 0.001`" early-out idiom
+/// repeated across every FX module.  Saves the wet-path work when
+/// the user has the knob at zero and avoids tiny denormal contributions
+/// at very low mix settings.  ≈ −60 dB below unity, well under audibility.
+pub const MIX_BYPASS_THRESHOLD: f32 = 0.001;
+
 /// Convert frequency in Hz to fractional MIDI note number (12-TET,
 /// A=`A4_HZ`).  Inverse of `midi_to_hz_f32`; callers round/clamp as
 /// needed.

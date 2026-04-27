@@ -13,6 +13,7 @@
 // Freeze) live in the sibling `fx_glitch.rs` to keep this file
 // well under the 1000-line cap as future Tier-1 FX land here.
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
 use super::fx::{Biquad, MAX_FLANGER_SIZE};
 
@@ -54,7 +55,7 @@ impl Flanger {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 && (feedback - 0.5).abs() < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD && (feedback - 0.5).abs() < 0.001 {
             // Pure bypass when no wet and no feedback — still has to advance
             // the write head so the ring tracks `input` for when mix rises.
             self.buf[self.write] = input;
@@ -227,7 +228,7 @@ impl Svf {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         // Log-mapped cutoff so the knob feels musical across the audio band.
@@ -338,7 +339,7 @@ impl CombRes {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 && feedback < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD && feedback < 0.001 {
             self.buf[self.write] = input;
             self.write = (self.write + 1) & (COMB_BUF - 1);
             return input;
@@ -395,7 +396,7 @@ impl Tilt {
     /// `pivot`: 0–1 → 200 Hz–5 kHz logarithmic.
     /// `mix`: 0–1 wet/dry.
     pub(crate) fn process(&mut self, input: f32, tilt: f32, pivot: f32, mix: f32) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         // Recompute coefficients only when knobs move appreciably.
@@ -443,7 +444,7 @@ impl Transient {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         let level = input.abs();
@@ -502,7 +503,7 @@ impl Exciter {
     /// `freq`:   0–1 → 1 kHz–10 kHz HP corner.
     /// `mix`:    0–1 wet/dry on the added harmonics.
     pub(crate) fn process(&mut self, input: f32, amount: f32, freq: f32, mix: f32, sr: f32) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         let fc = 1000.0 * 10.0f32.powf(freq.clamp(0.0, 1.0));
@@ -559,7 +560,7 @@ impl Multitap {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 && feedback < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD && feedback < 0.001 {
             self.buf[self.write] = input;
             self.write = (self.write + 1) % MULTITAP_BUF;
             return input;

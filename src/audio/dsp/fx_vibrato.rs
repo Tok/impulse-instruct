@@ -23,6 +23,7 @@
 // array sized to the maximum-rate LFO swing at the highest
 // supported sample rate.
 
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use std::f32::consts::TAU;
 
 /// Maximum delay-line length in samples — covers 10 ms at 96 kHz
@@ -77,7 +78,7 @@ impl VibratoFx {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         // Write current sample into the delay line first so even

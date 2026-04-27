@@ -27,6 +27,7 @@
 // banks are; their poles are well inside the unit circle.
 
 /// Real branch — squared 'a' coefficients for H(z) = (a + z⁻²) / (1 + a·z⁻²).
+use super::dsp_util::MIX_BYPASS_THRESHOLD;
 const HILBERT_A: [f32; 4] = [0.4794, 0.8780, 0.9764, 0.9955];
 /// Imaginary branch — same allpass form, different `a` so the cumulative
 /// phase across the cascade lands ~90° offset from `HILBERT_A`.
@@ -128,7 +129,7 @@ impl FreqShift {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             // Bypass — but still advance state so the shifted output
             // doesn't pop when the user opens the mix knob mid-bar.
             let (_re, _im) = self.analytic(input);

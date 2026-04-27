@@ -28,7 +28,7 @@
 
 use std::f32::consts::TAU;
 
-use super::dsp_util::{midi_to_hz_f32, nyquist_guard};
+use super::dsp_util::{MIX_BYPASS_THRESHOLD, midi_to_hz_f32, nyquist_guard};
 
 const NUM_VOICES: usize = 6;
 const NUM_CHORDS: usize = 6;
@@ -137,7 +137,7 @@ impl ResBankFx {
         mix: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 
