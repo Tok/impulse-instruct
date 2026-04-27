@@ -56,6 +56,7 @@ pub mod spectrum;
 pub mod stereo_meter;
 pub mod theremin;
 pub mod timeline;
+pub mod trigger_div;
 pub mod tts;
 pub mod viz;
 pub mod vocal;
@@ -96,6 +97,7 @@ pub use spectrum::draw_spectrum;
 pub use stereo_meter::draw_stereo_meter;
 pub use theremin::draw_theremin;
 pub use timeline::draw_timeline;
+pub use trigger_div::draw_trigger_div;
 pub use tts::draw_tts;
 pub use viz::{
     draw_chord_display, draw_cv_seq_scope, draw_lfo_scope, draw_loudness_meter, draw_phase_wheel,

@@ -122,6 +122,7 @@ mod style_resolve_tests;
 mod transitions_presets_tests;
 mod transport_helpers_tests;
 mod transport_tests;
+mod trigger_div_tests;
 mod tts_tests;
 mod tuning_tests;
 mod ui_prefs_tests;

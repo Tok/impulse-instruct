@@ -334,6 +334,12 @@ pub enum ModuleKind {
     /// operation (add / multiply / blend / max / min).  Two
     /// Mod-In ports per instance.
     Math,
+    /// Trigger divider CV utility — fires the output gate every Nth
+    /// input gate (configurable ratio: /2, /3, /4, /5, /7).  Distinct
+    /// from `Comparator` (threshold gate, no division) — enables
+    /// polyrhythmic patches without changing the sequencer's pattern
+    /// length.
+    TriggerDiv,
     LlmAgent,
     // ── LLM console (singleton, Global zone) ──────────────────────────────
     LlmConsole,
@@ -436,6 +442,7 @@ impl ModuleKind {
             Self::Comparator => "COMPARATOR",
             Self::SampleHold => "S&H",
             Self::Math => "MATH",
+            Self::TriggerDiv => "TRIG DIV",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
             Self::MasterOutput => "MASTER",
@@ -577,6 +584,8 @@ impl ModuleKind {
             Self::SampleHold => (2, 1),
             // Math — op cycle button + blend knob, 2×1 fits.
             Self::Math => (2, 1),
+            // TriggerDiv — single ratio cycle button.
+            Self::TriggerDiv => (2, 1),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
             // Convolution Reverb — 6 knobs in a glass-grouped 2-row
@@ -745,7 +754,8 @@ impl ModuleKind {
             | Self::Quantizer
             | Self::Comparator
             | Self::SampleHold
-            | Self::Math => Zone::FxMod,
+            | Self::Math
+            | Self::TriggerDiv => Zone::FxMod,
         }
     }
 
@@ -937,6 +947,7 @@ impl ModuleKind {
                 | Self::Comparator
                 | Self::SampleHold
                 | Self::Math
+                | Self::TriggerDiv
                 | Self::LlmAgent
         )
     }

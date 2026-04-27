@@ -16,8 +16,8 @@ use super::lfo_target_opcode::lfo_target_to_u8;
 use super::params::{
     ComparatorParamsCopy, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CV_SEQ_BASE,
     MOD_BUF_LFO_BASE, MOD_BUF_MATH_BASE, MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE,
-    MOD_BUF_SLEW_BASE, MathParamsCopy, ModRouteCopy, QuantizerParamsCopy, SampleHoldParamsCopy,
-    SlewParamsCopy,
+    MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE, MathParamsCopy, ModRouteCopy, QuantizerParamsCopy,
+    SampleHoldParamsCopy, SlewParamsCopy, TriggerDivParamsCopy,
 };
 use crate::state::{AppState, LfoTarget, ModuleKind, PortKind};
 
@@ -32,6 +32,7 @@ struct CvSourceMaps {
     comparator: Vec<u32>,
     sample_hold: Vec<u32>,
     math: Vec<u32>,
+    trigger_div: Vec<u32>,
 }
 
 impl CvSourceMaps {
@@ -43,6 +44,7 @@ impl CvSourceMaps {
         let mut comparator = Vec::new();
         let mut sample_hold = Vec::new();
         let mut math = Vec::new();
+        let mut trigger_div = Vec::new();
         for m in &s.rack.modules {
             match m.kind {
                 ModuleKind::LfoModule => lfo.push(m.id),
@@ -52,6 +54,7 @@ impl CvSourceMaps {
                 ModuleKind::Comparator => comparator.push(m.id),
                 ModuleKind::SampleHold => sample_hold.push(m.id),
                 ModuleKind::Math => math.push(m.id),
+                ModuleKind::TriggerDiv => trigger_div.push(m.id),
                 _ => {}
             }
         }
@@ -63,6 +66,7 @@ impl CvSourceMaps {
             comparator,
             sample_hold,
             math,
+            trigger_div,
         }
     }
 
@@ -111,6 +115,12 @@ impl CvSourceMaps {
                 return None;
             }
             return Some((MOD_BUF_MATH_BASE + idx) as u8);
+        }
+        if let Some(idx) = self.trigger_div.iter().position(|id| *id == src_module_id) {
+            if idx >= crate::state::TRIGGER_DIV_SLOTS {
+                return None;
+            }
+            return Some((MOD_BUF_TRIGGER_DIV_BASE + idx) as u8);
         }
         None
     }
@@ -369,6 +379,45 @@ pub fn compile_math_params(s: &AppState) -> [MathParamsCopy; crate::state::MATH_
             0 => out[idx].cv_in_a_buf_idx = buf_idx,
             1 => out[idx].cv_in_b_buf_idx = buf_idx,
             _ => {}
+        }
+    }
+    out
+}
+
+/// Walk the rack's cables and produce the TriggerDiv
+/// utility-slot snapshot.  Single CV-In port per slot; the
+/// `ratio` field is snapped to the nearest valid value at compile
+/// time so the audio thread can match on a known set.
+pub fn compile_trigger_div_params(
+    s: &AppState,
+) -> [TriggerDivParamsCopy; crate::state::TRIGGER_DIV_SLOTS] {
+    let mut out = [TriggerDivParamsCopy::default(); crate::state::TRIGGER_DIV_SLOTS];
+    let maps = CvSourceMaps::build(s);
+    let ids = &maps.trigger_div;
+    for (i, slot) in s
+        .trigger_div
+        .iter()
+        .enumerate()
+        .take(crate::state::TRIGGER_DIV_SLOTS)
+    {
+        out[i] = TriggerDivParamsCopy {
+            enabled: slot.enabled,
+            ratio: crate::state::trigger_div::nearest_trigger_div_ratio(slot.ratio),
+            cv_in_buf_idx: u8::MAX,
+        };
+    }
+    for cable in &s.rack.cables {
+        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
+            continue;
+        }
+        let Some(idx) = ids.iter().position(|id| *id == cable.to.module_id) else {
+            continue;
+        };
+        if idx >= crate::state::TRIGGER_DIV_SLOTS {
+            continue;
+        }
+        if let Some(buf_idx) = maps.resolve(s, cable.from.module_id) {
+            out[idx].cv_in_buf_idx = buf_idx;
         }
     }
     out

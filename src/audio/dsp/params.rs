@@ -49,6 +49,10 @@ pub const MOD_BUF_COMPARATOR_BASE: usize = 16;
 pub const MOD_BUF_SAMPLE_HOLD_BASE: usize = 20;
 /// Math utility output range starts here.
 pub const MOD_BUF_MATH_BASE: usize = 24;
+/// TriggerDiv utility output range starts here.  Last range that
+/// fits in the current `MOD_BUF_SIZE = 32`; the next utility kind
+/// to ship will need to bump that constant.
+pub const MOD_BUF_TRIGGER_DIV_BASE: usize = 28;
 
 /// Per-slot LFO configuration passed to the audio thread (Copy-safe).
 #[derive(Clone, Copy, Debug)]
@@ -144,6 +148,29 @@ impl Default for ComparatorParamsCopy {
         Self {
             enabled: false,
             threshold: 0.0,
+            cv_in_buf_idx: u8::MAX,
+        }
+    }
+}
+
+/// Per-slot TriggerDiv configuration.  Single CV input + a
+/// division ratio; output is a 0/1 gate that fires every Nth rising
+/// edge of the input.
+#[derive(Clone, Copy, Debug)]
+pub struct TriggerDivParamsCopy {
+    pub enabled: bool,
+    /// Division ratio — clamped to a member of
+    /// `crate::state::TRIGGER_DIV_RATIOS` at compile time so the
+    /// audio-thread mod arithmetic stays cheap.
+    pub ratio: u8,
+    pub cv_in_buf_idx: u8,
+}
+
+impl Default for TriggerDivParamsCopy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            ratio: 2,
             cv_in_buf_idx: u8::MAX,
         }
     }
@@ -556,6 +583,7 @@ pub struct AudioParams {
     /// note in the configured scale.
     pub quantizer: [QuantizerParamsCopy; crate::state::QUANTIZER_SLOTS],
     pub comparator: [ComparatorParamsCopy; crate::state::COMPARATOR_SLOTS],
+    pub trigger_div: [TriggerDivParamsCopy; crate::state::TRIGGER_DIV_SLOTS],
     pub sample_hold: [SampleHoldParamsCopy; crate::state::SAMPLE_HOLD_SLOTS],
     pub math: [MathParamsCopy; crate::state::MATH_SLOTS],
     /// Per-block modulation source buffer.  The audio thread fills

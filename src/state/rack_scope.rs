@@ -105,6 +105,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::Comparator => Some("comparator".to_string()),
         ModuleKind::SampleHold => Some("sample_hold".to_string()),
         ModuleKind::Math => Some("math".to_string()),
+        ModuleKind::TriggerDiv => Some("trigger_div".to_string()),
         _ => None,
     }
 }
@@ -207,6 +208,8 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "comparator" | "compare" | "thresh" | "threshold" => Some(Comparator),
         "samplehold" | "sample_hold" | "sandh" | "s&h" | "snh" => Some(SampleHold),
         "math" | "mathmodule" | "mathcv" | "cvmath" => Some(Math),
+        "triggerdiv" | "trigger_div" | "trigdiv" | "trigger_divider" | "clockdivider"
+        | "clockdiv" | "divider" => Some(TriggerDiv),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
         "activitytimeline" | "timeline" | "activity" | "log" => Some(ActivityTimeline),
@@ -391,6 +394,16 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::Comparator => matches!(n.as_str(), "comparator" | "compare" | "threshold"),
         ModuleKind::SampleHold => matches!(n.as_str(), "samplehold" | "sample_hold" | "snh"),
         ModuleKind::Math => matches!(n.as_str(), "math" | "mathmodule" | "cvmath"),
+        ModuleKind::TriggerDiv => matches!(
+            n.as_str(),
+            "triggerdiv"
+                | "trigger_div"
+                | "trigger div"
+                | "trigdiv"
+                | "clockdivider"
+                | "clockdiv"
+                | "divider"
+        ),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),
         ModuleKind::DrumKit909 => matches!(n.as_str(), "909" | "kit_b" | "drum_b" | "drums_b"),

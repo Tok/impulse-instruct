@@ -4,6 +4,68 @@ A detailed log of what's built.
 
 ---
 
+### TriggerDiv CV utility (`TriggerDiv`)
+
+Clock divider modulation utility — fires the output gate every
+Nth rising edge of the input.  Distinct from `Comparator`
+(threshold gate, no division) and from the sequencer's per-step
+clock: this divides any incoming gate stream (LFO with Square
+waveform, CvSequencer, comparator output, even another TriggerDiv)
+by a configurable ratio.  Enables polyrhythmic patches
+(3-against-4, 5-against-4, 7-against-4) without changing the
+sequencer's pattern length.
+
+**State.**  New `state::trigger_div` module: `TriggerDivSlot {
+enabled, ratio: u8 }` with `TRIGGER_DIV_SLOTS = 4` slots and a
+fixed `TRIGGER_DIV_RATIOS = [2, 3, 4, 5, 7]` table.  A
+`nearest_trigger_div_ratio` helper snaps arbitrary inputs to the
+nearest valid ratio so the audio thread's `% ratio` arithmetic
+stays exhaustive.
+
+**Audio thread.**  New `MOD_BUF_TRIGGER_DIV_BASE = 28` slot in
+the cv_buf (last available range under the current
+`MOD_BUF_SIZE = 32`; the next utility ship will need to bump it).
+Per-slot edge-detection state in DspState:
+- `trigger_div_count: [u32; 4]` — running count per slot.
+- `trigger_div_prev: [f32; 4]` — previous-input cache for
+  rising-edge detection at the 0.5 threshold.
+
+`process_block` evaluates after the Sample-and-Hold stage:
+detect rising edge → increment count → output 1.0 when input is
+high AND count is a multiple of ratio (gate-shaped output that
+matches the input gate width on kept fires, fully off on
+skipped). Disabled = passthrough.
+
+**UI thread.**  New `panels::trigger_div` module with ON/OFF
+toggle + ratio cycle button (`÷N` label cycles 2→3→4→5→7→2 on
+click).  No XY pad.  Sub-line caption: "Gate in → 1 every Nth
+pulse → Gate out".
+
+**Wiring.**  Standard 17-file utility ritual.  ModuleKind
+`TriggerDiv` ("TRIG DIV" label, 2×1 grid, FxMod zone, sort-group
+35 next to the other CV utilities, Selector × 1 mod input,
+PortKind::Cv output).  Aliases triggerdiv / trigger_div / trigdiv
+/ clockdivider / clockdiv / divider.  Allows multiple — multiple
+divider instances on different ratios is the whole point.
+
+Palette catch-up: the menus in `rack_canvas_menus.rs` had drifted
+behind the recent FX/viz ships (FxPlate, FxTranceGate,
+FxWaveFolder, VoiceMeterStrip, GrHistory were all missing); this
+ship adds those entries alongside TriggerDiv so the user-facing
+"Add module" picker stays current.
+
+**Tests.**  +9 (5 state-side: defaults, slot round-trip, ratio
+snap helper round-trips for table members, snap helper picks
+closest for off-table inputs, snap helper outputs are always
+table members; +4 module: label, alias parsing, FxMod zone,
+allows_multiple).  Suite **2269 → 2278**.
+
+Files: new `src/state/trigger_div.rs`, new
+`src/ui/panels/trigger_div.rs`, new
+`src/tests/trigger_div_tests.rs`.
+
+---
+
 ### Gain-reduction history viz (`GrHistory`)
 
 Rolling waveform of the momentary gain reduction across the

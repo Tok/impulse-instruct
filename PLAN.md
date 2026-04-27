@@ -18,10 +18,6 @@ Pick from the top down; each row is one focused commit.
   Maths-style: gate-in → envelope-out.  Different from `LfoModule`
   (free-running) and `CvSequencer` (step-table); fills the
   "transient envelope" gap for drum sounds / plucks.
-- [ ] **Trigger divider** (`TriggerDiv`) — clock divider with
-  configurable ratio (/2, /3, /4, /5, /7).  Fires output gate
-  every N input gates.  Enables polyrhythmic patches without
-  changing pattern length.
 - [ ] **Logic gate** (`LogicGate`) — AND / OR / XOR over two gate
   inputs.  Combinator for euclidean patches; pairs with
   TriggerDiv for layered rhythmic logic.

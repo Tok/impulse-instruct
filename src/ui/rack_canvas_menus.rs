@@ -54,6 +54,9 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::FxWaveshaper,
     ModuleKind::FxBitcrush,
     ModuleKind::FxRingMod,
+    ModuleKind::FxPlate,
+    ModuleKind::FxTranceGate,
+    ModuleKind::FxWaveFolder,
     ModuleKind::SpectrumAnalyzer,
     ModuleKind::StereoMeter,
     ModuleKind::ActivityTimeline,
@@ -69,6 +72,8 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::EventStream,
     ModuleKind::PatternHeatmap,
     ModuleKind::OnsetGrid,
+    ModuleKind::VoiceMeterStrip,
+    ModuleKind::GrHistory,
     ModuleKind::LfoModule,
     ModuleKind::CvSequencer,
     ModuleKind::Slew,
@@ -76,6 +81,7 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::Comparator,
     ModuleKind::SampleHold,
     ModuleKind::Math,
+    ModuleKind::TriggerDiv,
 ];
 
 pub(super) fn draw_remove_confirm(app: &mut ImpulseApp, ctx: &egui::Context) {

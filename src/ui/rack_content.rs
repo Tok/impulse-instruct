@@ -852,6 +852,21 @@ pub(super) fn draw_math_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_
     crate::ui::panels::draw_math(app, ui, slot);
 }
 
+pub(super) fn draw_trigger_div_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::TriggerDiv)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_trigger_div(app, ui, slot);
+}
+
 pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     use crate::ui::widgets;
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);

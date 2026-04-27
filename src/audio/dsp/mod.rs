@@ -88,14 +88,14 @@ use granular_voice::GranularVoice;
 pub use lfo_target_opcode::lfo_target_to_u8;
 pub use mod_compile::{
     compile_comparator_params, compile_math_params, compile_mod_routes, compile_quantizer_params,
-    compile_sample_hold_params, compile_slew_params,
+    compile_sample_hold_params, compile_slew_params, compile_trigger_div_params,
 };
 use ms_master::MsMaster;
 use param_eq::ParamEq;
 pub use params::{
     AudioParams, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE,
     MOD_BUF_MATH_BASE, MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE, MOD_BUF_SIZE,
-    MOD_BUF_SLEW_BASE, MOD_UTIL_SLOTS,
+    MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE, MOD_UTIL_SLOTS,
 };
 use pendulum::PendulumVoice;
 use pitch_shift::PitchShift;
@@ -235,6 +235,11 @@ pub struct DspState {
     slew_state: [f32; crate::state::SLEW_SLOTS],
     /// Cached Sample-and-hold latch per slot.
     sample_hold_state: [f32; crate::state::SAMPLE_HOLD_SLOTS],
+    /// TriggerDiv per-slot edge counter — increments on each rising
+    /// edge of the input.  Output fires when `count % ratio == 0`.
+    trigger_div_count: [u32; crate::state::TRIGGER_DIV_SLOTS],
+    /// TriggerDiv previous-input cache for rising-edge detection.
+    trigger_div_prev: [f32; crate::state::TRIGGER_DIV_SLOTS],
     /// Last sequencer step seen by `process_block`.  Used by S&H
     /// to detect step transitions (the "clock edge").
     prev_seq_step: u32,
@@ -409,6 +414,8 @@ impl DspState {
             lfo_sh_held: [0.0; 4],
             slew_state: [0.0; crate::state::SLEW_SLOTS],
             sample_hold_state: [0.0; crate::state::SAMPLE_HOLD_SLOTS],
+            trigger_div_count: [0; crate::state::TRIGGER_DIV_SLOTS],
+            trigger_div_prev: [0.0; crate::state::TRIGGER_DIV_SLOTS],
             prev_seq_step: u32::MAX,
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
             free_eg_phase: 0.0,

@@ -211,6 +211,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // the per-utility compile pass resolves each input
         // independently.
         Math => &[Selector, Selector],
+        // TriggerDiv — single CV input (gate stream).  No knobs are
+        // CV-modulatable in V1 (ratio is a discrete selector); the
+        // Selector slot is for the gate-stream input cable.
+        TriggerDiv => &[Selector],
     }
 }
 
@@ -633,7 +637,8 @@ pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
         | ModuleKind::Quantizer
         | ModuleKind::Comparator
         | ModuleKind::SampleHold
-        | ModuleKind::Math => PortKind::Cv,
+        | ModuleKind::Math
+        | ModuleKind::TriggerDiv => PortKind::Cv,
         _ => PortKind::Audio,
     }
 }

@@ -222,6 +222,43 @@ impl DspState {
         }
         self.prev_seq_step = cur_step;
 
+        // ── TriggerDiv utility ───────────────────────────────────────────────
+        // Schmitt-style rising-edge detection: count climbs each time
+        // the input crosses the 0.5 threshold upward.  Output fires
+        // (1.0) when the running count is divisible by the slot's
+        // ratio, else 0.0.  Disabled = passthrough so the user can
+        // unhook the gate without rewiring.
+        for (i, td) in p_base.trigger_div.iter().enumerate() {
+            let out_idx = super::params::MOD_BUF_TRIGGER_DIV_BASE + i;
+            let raw = if td.cv_in_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[td.cv_in_buf_idx as usize]
+            };
+            if !td.enabled {
+                p.cv_buf[out_idx] = raw;
+                self.trigger_div_prev[i] = raw;
+                continue;
+            }
+            // Rising-edge detector with a single-threshold gate at 0.5.
+            // Hysteresis would need both an upper + lower threshold
+            // band; for V1 the simple threshold catches typical LFO
+            // gates / comparator outputs without chatter.
+            let was_high = self.trigger_div_prev[i] >= 0.5;
+            let is_high = raw >= 0.5;
+            if is_high && !was_high {
+                self.trigger_div_count[i] = self.trigger_div_count[i].wrapping_add(1);
+            }
+            self.trigger_div_prev[i] = raw;
+            let ratio = td.ratio.max(1) as u32;
+            // Fire output during the entire input gate period when
+            // count's an exact multiple of ratio.  This produces the
+            // expected gate-out shape (matches the input gate width
+            // for kept gates, fully off for skipped ones).
+            let on = is_high && self.trigger_div_count[i].is_multiple_of(ratio);
+            p.cv_buf[out_idx] = if on { 1.0 } else { 0.0 };
+        }
+
         // ── Math utility ──────────────────────────────────────────────────────
         // Combine two CV inputs per the slot's op selector.
         // Unwired inputs read 0; the op semantics handle this

@@ -72,6 +72,7 @@ pub mod math_module;
 pub mod quantizer;
 pub mod sample_hold;
 pub mod slew;
+pub mod trigger_div;
 pub use comparator::{COMPARATOR_SLOTS, ComparatorSlot};
 pub use cv_seq::{CV_SEQ_SLOTS, CV_SEQ_STEPS, CvSeqSlot};
 pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
@@ -79,6 +80,7 @@ pub use math_module::{MATH_SLOTS, MathOp, MathSlot};
 pub use quantizer::{QUANTIZER_SLOTS, QuantizerSlot};
 pub use sample_hold::{SAMPLE_HOLD_SLOTS, SampleHoldSlot};
 pub use slew::{SLEW_SLOTS, SlewSlot};
+pub use trigger_div::{TRIGGER_DIV_RATIOS, TRIGGER_DIV_SLOTS, TriggerDivSlot};
 
 pub mod chain_advance;
 pub use chain_advance::{LoopBoundaryAction, build_advance_target, classify_loop_boundary};
@@ -282,6 +284,8 @@ pub struct AppState {
     #[serde(default)]
     pub math: [MathSlot; MATH_SLOTS],
     #[serde(default)]
+    pub trigger_div: [TriggerDivSlot; TRIGGER_DIV_SLOTS],
+    #[serde(default)]
     pub free_eg: FreeEg,
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
@@ -456,6 +460,7 @@ impl Default for AppState {
             comparator: std::array::from_fn(|_| ComparatorSlot::default()),
             sample_hold: std::array::from_fn(|_| SampleHoldSlot::default()),
             math: std::array::from_fn(|_| MathSlot::default()),
+            trigger_div: std::array::from_fn(|_| TriggerDivSlot::default()),
             free_eg: Default::default(),
             noise_voice: Default::default(),
             theremin: Default::default(),
