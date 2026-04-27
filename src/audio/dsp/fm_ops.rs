@@ -9,7 +9,8 @@
 
 use super::AudioParams;
 use super::dsp_util::{
-    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, nyquist_guard, one_pole_coef,
+    ADSR_TIME_MIN_S, ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD,
+    nyquist_guard, one_pole_coef,
 };
 
 /// Modulation-index scaling.  Op `level` 0..1 multiplies into this
@@ -60,8 +61,9 @@ impl AdsrState {
     fn step(&mut self, attack: f32, decay: f32, sustain: f32, release: f32, sr: f32) {
         // Same knob → seconds map as the SampleInstrument ADSR so
         // the two voices feel consistent across the rack.
-        let knob_to_secs =
-            |k: f32, lo: f32, hi: f32| -> f32 { (lo + (hi - lo) * k.clamp(0.0, 1.0)).max(0.0005) };
+        let knob_to_secs = |k: f32, lo: f32, hi: f32| -> f32 {
+            (lo + (hi - lo) * k.clamp(0.0, 1.0)).max(ADSR_TIME_MIN_S)
+        };
         match self.stage {
             AdsrStage::Off => {
                 self.value = 0.0;

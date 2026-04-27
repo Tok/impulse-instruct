@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use super::AudioParams;
 use super::dsp_util::{
-    ATTACK_HANDOVER_VALUE, AUDIBLE_HZ_MAX, AUDIBLE_HZ_MIN, RELEASE_OFF_VALUE,
+    ADSR_TIME_MIN_S, ATTACK_HANDOVER_VALUE, AUDIBLE_HZ_MAX, AUDIBLE_HZ_MIN, RELEASE_OFF_VALUE,
     SUSTAIN_REACH_THRESHOLD, db_to_lin, one_pole_coef,
 };
 use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
@@ -615,14 +615,14 @@ impl SampleInstrumentVoice {
     fn step_adsr(slot: &mut SampleInstrumentSlot, sr: f32, p: &AudioParams) {
         let knob_to_secs = |knob: f32, lo: f32, hi: f32| -> f32 {
             let k = knob.clamp(0.0, 1.0);
-            (lo + (hi - lo) * k).max(0.0005)
+            (lo + (hi - lo) * k).max(ADSR_TIME_MIN_S)
         };
         let (attack_s, decay_s, sustain, release_s) = match slot.region_adsr {
             Some((a, d, s, r)) => (
-                a.max(0.0005),
-                d.max(0.0005),
+                a.max(ADSR_TIME_MIN_S),
+                d.max(ADSR_TIME_MIN_S),
                 s.clamp(0.0, 1.0),
-                r.max(0.0005),
+                r.max(ADSR_TIME_MIN_S),
             ),
             None => (
                 knob_to_secs(p.sample_attack, 0.0005, 1.5),

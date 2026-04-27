@@ -108,6 +108,14 @@ pub const MIX_BYPASS_THRESHOLD: f32 = 0.001;
 pub const PWM_MIN: f32 = 0.05;
 pub const PWM_MAX: f32 = 0.95;
 
+/// Floor for ADSR / glide stage times in seconds.  0.5 ms ≈ 24
+/// samples at 48 kHz — below this the [`one_pole_coef`] curve
+/// effectively becomes a one-sample snap, and `time_s = 0` divides
+/// by zero in the formula.  Voice envelopes clamp `attack`/`decay`/
+/// `release` against this floor so an "instant" knob still produces
+/// a sane micro-ramp rather than a click.
+pub const ADSR_TIME_MIN_S: f32 = 0.0005;
+
 /// One-pole exponential approach coefficient: per-sample multiplier
 /// that turns a value into an exponential decay toward a target over
 /// `time_s` seconds at sample rate `sr`.
