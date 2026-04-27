@@ -21,8 +21,8 @@
 // Allocation-free.  Coefficients refresh lazily when freq or sr
 // move appreciably.
 
-use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
+use super::dsp_util::{MIX_BYPASS_THRESHOLD, one_pole_coef};
 use std::f32::consts::TAU;
 
 /// One RBJ-cookbook HP biquad.  Same shape as the one in
@@ -161,8 +161,8 @@ impl DeEsserFx {
         // Peak envelope follower — fast attack / medium release.
         // sr-aware coefficients keep the time constants musical
         // across sample-rate changes.
-        let attack_coef = (-1.0_f32 / (0.003 * sr)).exp(); // ~3 ms
-        let release_coef = (-1.0_f32 / (0.05 * sr)).exp(); // ~50 ms
+        let attack_coef = one_pole_coef(0.003, sr); // ~3 ms
+        let release_coef = one_pole_coef(0.05, sr); // ~50 ms
         let abs_sib = sibilant.abs();
         if abs_sib > self.env {
             self.env = abs_sib + (self.env - abs_sib) * attack_coef;

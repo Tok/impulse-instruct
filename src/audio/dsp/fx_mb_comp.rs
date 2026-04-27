@@ -25,8 +25,8 @@
 // Allocation-free; coefficients refresh lazily on sample-rate
 // change.
 
-use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
+use super::dsp_util::{MIX_BYPASS_THRESHOLD, one_pole_coef};
 use std::f32::consts::TAU;
 
 const LOW_FC: f32 = 250.0;
@@ -155,8 +155,8 @@ impl MultibandCompFx {
         // medium release.  Tracking each band independently is
         // the whole point of multiband: a low-band kick doesn't
         // duck the high-band air.
-        let attack_coef = (-1.0_f32 / (0.003 * sr)).exp(); // ~3 ms
-        let release_coef = (-1.0_f32 / (0.08 * sr)).exp(); // ~80 ms
+        let attack_coef = one_pole_coef(0.003, sr); // ~3 ms
+        let release_coef = one_pole_coef(0.08, sr); // ~80 ms
         update_env(&mut self.env_low, low_band, attack_coef, release_coef);
         update_env(&mut self.env_mid, mid_band, attack_coef, release_coef);
         update_env(&mut self.env_high, high_band, attack_coef, release_coef);

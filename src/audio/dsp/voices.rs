@@ -1,5 +1,5 @@
 use super::dsp_util::nyquist_guard;
-use super::dsp_util::{PWM_MAX, PWM_MIN};
+use super::dsp_util::{PWM_MAX, PWM_MIN, one_pole_coef};
 // ─── Low-level voice state machines ──────────────────────────────────────────
 // Pure numeric DSP structs — no allocations.
 
@@ -526,15 +526,15 @@ impl HooverVoice {
 
         // Amplitude envelope: fast attack (~5 ms), release (~80 ms)
         if self.gate {
-            let attack_coeff = (-1.0_f32 / (0.005 * sr)).exp();
+            let attack_coeff = one_pole_coef(0.005, sr);
             self.amp_env = 1.0 - (1.0 - self.amp_env) * attack_coeff;
         } else {
-            let release_coeff = (-1.0_f32 / (0.08 * sr)).exp();
+            let release_coeff = one_pole_coef(0.08, sr);
             self.amp_env *= release_coeff;
         }
 
         // Filter sweep: filt_env decays from 1.0 → 0.0 over sweep_time
-        let sweep_coeff = (-1.0_f32 / (p.hoover_sweep_time * sr)).exp();
+        let sweep_coeff = one_pole_coef(p.hoover_sweep_time, sr);
         if self.filt_env > 1e-5 {
             self.filt_env *= sweep_coeff;
         } else {
@@ -547,13 +547,13 @@ impl HooverVoice {
         // update path (target == freq).
         if self.slide > 0.0 && (self.freq - self.target_freq).abs() > 1e-3 {
             let glide_time_s = 0.01 + self.slide * 0.15; // 10..160 ms
-            let coeff = (-1.0_f32 / (glide_time_s * sr)).exp();
+            let coeff = one_pole_coef(glide_time_s, sr);
             self.freq = self.target_freq - (self.target_freq - self.freq) * coeff;
         }
 
         // Pitch-dip envelope: fast decay (~30 ms) gives the hoover "wow"
         // transient where the note swoops up into pitch on attack.
-        let pitch_dip_coeff = (-1.0_f32 / (0.03 * sr)).exp();
+        let pitch_dip_coeff = one_pole_coef(0.03, sr);
         self.pitch_env *= pitch_dip_coeff;
         if self.pitch_env < 1e-4 {
             self.pitch_env = 0.0;

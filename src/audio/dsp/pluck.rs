@@ -14,7 +14,7 @@
 // AMP envelope provides soft attack so retriggers don't click.
 
 use super::AudioParams;
-use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
+use super::dsp_util::{TuningSystem, midi_to_hz_tuned, one_pole_coef};
 
 /// Max delay-line length — sized for the lowest musically useful
 /// fundamental we expect.  At 48 kHz a 4096-sample delay line covers
@@ -123,10 +123,10 @@ impl PluckVoice {
         // — the body of the pluck's decay lives in the delay-line
         // feedback itself, this envelope only hides retrigger clicks.
         if self.gate {
-            let atk = (-1.0_f32 / (0.003 * sr)).exp();
+            let atk = one_pole_coef(0.003, sr);
             self.amp_env = 1.0 - (1.0 - self.amp_env) * atk;
         } else {
-            let rel = (-1.0_f32 / (0.1 * sr)).exp();
+            let rel = one_pole_coef(0.1, sr);
             self.amp_env *= rel;
         }
 

@@ -17,7 +17,9 @@
 use std::sync::Arc;
 
 use super::AudioParams;
-use super::dsp_util::{ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD};
+use super::dsp_util::{
+    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, one_pole_coef,
+};
 use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
 use super::formant_shifter::FormantShifter;
 use super::fx_extras::{Svf, SvfMode};
@@ -633,7 +635,7 @@ impl SampleInstrumentVoice {
                 slot.adsr_value = 0.0;
             }
             AdsrStage::Attack => {
-                let coef = (-1.0_f32 / (attack_s * sr)).exp();
+                let coef = one_pole_coef(attack_s, sr);
                 slot.adsr_value = 1.0 - (1.0 - slot.adsr_value) * coef;
                 if slot.adsr_value >= ATTACK_HANDOVER_VALUE {
                     slot.adsr_value = 1.0;
@@ -641,7 +643,7 @@ impl SampleInstrumentVoice {
                 }
             }
             AdsrStage::Decay => {
-                let coef = (-1.0_f32 / (decay_s * sr)).exp();
+                let coef = one_pole_coef(decay_s, sr);
                 slot.adsr_value = sustain + (slot.adsr_value - sustain) * coef;
                 if (slot.adsr_value - sustain).abs() < SUSTAIN_REACH_THRESHOLD {
                     slot.adsr_value = sustain;
@@ -652,7 +654,7 @@ impl SampleInstrumentVoice {
                 slot.adsr_value += (sustain - slot.adsr_value) * 0.001;
             }
             AdsrStage::Release => {
-                let coef = (-1.0_f32 / (release_s * sr)).exp();
+                let coef = one_pole_coef(release_s, sr);
                 slot.adsr_value *= coef;
                 if slot.adsr_value < RELEASE_OFF_VALUE {
                     slot.adsr_value = 0.0;
@@ -714,7 +716,7 @@ impl SampleInstrumentVoice {
             // lowpass shape the audible glide is more natural than
             // a linear ramp.
             let spinup_t = 0.080_f32; // 80 ms
-            let spinup_coef = (-1.0_f32 / (spinup_t * sr)).exp();
+            let spinup_coef = one_pole_coef(spinup_t, sr);
             slot.spinup = 1.0 + (slot.spinup - 1.0) * spinup_coef;
             // Cap pitch dip at ~6 % (about a semitone) so the
             // ramp is audible but not jarring.

@@ -10,7 +10,7 @@
 //     is not.
 
 use crate::audio::dsp::{
-    NYQUIST_GUARD_FACTOR, hz_to_midi, midi_to_hz, midi_to_hz_f32, nyquist_guard,
+    NYQUIST_GUARD_FACTOR, hz_to_midi, midi_to_hz, midi_to_hz_f32, nyquist_guard, one_pole_coef,
 };
 use crate::state::LfoTarget;
 use crate::state::fx_plan::kind_is_fx;
@@ -123,6 +123,52 @@ fn nyquist_guard_factor_matches_legacy_literal() {
     // the constant must reproduce that exactly, otherwise existing
     // filter clamps would shift their cutoffs.
     assert_eq!(NYQUIST_GUARD_FACTOR, 0.45);
+}
+
+// ─── one_pole_coef ──────────────────────────────────────────────────────────
+
+/// Bit-identity with the inline formula every voice envelope used
+/// before the helper existed — the refactor must not perturb any
+/// envelope's coast curve.
+#[test]
+fn one_pole_coef_matches_inline_formula() {
+    let sr = 48_000.0_f32;
+    for &t in &[0.001_f32, 0.005, 0.05, 0.1, 0.5, 1.0, 2.0] {
+        let inline = (-1.0_f32 / (t * sr)).exp();
+        let helper = one_pole_coef(t, sr);
+        assert_eq!(helper, inline, "drift at t={t}");
+    }
+}
+
+/// Plug the helper into a one-pole approach loop and check it
+/// reaches the target within the configured time-constant — the
+/// envelope-stage handover is wired around exactly this property.
+#[test]
+fn one_pole_coef_reaches_target_within_time_constant() {
+    let sr = 48_000.0_f32;
+    let attack_s = 0.020_f32; // 20 ms attack
+    let coef = one_pole_coef(attack_s, sr);
+    let mut value = 0.0_f32;
+    let target = 1.0_f32;
+    for _ in 0..((attack_s * sr) as usize) {
+        value = target + (value - target) * coef;
+    }
+    // After 1 time-constant, value should reach ~1 - 1/e ≈ 0.632.
+    assert!(value > 0.6 && value < 0.7, "value at τ: {value}");
+}
+
+/// Larger time → coefficient closer to 1 (slower approach); smaller
+/// time → coefficient closer to 0 (snap).  Pin the monotonicity so a
+/// future formula refactor can't silently invert.
+#[test]
+fn one_pole_coef_is_monotone_in_time() {
+    let sr = 48_000.0_f32;
+    let mut prev = one_pole_coef(0.001, sr);
+    for &t in &[0.005_f32, 0.05, 0.5, 5.0] {
+        let c = one_pole_coef(t, sr);
+        assert!(c > prev, "coef should grow with time (t={t}: {c} ≤ {prev})");
+        prev = c;
+    }
 }
 
 // ─── lfo_target_to_u8 ───────────────────────────────────────────────────────

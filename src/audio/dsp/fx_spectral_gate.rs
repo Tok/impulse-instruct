@@ -24,8 +24,8 @@
 use std::f32::consts::TAU;
 use std::sync::Arc;
 
-use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
+use super::dsp_util::{MIX_BYPASS_THRESHOLD, one_pole_coef};
 use rustfft::num_complex::Complex;
 use rustfft::{Fft, FftPlanner};
 
@@ -244,10 +244,10 @@ impl SpectralGateFx {
         let base_thr = thresh.clamp(0.0, 1.0);
         let release_ms = 10.0 * 200.0_f32.powf(release.clamp(0.0, 1.0));
         // 10..2000 ms log span.
-        let release_coef = (-1.0_f32 / (release_ms * 0.001 * sr)).exp();
-        let attack_coef = (-1.0_f32 / (0.005 * sr)).exp(); // ~5 ms attack — fast
+        let release_coef = one_pole_coef(release_ms * 0.001, sr);
+        let attack_coef = one_pole_coef(0.005, sr); // ~5 ms attack — fast
         // env-follower attack (separate from gate attack).
-        let env_attack = (-1.0_f32 / (0.003 * sr)).exp();
+        let env_attack = one_pole_coef(0.003, sr);
 
         // Total killed amount = sum of (1 - gate_i) * band_i —
         // the subtractive cancellation idiom keeps reconstruction

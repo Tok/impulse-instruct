@@ -16,7 +16,7 @@
 // bank stays bounded.
 
 use super::AudioParams;
-use super::dsp_util::nyquist_guard;
+use super::dsp_util::{nyquist_guard, one_pole_coef};
 use crate::state::{MODAL_MODES, MODAL_RATIO_PRESETS};
 
 /// Idealised mode-frequency ratios per preset.  Values relative to
@@ -79,7 +79,7 @@ impl Resonator {
         // explode and r stays in (0, 1).
         let f = freq_hz.clamp(20.0, nyquist_guard(sr));
         let omega = std::f32::consts::TAU * f / sr;
-        let r = (-1.0_f32 / (decay_s.max(0.001) * sr)).exp();
+        let r = one_pole_coef(decay_s.max(0.001), sr);
         self.a1 = 2.0 * r * omega.cos();
         self.neg_a2 = r * r;
         // Energy-preserving input scale: `sqrt(1 - r²)` instead of

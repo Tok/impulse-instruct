@@ -99,6 +99,25 @@ pub const MIX_BYPASS_THRESHOLD: f32 = 0.001;
 pub const PWM_MIN: f32 = 0.05;
 pub const PWM_MAX: f32 = 0.95;
 
+/// One-pole exponential approach coefficient: per-sample multiplier
+/// that turns a value into an exponential decay toward a target over
+/// `time_s` seconds at sample rate `sr`.
+///
+/// Standard form: `coef = exp(-1 / (time_s · sr))`.  Used by every
+/// voice envelope (Attack / Decay / Release), portamento glide, and
+/// short transient ramps (spin-up / decay tails).  The state update
+/// is then `value = target + (value - target) * coef` (one-pole IIR).
+///
+/// Caller clamps `time_s` to a positive minimum (typical floors are
+/// 0.5 ms / 1 ms — `time_s = 0` would divide by zero in the formula
+/// and produce `coef = 0`, i.e. snap to target instantly).  The
+/// helper deliberately doesn't impose its own floor so existing
+/// per-voice clamps stay authoritative.
+#[inline]
+pub fn one_pole_coef(time_s: f32, sr: f32) -> f32 {
+    (-1.0 / (time_s * sr)).exp()
+}
+
 /// Convert frequency in Hz to fractional MIDI note number (12-TET,
 /// A=`A4_HZ`).  Inverse of `midi_to_hz_f32`; callers round/clamp as
 /// needed.

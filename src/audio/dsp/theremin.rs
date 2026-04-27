@@ -15,6 +15,7 @@
 //      Theremin its "talking" overtone character at high volumes.
 
 use super::AudioParams;
+use super::dsp_util::one_pole_coef;
 
 /// Fixed gain-smoother time constant (~10 ms).  Independent of the
 /// portamento knob so that abrupt volume changes (a quick pad-flick
@@ -59,7 +60,7 @@ impl ThereminVoice {
         // knob 1 → ~500 ms (long glissando).  exp() once per sample
         // is fine — single oscillator, no allocation.
         let porta_t = 0.001 + p.theremin_portamento.clamp(0.0, 1.0) * 0.5;
-        let pitch_coef = (-1.0_f32 / (porta_t * sr)).exp();
+        let pitch_coef = one_pole_coef(porta_t, sr);
         self.pitch_smooth_hz = target_hz + (self.pitch_smooth_hz - target_hz) * pitch_coef;
 
         // Gain smoothing — fixed-tau lowpass so the player can

@@ -18,6 +18,7 @@
 use super::AudioParams;
 use super::dsp_util::{
     ATTACK_HANDOVER_VALUE, PWM_MAX, PWM_MIN, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD,
+    one_pole_coef,
 };
 use super::fx_extras::Svf;
 use crate::state::CHIPTUNE_OSCS;
@@ -62,7 +63,7 @@ impl AdsrState {
             AdsrStage::Off => self.value = 0.0,
             AdsrStage::Attack => {
                 let t = knob_to_secs(attack, 0.0005, 1.5);
-                let coef = (-1.0_f32 / (t * sr)).exp();
+                let coef = one_pole_coef(t, sr);
                 self.value = 1.0 - (1.0 - self.value) * coef;
                 if self.value >= ATTACK_HANDOVER_VALUE {
                     self.value = 1.0;
@@ -71,7 +72,7 @@ impl AdsrState {
             }
             AdsrStage::Decay => {
                 let t = knob_to_secs(decay, 0.005, 2.0);
-                let coef = (-1.0_f32 / (t * sr)).exp();
+                let coef = one_pole_coef(t, sr);
                 let target = sustain.clamp(0.0, 1.0);
                 self.value = target + (self.value - target) * coef;
                 if (self.value - target).abs() < SUSTAIN_REACH_THRESHOLD {
@@ -85,7 +86,7 @@ impl AdsrState {
             }
             AdsrStage::Release => {
                 let t = knob_to_secs(release, 0.005, 2.0);
-                let coef = (-1.0_f32 / (t * sr)).exp();
+                let coef = one_pole_coef(t, sr);
                 self.value *= coef;
                 if self.value < RELEASE_OFF_VALUE {
                     self.value = 0.0;
