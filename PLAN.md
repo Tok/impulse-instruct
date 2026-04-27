@@ -18,9 +18,6 @@ Pick from the top down; each row is one focused commit.
   Maths-style: gate-in → envelope-out.  Different from `LfoModule`
   (free-running) and `CvSequencer` (step-table); fills the
   "transient envelope" gap for drum sounds / plucks.
-- [ ] **Logic gate** (`LogicGate`) — AND / OR / XOR over two gate
-  inputs.  Combinator for euclidean patches; pairs with
-  TriggerDiv for layered rhythmic logic.
 - [ ] **Crossfader** (`Crossfader`) — single-knob A/B blend
   between two CV sources.  Mix knob = 0 → A only; 1 → B only.
   More direct than Math's Blend mode for the common A/B case.

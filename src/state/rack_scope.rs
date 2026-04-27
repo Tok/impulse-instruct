@@ -106,6 +106,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::SampleHold => Some("sample_hold".to_string()),
         ModuleKind::Math => Some("math".to_string()),
         ModuleKind::TriggerDiv => Some("trigger_div".to_string()),
+        ModuleKind::LogicGate => Some("logic_gate".to_string()),
         _ => None,
     }
 }
@@ -210,6 +211,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "math" | "mathmodule" | "mathcv" | "cvmath" => Some(Math),
         "triggerdiv" | "trigger_div" | "trigdiv" | "trigger_divider" | "clockdivider"
         | "clockdiv" | "divider" => Some(TriggerDiv),
+        "logicgate" | "logic_gate" | "logic" | "boolean" | "andorxor" => Some(LogicGate),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
         "activitytimeline" | "timeline" | "activity" | "log" => Some(ActivityTimeline),
@@ -403,6 +405,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
                 | "clockdivider"
                 | "clockdiv"
                 | "divider"
+        ),
+        ModuleKind::LogicGate => matches!(
+            n.as_str(),
+            "logicgate" | "logic_gate" | "logic gate" | "logic" | "boolean" | "andorxor"
         ),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),

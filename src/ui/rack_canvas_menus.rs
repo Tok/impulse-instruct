@@ -82,6 +82,7 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::SampleHold,
     ModuleKind::Math,
     ModuleKind::TriggerDiv,
+    ModuleKind::LogicGate,
 ];
 
 pub(super) fn draw_remove_confirm(app: &mut ImpulseApp, ctx: &egui::Context) {

@@ -207,6 +207,7 @@ impl RackState {
                 ModuleKind::SampleHold => 35,
                 ModuleKind::Math => 35,
                 ModuleKind::TriggerDiv => 35,
+                ModuleKind::LogicGate => 35,
                 // Bar oscilloscope sorts next to the spectrum module —
                 // both are global-bus visualisers; users tend to want
                 // them adjacent.

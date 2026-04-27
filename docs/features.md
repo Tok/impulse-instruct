@@ -4,6 +4,50 @@ A detailed log of what's built.
 
 ---
 
+### LogicGate CV utility (`LogicGate`)
+
+Boolean combinator for gate-domain CV — AND / OR / XOR over two
+gate inputs.  Distinct from Math (continuous CV arithmetic): the
+output is always 0.0 or 1.0, suitable for driving downstream
+gate-consuming utilities (TriggerDiv, Comparator, Sample-and-
+hold).  Pairs with TriggerDiv for layered rhythmic logic — patch
+two divider outputs through AND for "fires only when both happen
+on the same step", or XOR for "fires on the steps where exactly
+one fires".
+
+**State.**  New `state::logic_gate` module: `LogicGateSlot {
+enabled, op: LogicOp }` with `LOGIC_GATE_SLOTS = 4` and a
+`LogicOp { And, Or, Xor }` enum (with `next()` cycle helper +
+`name()` for UI labels).
+
+**Audio thread.**  `MOD_BUF_SIZE` bumped from **32 → 64** to
+make room for the remaining utility ships (LogicGate +
+FunctionGen + Crossfader + future).  New
+`MOD_BUF_LOGIC_GATE_BASE = 32`.  Two CV inputs per slot
+resolved by `cable.to.index` (0 = A, 1 = B), same dispatch as
+Math.  `process_block` evaluates after TriggerDiv: read both
+inputs, apply boolean op (`>= 0.5` threshold for "high"),
+output 1.0 / 0.0.  Disabled = passthrough of input A.
+
+**UI.**  ON/OFF toggle + AND/OR/XOR cycle button.  No XY pad.
+Caption: "Gate A · Gate B → bool → Gate out".
+
+**Wiring.**  Standard 17-file utility ritual.  ModuleKind
+`LogicGate` ("LOGIC" label, 2×1 grid, FxMod zone, sort-group
+35, Selector × 2 mod inputs, PortKind::Cv output).  Aliases
+logicgate / logic_gate / logic / boolean / andorxor.  Allows
+multiple — chain AND with XOR for composite logic.
+
+**Tests.**  +8 (4 state-side: defaults, slot round-trip, op
+next() cycles three states, op names; +4 module: label, alias
+parsing, FxMod zone, allows_multiple).  Suite **2278 → 2286**.
+
+Files: new `src/state/logic_gate.rs`, new
+`src/ui/panels/logic_gate.rs`, new
+`src/tests/logic_gate_tests.rs`.
+
+---
+
 ### TriggerDiv CV utility (`TriggerDiv`)
 
 Clock divider modulation utility — fires the output gate every

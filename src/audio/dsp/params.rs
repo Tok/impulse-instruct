@@ -29,8 +29,10 @@ pub struct ModRouteCopy {
 /// Size of the per-block modulation source buffer.  Indices 0..4
 /// hold LFO slot values; 4..8 hold CV sequencer values; the
 /// utility module ranges (Slew / Quantizer / Comparator / Math /
-/// S&H) start at 8 and walk up by `MOD_UTIL_SLOTS` per kind.
-pub const MOD_BUF_SIZE: usize = 32;
+/// S&H / TriggerDiv / LogicGate / FunctionGen / Crossfader) start
+/// at 8 and walk up by `MOD_UTIL_SLOTS` per kind.  Bumped to 64 in
+/// the LogicGate ship to leave headroom for the next utilities.
+pub const MOD_BUF_SIZE: usize = 64;
 /// Buf index where the LFO source range starts.
 pub const MOD_BUF_LFO_BASE: usize = 0;
 /// Buf index where the CV sequencer source range starts.
@@ -49,173 +51,18 @@ pub const MOD_BUF_COMPARATOR_BASE: usize = 16;
 pub const MOD_BUF_SAMPLE_HOLD_BASE: usize = 20;
 /// Math utility output range starts here.
 pub const MOD_BUF_MATH_BASE: usize = 24;
-/// TriggerDiv utility output range starts here.  Last range that
-/// fits in the current `MOD_BUF_SIZE = 32`; the next utility kind
-/// to ship will need to bump that constant.
+/// TriggerDiv utility output range starts here.
 pub const MOD_BUF_TRIGGER_DIV_BASE: usize = 28;
+/// LogicGate utility output range starts here.
+pub const MOD_BUF_LOGIC_GATE_BASE: usize = 32;
 
-/// Per-slot LFO configuration passed to the audio thread (Copy-safe).
-#[derive(Clone, Copy, Debug)]
-pub struct LfoParamsCopy {
-    pub enabled: bool,
-    pub waveform: crate::state::LfoWaveform,
-    pub rate: f32,         // 0–1
-    pub depth: f32,        // 0–1
-    pub phase_offset: f32, // 0–1
-    pub target: u8,        // opcode from `lfo_target_to_u8`
-}
-
-/// Per-slot CV sequencer configuration passed to the audio thread
-/// (Copy-safe).  Step values stored as a fixed `[f32; 16]` so the
-/// audio thread can index by `current_step` without a heap walk.
-#[derive(Clone, Copy, Debug)]
-pub struct CvSeqParamsCopy {
-    pub enabled: bool,
-    pub step_values: [f32; crate::state::CV_SEQ_STEPS],
-    pub depth: f32, // 0..1 — bipolar swing around 0.5 step value
-    pub target: u8, // opcode from `lfo_target_to_u8`
-}
-
-impl Default for CvSeqParamsCopy {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            step_values: [0.5; crate::state::CV_SEQ_STEPS],
-            depth: 0.0,
-            target: 0,
-        }
-    }
-}
-
-/// Per-slot Slew / glide configuration passed to the audio thread.
-/// `cv_in_buf_idx = u8::MAX` means "unwired" — the slot still runs
-/// but reads 0 every block (decays to 0 with the release time).
-#[derive(Clone, Copy, Debug)]
-pub struct SlewParamsCopy {
-    pub enabled: bool,
-    pub attack: f32,
-    pub release: f32,
-    /// `cv_buf` index where this slew's input value is read from
-    /// each block.  Resolved by the cable compile pass; defaults
-    /// to `u8::MAX` (unwired) when no cable lands on this slot.
-    pub cv_in_buf_idx: u8,
-}
-
-impl Default for SlewParamsCopy {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            attack: 0.2,
-            release: 0.2,
-            cv_in_buf_idx: u8::MAX,
-        }
-    }
-}
-
-/// Per-slot Quantizer configuration passed to the audio thread.
-/// Stores the scale + root choice + the resolved input buf
-/// index.  The scale's note set is rebuilt on the audio thread
-/// each block (cheap — 12 candidate notes max).
-#[derive(Clone, Copy, Debug)]
-pub struct QuantizerParamsCopy {
-    pub enabled: bool,
-    pub root: u8,
-    pub scale: crate::state::Scale,
-    pub cv_in_buf_idx: u8,
-}
-
-impl Default for QuantizerParamsCopy {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            root: 0,
-            scale: crate::state::Scale::Major,
-            cv_in_buf_idx: u8::MAX,
-        }
-    }
-}
-
-/// Per-slot Comparator configuration.
-#[derive(Clone, Copy, Debug)]
-pub struct ComparatorParamsCopy {
-    pub enabled: bool,
-    pub threshold: f32,
-    pub cv_in_buf_idx: u8,
-}
-
-impl Default for ComparatorParamsCopy {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            threshold: 0.0,
-            cv_in_buf_idx: u8::MAX,
-        }
-    }
-}
-
-/// Per-slot TriggerDiv configuration.  Single CV input + a
-/// division ratio; output is a 0/1 gate that fires every Nth rising
-/// edge of the input.
-#[derive(Clone, Copy, Debug)]
-pub struct TriggerDivParamsCopy {
-    pub enabled: bool,
-    /// Division ratio — clamped to a member of
-    /// `crate::state::TRIGGER_DIV_RATIOS` at compile time so the
-    /// audio-thread mod arithmetic stays cheap.
-    pub ratio: u8,
-    pub cv_in_buf_idx: u8,
-}
-
-impl Default for TriggerDivParamsCopy {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            ratio: 2,
-            cv_in_buf_idx: u8::MAX,
-        }
-    }
-}
-
-/// Per-slot Sample-and-hold configuration.  No knobs in V1 —
-/// the slot just latches its input on each new sequencer step.
-#[derive(Clone, Copy, Debug)]
-pub struct SampleHoldParamsCopy {
-    pub enabled: bool,
-    pub cv_in_buf_idx: u8,
-}
-
-impl Default for SampleHoldParamsCopy {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            cv_in_buf_idx: u8::MAX,
-        }
-    }
-}
-
-/// Per-slot Math configuration.  Two CV-input ports (resolved by
-/// the cable compile pass into `cv_in_a_buf_idx` and
-/// `cv_in_b_buf_idx`) and an op selector + blend knob.
-#[derive(Clone, Copy, Debug)]
-pub struct MathParamsCopy {
-    pub enabled: bool,
-    pub op: crate::state::MathOp,
-    pub blend: f32,
-    pub cv_in_a_buf_idx: u8,
-    pub cv_in_b_buf_idx: u8,
-}
-
-impl Default for MathParamsCopy {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            op: crate::state::MathOp::Add,
-            blend: 0.5,
-            cv_in_a_buf_idx: u8::MAX,
-            cv_in_b_buf_idx: u8::MAX,
-        }
-    }
-}
+// Per-utility ParamsCopy structs live in `params_utils.rs` (sibling)
+// since this file crossed the 1000-line cap during the LogicGate ship.
+// Re-exported below so consumers continue to import them from `params`.
+pub use super::params_utils::{
+    ComparatorParamsCopy, CvSeqParamsCopy, LfoParamsCopy, LogicGateParamsCopy, MathParamsCopy,
+    QuantizerParamsCopy, SampleHoldParamsCopy, SlewParamsCopy, TriggerDivParamsCopy,
+};
 
 /// Per-voice bass synth params — one per Bass303 instance.
 #[derive(Clone, Copy, Debug)]
@@ -584,6 +431,7 @@ pub struct AudioParams {
     pub quantizer: [QuantizerParamsCopy; crate::state::QUANTIZER_SLOTS],
     pub comparator: [ComparatorParamsCopy; crate::state::COMPARATOR_SLOTS],
     pub trigger_div: [TriggerDivParamsCopy; crate::state::TRIGGER_DIV_SLOTS],
+    pub logic_gate: [LogicGateParamsCopy; crate::state::LOGIC_GATE_SLOTS],
     pub sample_hold: [SampleHoldParamsCopy; crate::state::SAMPLE_HOLD_SLOTS],
     pub math: [MathParamsCopy; crate::state::MATH_SLOTS],
     /// Per-block modulation source buffer.  The audio thread fills

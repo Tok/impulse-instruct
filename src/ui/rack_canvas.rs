@@ -723,6 +723,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             crate::ui::rack_content::draw_math_content(app, ui, id);
                         } else if kind == ModuleKind::TriggerDiv {
                             crate::ui::rack_content::draw_trigger_div_content(app, ui, id);
+                        } else if kind == ModuleKind::LogicGate {
+                            crate::ui::rack_content::draw_logic_gate_content(app, ui, id);
                         } else if kind == ModuleKind::SpectrumAnalyzer {
                             crate::ui::panels::draw_spectrum(app, ui);
                         } else if kind == ModuleKind::StereoMeter {

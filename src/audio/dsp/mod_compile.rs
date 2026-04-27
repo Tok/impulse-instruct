@@ -14,10 +14,11 @@
 
 use super::lfo_target_opcode::lfo_target_to_u8;
 use super::params::{
-    ComparatorParamsCopy, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CV_SEQ_BASE,
-    MOD_BUF_LFO_BASE, MOD_BUF_MATH_BASE, MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE,
-    MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE, MathParamsCopy, ModRouteCopy, QuantizerParamsCopy,
-    SampleHoldParamsCopy, SlewParamsCopy, TriggerDivParamsCopy,
+    ComparatorParamsCopy, LogicGateParamsCopy, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE,
+    MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE, MOD_BUF_LOGIC_GATE_BASE, MOD_BUF_MATH_BASE,
+    MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE, MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE,
+    MathParamsCopy, ModRouteCopy, QuantizerParamsCopy, SampleHoldParamsCopy, SlewParamsCopy,
+    TriggerDivParamsCopy,
 };
 use crate::state::{AppState, LfoTarget, ModuleKind, PortKind};
 
@@ -33,6 +34,7 @@ struct CvSourceMaps {
     sample_hold: Vec<u32>,
     math: Vec<u32>,
     trigger_div: Vec<u32>,
+    logic_gate: Vec<u32>,
 }
 
 impl CvSourceMaps {
@@ -45,6 +47,7 @@ impl CvSourceMaps {
         let mut sample_hold = Vec::new();
         let mut math = Vec::new();
         let mut trigger_div = Vec::new();
+        let mut logic_gate = Vec::new();
         for m in &s.rack.modules {
             match m.kind {
                 ModuleKind::LfoModule => lfo.push(m.id),
@@ -55,6 +58,7 @@ impl CvSourceMaps {
                 ModuleKind::SampleHold => sample_hold.push(m.id),
                 ModuleKind::Math => math.push(m.id),
                 ModuleKind::TriggerDiv => trigger_div.push(m.id),
+                ModuleKind::LogicGate => logic_gate.push(m.id),
                 _ => {}
             }
         }
@@ -67,6 +71,7 @@ impl CvSourceMaps {
             sample_hold,
             math,
             trigger_div,
+            logic_gate,
         }
     }
 
@@ -121,6 +126,12 @@ impl CvSourceMaps {
                 return None;
             }
             return Some((MOD_BUF_TRIGGER_DIV_BASE + idx) as u8);
+        }
+        if let Some(idx) = self.logic_gate.iter().position(|id| *id == src_module_id) {
+            if idx >= crate::state::LOGIC_GATE_SLOTS {
+                return None;
+            }
+            return Some((MOD_BUF_LOGIC_GATE_BASE + idx) as u8);
         }
         None
     }
@@ -418,6 +429,50 @@ pub fn compile_trigger_div_params(
         }
         if let Some(buf_idx) = maps.resolve(s, cable.from.module_id) {
             out[idx].cv_in_buf_idx = buf_idx;
+        }
+    }
+    out
+}
+
+/// Walk the rack's cables and produce the LogicGate utility-slot
+/// snapshot.  Two CV inputs per slot resolved by `cable.to.index`
+/// (0 = A, 1 = B), same dispatch as Math.
+pub fn compile_logic_gate_params(
+    s: &AppState,
+) -> [LogicGateParamsCopy; crate::state::LOGIC_GATE_SLOTS] {
+    let mut out = [LogicGateParamsCopy::default(); crate::state::LOGIC_GATE_SLOTS];
+    let maps = CvSourceMaps::build(s);
+    let ids = &maps.logic_gate;
+    for (i, slot) in s
+        .logic_gate
+        .iter()
+        .enumerate()
+        .take(crate::state::LOGIC_GATE_SLOTS)
+    {
+        out[i] = LogicGateParamsCopy {
+            enabled: slot.enabled,
+            op: slot.op,
+            cv_in_a_buf_idx: u8::MAX,
+            cv_in_b_buf_idx: u8::MAX,
+        };
+    }
+    for cable in &s.rack.cables {
+        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
+            continue;
+        }
+        let Some(idx) = ids.iter().position(|id| *id == cable.to.module_id) else {
+            continue;
+        };
+        if idx >= crate::state::LOGIC_GATE_SLOTS {
+            continue;
+        }
+        let Some(buf_idx) = maps.resolve(s, cable.from.module_id) else {
+            continue;
+        };
+        match cable.to.index {
+            0 => out[idx].cv_in_a_buf_idx = buf_idx,
+            1 => out[idx].cv_in_b_buf_idx = buf_idx,
+            _ => {}
         }
     }
     out

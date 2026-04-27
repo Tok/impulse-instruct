@@ -128,6 +128,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         ModuleKind::SampleHold => 18,
         ModuleKind::Math => 18,
         ModuleKind::TriggerDiv => 18,
+        ModuleKind::LogicGate => 18,
         ModuleKind::LlmAgent => 30,
         ModuleKind::LlmConsole => 28,
     };

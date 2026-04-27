@@ -70,6 +70,7 @@ mod llm_apply_voice_tests;
 mod llm_intensity_array_tests;
 mod llm_plumbing_tests;
 mod llm_tests;
+mod logic_gate_tests;
 mod midi_export_tests;
 mod midi_import_tests;
 mod midi_learn_tests;

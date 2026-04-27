@@ -259,6 +259,36 @@ impl DspState {
             p.cv_buf[out_idx] = if on { 1.0 } else { 0.0 };
         }
 
+        // ── LogicGate utility ────────────────────────────────────────────────
+        // Boolean op (AND / OR / XOR) on two gate-domain inputs;
+        // output is 1.0 / 0.0.  Disabled passes A through unchanged
+        // so unhooking the gate doesn't kill the signal.
+        for (i, lg) in p_base.logic_gate.iter().enumerate() {
+            let out_idx = super::params::MOD_BUF_LOGIC_GATE_BASE + i;
+            let a_raw = if lg.cv_in_a_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[lg.cv_in_a_buf_idx as usize]
+            };
+            let b_raw = if lg.cv_in_b_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[lg.cv_in_b_buf_idx as usize]
+            };
+            if !lg.enabled {
+                p.cv_buf[out_idx] = a_raw;
+                continue;
+            }
+            let a_high = a_raw >= 0.5;
+            let b_high = b_raw >= 0.5;
+            let on = match lg.op {
+                crate::state::LogicOp::And => a_high && b_high,
+                crate::state::LogicOp::Or => a_high || b_high,
+                crate::state::LogicOp::Xor => a_high ^ b_high,
+            };
+            p.cv_buf[out_idx] = if on { 1.0 } else { 0.0 };
+        }
+
         // ── Math utility ──────────────────────────────────────────────────────
         // Combine two CV inputs per the slot's op selector.
         // Unwired inputs read 0; the op semantics handle this

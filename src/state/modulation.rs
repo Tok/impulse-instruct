@@ -215,6 +215,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // CV-modulatable in V1 (ratio is a discrete selector); the
         // Selector slot is for the gate-stream input cable.
         TriggerDiv => &[Selector],
+        // LogicGate — two CV inputs (A, B); the per-utility compile
+        // pass branches on `cable.to.index` (0 = A, 1 = B), same
+        // pattern as Math.
+        LogicGate => &[Selector, Selector],
     }
 }
 
@@ -638,7 +642,8 @@ pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
         | ModuleKind::Comparator
         | ModuleKind::SampleHold
         | ModuleKind::Math
-        | ModuleKind::TriggerDiv => PortKind::Cv,
+        | ModuleKind::TriggerDiv
+        | ModuleKind::LogicGate => PortKind::Cv,
         _ => PortKind::Audio,
     }
 }

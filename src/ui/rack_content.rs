@@ -867,6 +867,21 @@ pub(super) fn draw_trigger_div_content(app: &mut ImpulseApp, ui: &mut egui::Ui, 
     crate::ui::panels::draw_trigger_div(app, ui, slot);
 }
 
+pub(super) fn draw_logic_gate_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::LogicGate)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_logic_gate(app, ui, slot);
+}
+
 pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     use crate::ui::widgets;
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);

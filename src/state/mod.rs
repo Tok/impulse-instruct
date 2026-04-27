@@ -68,6 +68,7 @@ pub mod comparator;
 pub mod cv_seq;
 pub mod fx;
 mod fx_defaults;
+pub mod logic_gate;
 pub mod math_module;
 pub mod quantizer;
 pub mod sample_hold;
@@ -76,6 +77,7 @@ pub mod trigger_div;
 pub use comparator::{COMPARATOR_SLOTS, ComparatorSlot};
 pub use cv_seq::{CV_SEQ_SLOTS, CV_SEQ_STEPS, CvSeqSlot};
 pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
+pub use logic_gate::{LOGIC_GATE_SLOTS, LogicGateSlot, LogicOp};
 pub use math_module::{MATH_SLOTS, MathOp, MathSlot};
 pub use quantizer::{QUANTIZER_SLOTS, QuantizerSlot};
 pub use sample_hold::{SAMPLE_HOLD_SLOTS, SampleHoldSlot};
@@ -286,6 +288,8 @@ pub struct AppState {
     #[serde(default)]
     pub trigger_div: [TriggerDivSlot; TRIGGER_DIV_SLOTS],
     #[serde(default)]
+    pub logic_gate: [LogicGateSlot; LOGIC_GATE_SLOTS],
+    #[serde(default)]
     pub free_eg: FreeEg,
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
@@ -461,6 +465,7 @@ impl Default for AppState {
             sample_hold: std::array::from_fn(|_| SampleHoldSlot::default()),
             math: std::array::from_fn(|_| MathSlot::default()),
             trigger_div: std::array::from_fn(|_| TriggerDivSlot::default()),
+            logic_gate: std::array::from_fn(|_| LogicGateSlot::default()),
             free_eg: Default::default(),
             noise_voice: Default::default(),
             theremin: Default::default(),

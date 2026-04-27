@@ -340,6 +340,10 @@ pub enum ModuleKind {
     /// polyrhythmic patches without changing the sequencer's pattern
     /// length.
     TriggerDiv,
+    /// Logic gate CV utility — boolean operation (AND / OR / XOR)
+    /// over two gate inputs.  Combinator for euclidean / TriggerDiv
+    /// patches; pairs with TriggerDiv for layered rhythmic logic.
+    LogicGate,
     LlmAgent,
     // ── LLM console (singleton, Global zone) ──────────────────────────────
     LlmConsole,
@@ -443,6 +447,7 @@ impl ModuleKind {
             Self::SampleHold => "S&H",
             Self::Math => "MATH",
             Self::TriggerDiv => "TRIG DIV",
+            Self::LogicGate => "LOGIC",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
             Self::MasterOutput => "MASTER",
@@ -586,6 +591,8 @@ impl ModuleKind {
             Self::Math => (2, 1),
             // TriggerDiv — single ratio cycle button.
             Self::TriggerDiv => (2, 1),
+            // LogicGate — single op cycle button (AND / OR / XOR).
+            Self::LogicGate => (2, 1),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
             // Convolution Reverb — 6 knobs in a glass-grouped 2-row
@@ -755,7 +762,8 @@ impl ModuleKind {
             | Self::Comparator
             | Self::SampleHold
             | Self::Math
-            | Self::TriggerDiv => Zone::FxMod,
+            | Self::TriggerDiv
+            | Self::LogicGate => Zone::FxMod,
         }
     }
 
@@ -948,6 +956,7 @@ impl ModuleKind {
                 | Self::SampleHold
                 | Self::Math
                 | Self::TriggerDiv
+                | Self::LogicGate
                 | Self::LlmAgent
         )
     }
