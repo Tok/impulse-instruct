@@ -4,6 +4,7 @@
 // renderer (both call `band_magnitude` / `cascade_db`), so these
 // tests lock the peak-gain-at-centre / unity-elsewhere contract.
 
+use crate::audio::dsp::db_to_lin;
 use crate::audio::dsp::param_eq::{ParamEq, band_magnitude, cascade_db};
 use crate::state::{AppState, ModuleKind, ParamEqBand, ParamEqBandKind, apply_llm_update};
 
@@ -169,7 +170,7 @@ fn param_eq_cascade_boosts_when_band_gain_is_positive() {
     let in_rms = (in_sum2 / measure as f32).sqrt();
     let out_rms = (out_sum2 / measure as f32).sqrt();
     let ratio = out_rms / in_rms;
-    let expected = 10.0_f32.powf(12.0 / 20.0);
+    let expected = db_to_lin(12.0);
     assert!(
         (ratio - expected).abs() / expected < 0.1,
         "expected ~4× RMS boost, got {ratio:.3} (target {expected:.3})",

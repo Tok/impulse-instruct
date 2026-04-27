@@ -15,6 +15,7 @@
 // total — two per side — plus two `atan` calls).  At 48 kHz that's
 // well under a percent of DSP budget on modern CPUs.
 
+use super::dsp_util::db_to_lin;
 use super::param_eq::biquad_coeffs;
 use crate::state::ParamEqBandKind;
 
@@ -218,7 +219,7 @@ impl Default for MsMaster {
 /// ±`MS_GAIN_MAX_DB` dB around unity at 0.5.
 fn knob_to_gain_lin(knob: f32) -> f32 {
     let db = (knob.clamp(0.0, 1.0) - 0.5) * 2.0 * MS_GAIN_MAX_DB;
-    10.0_f32.powf(db / 20.0)
+    db_to_lin(db)
 }
 
 /// Arctan soft-clip with strict ±1 output bound.  `sat ∈ [0, 1]`;

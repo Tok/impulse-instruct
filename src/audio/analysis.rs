@@ -3,6 +3,7 @@
 // Called from the UI thread when the user clicks "Listen"; never inside the
 // audio callback. Allocation is fine here.
 
+use crate::audio::dsp::db_to_lin;
 use std::f32::consts::PI;
 
 // ─── Result struct ────────────────────────────────────────────────────────────
@@ -466,7 +467,7 @@ pub fn chroma_from_spectrum(mags: &[f32], bin_hz: f32) -> [f32; 12] {
         if !(27.5..=4000.0).contains(&f) {
             continue;
         }
-        let lin = 10.0f32.powf(m_db / 20.0);
+        let lin = db_to_lin(m_db);
         // Split contribution across the two nearest pitch classes by
         // fractional MIDI so a 440 Hz peak landing in an off-centre
         // FFT bin (1024-FFT @ 48 kHz has only ~46 Hz resolution)

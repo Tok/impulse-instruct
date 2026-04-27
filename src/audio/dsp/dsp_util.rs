@@ -131,6 +131,16 @@ pub fn one_pole_lp_alpha(fc: f32, sr: f32) -> f32 {
     1.0 - (-std::f32::consts::TAU * fc / sr).exp()
 }
 
+/// Convert decibels to a linear amplitude / power-ratio multiplier
+/// via `10^(dB/20)`.  At 0 dB returns 1.0; +6 dB ≈ 2×, −6 dB ≈ 0.5×.
+/// Used by every gain stage that takes a dB input — region-volume
+/// in the SF2 path, the limiter / compressor threshold mapping, the
+/// MS-master gain knob, and the analysis-side magnitude conversion.
+#[inline]
+pub fn db_to_lin(db: f32) -> f32 {
+    10.0_f32.powf(db / 20.0)
+}
+
 /// Convert frequency in Hz to fractional MIDI note number (12-TET,
 /// A=`A4_HZ`).  Inverse of `midi_to_hz_f32`; callers round/clamp as
 /// needed.

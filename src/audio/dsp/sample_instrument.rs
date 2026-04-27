@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use super::AudioParams;
 use super::dsp_util::{
-    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, one_pole_coef,
+    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, db_to_lin, one_pole_coef,
 };
 use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
 use super::formant_shifter::FormantShifter;
@@ -102,7 +102,7 @@ fn hz_to_svf_knob(hz: f32) -> f32 {
 /// expects (Q ≈ 0.5..20 mapped linear to 0..1).  Q_linear =
 /// 10^(dB / 20); knob = (Q − 0.5) / 19.5.
 fn db_to_svf_resonance_knob(db: f32) -> f32 {
-    let q_linear = 10.0_f32.powf(db.clamp(0.0, 40.0) / 20.0);
+    let q_linear = db_to_lin(db.clamp(0.0, 40.0));
     ((q_linear - 0.5) / 19.5).clamp(0.0, 1.0)
 }
 
@@ -496,7 +496,7 @@ impl SampleInstrumentVoice {
                     samples: r.samples.clone(),
                     root_freq: midi_to_hz_tuned(r.region.pitch_keycenter, tuning).max(20.0),
                     freq: (midi_to_hz_tuned(note, tuning) * cents_ratio).max(20.0),
-                    region_gain: 10.0_f32.powf(v / 20.0) * cf_gain,
+                    region_gain: db_to_lin(v) * cf_gain,
                     region_adsr,
                     region_filter,
                     region_loop,

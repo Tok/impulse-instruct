@@ -14,7 +14,7 @@
 // automation feels live.  The Compressor's sidechain mode is a flag
 // added to the existing struct in `fx.rs`, not a new type.
 
-use super::dsp_util::MIX_BYPASS_THRESHOLD;
+use super::dsp_util::{MIX_BYPASS_THRESHOLD, db_to_lin};
 use crate::state::{FxStep, ModuleKind, SidechainSource};
 
 /// Max sidechain routes the audio thread tracks per block.  4 covers
@@ -164,7 +164,7 @@ impl Gate {
         // Threshold is given as 0..1; map to −60..0 dBFS to match the
         // detector's linear amplitude.
         let thresh_db = -60.0 * (1.0 - threshold.clamp(0.0, 1.0));
-        let thresh_lin = 10.0f32.powf(thresh_db / 20.0);
+        let thresh_lin = db_to_lin(thresh_db);
         let target = if self.detect_env > thresh_lin {
             1.0
         } else {

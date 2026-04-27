@@ -748,6 +748,7 @@ mod flanger_tests {
 
 #[cfg(test)]
 mod limiter_tests {
+    use crate::audio::dsp::db_to_lin;
     use crate::audio::dsp::fx_extras::Limiter;
 
     #[test]
@@ -788,7 +789,7 @@ mod limiter_tests {
         }
         // ceiling = 0.5 → −6 dB → linear ≈ 0.501.  Allow tiny overshoot for
         // attack lag at the very first peak before the limiter catches up.
-        let ceil_lin = 10.0f32.powf(-6.0 / 20.0);
+        let ceil_lin = db_to_lin(-6.0);
         assert!(
             peak <= ceil_lin * 1.05,
             "peak {peak} exceeded ceiling {ceil_lin}"

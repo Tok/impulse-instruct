@@ -10,8 +10,8 @@
 //     is not.
 
 use crate::audio::dsp::{
-    NYQUIST_GUARD_FACTOR, hz_to_midi, midi_to_hz, midi_to_hz_f32, nyquist_guard, one_pole_coef,
-    one_pole_lp_alpha,
+    NYQUIST_GUARD_FACTOR, db_to_lin, hz_to_midi, midi_to_hz, midi_to_hz_f32, nyquist_guard,
+    one_pole_coef, one_pole_lp_alpha,
 };
 use crate::state::LfoTarget;
 use crate::state::fx_plan::kind_is_fx;
@@ -215,6 +215,43 @@ fn one_pole_lp_alpha_at_unit_time_constant() {
         (alpha - expected).abs() < 1e-5,
         "alpha at fc=sr/2π should equal 1−1/e (got {alpha}, want {expected})"
     );
+}
+
+// ─── db_to_lin ─────────────────────────────────────────────────────────────
+
+/// 0 dB is the unity-gain reference.  The helper has to return
+/// exactly 1.0 here — every gain stage in the codebase relies on
+/// this.
+#[test]
+fn db_to_lin_zero_is_unity() {
+    assert_eq!(db_to_lin(0.0), 1.0);
+}
+
+/// Classic gain landmarks: ±6 dB ≈ ±2× factor, ±20 dB = ±10×.
+/// The 6 dB approximation is loose by ~0.2 % (true factor is 1.995…),
+/// which is well within audible tolerance.
+#[test]
+fn db_to_lin_known_values() {
+    assert!((db_to_lin(6.0) - 1.995_262).abs() < 1e-3);
+    assert!((db_to_lin(-6.0) - 0.501_187).abs() < 1e-3);
+    assert!((db_to_lin(20.0) - 10.0).abs() < 1e-3);
+    assert!((db_to_lin(-20.0) - 0.1).abs() < 1e-4);
+}
+
+/// `db_to_lin(-x)` is the multiplicative inverse of `db_to_lin(x)` —
+/// pulling 6 dB down then 6 dB up should land at unity.  Pin this
+/// inverse property so the formula's polarity can't silently flip.
+#[test]
+fn db_to_lin_negation_is_reciprocal() {
+    for &db in &[1.0_f32, 6.0, 12.0, 24.0, 48.0] {
+        let up = db_to_lin(db);
+        let down = db_to_lin(-db);
+        assert!(
+            (up * down - 1.0).abs() < 1e-4,
+            "db_to_lin({db}) · db_to_lin(-{db}) should = 1 (got {})",
+            up * down
+        );
+    }
 }
 
 // ─── lfo_target_to_u8 ───────────────────────────────────────────────────────

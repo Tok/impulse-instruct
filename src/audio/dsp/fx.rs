@@ -1,5 +1,5 @@
-use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
+use super::dsp_util::{MIX_BYPASS_THRESHOLD, db_to_lin};
 // ─── FX DSP structs ───────────────────────────────────────────────────────────
 // Pure numeric DSP — no allocations inside process().
 
@@ -468,7 +468,7 @@ impl Compressor {
         } else {
             0.0
         };
-        input * 10.0f32.powf(-gain_db / 20.0)
+        input * db_to_lin(-gain_db)
     }
 
     /// Sidechain-aware variant of `process` — the level detector reads
@@ -513,7 +513,7 @@ impl Compressor {
             } else {
                 0.0
             };
-            let compressed = input * 10.0f32.powf(-gain_db / 20.0);
+            let compressed = input * db_to_lin(-gain_db);
             return input * (1.0 - mix) + compressed * mix;
         }
         // Multiband path: fall back to non-sidechain processing — adding
