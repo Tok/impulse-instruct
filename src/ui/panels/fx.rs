@@ -271,7 +271,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
             // ── REVERB (3+2 rows) ──────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(egui::RichText::new("REVERB").color(theme::FOG).monospace().size(9.5));
+                widgets::group_header(ui, "REVERB");
                 hknobs!(ui, ("MIX", &mut rm, pm("fx.reverb_mix")), ("SIZE", &mut rs, pm("fx.reverb_size")), ("DAMPING", &mut rd, ParamMode::Free));
                 ui.horizontal(|ui| {
                     let mut rgt_norm = rgt / 2.0;
@@ -286,39 +286,39 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
             // ── DELAY (3+2 rows) ───────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(egui::RichText::new("DELAY").color(theme::FOG).monospace().size(9.5));
+                widgets::group_header(ui, "DELAY");
                 hknobs!(ui, ("MIX", &mut dm, pm("fx.delay_mix")), ("TIME", &mut dt, ParamMode::Free), ("FEEDBACK", &mut df, pm("fx.delay_feedback")));
                 hknobs!(ui, ("WOW", &mut delay_wow, pm("fx.delay_wow_flutter")), ("SAT", &mut delay_sat, pm("fx.delay_saturation")));
             });
 
             // ── CHORUS (1 row) ─────────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(egui::RichText::new("CHORUS").color(theme::FOG).monospace().size(9.5));
+                widgets::group_header(ui, "CHORUS");
                 hknobs!(ui, ("MIX", &mut ch_mix, ParamMode::Free), ("RATE", &mut ch_rate, ParamMode::Free), ("DEPTH", &mut ch_depth, ParamMode::Free));
             });
 
             // ── PHASER (1 row) ─────────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(egui::RichText::new("PHASER").color(theme::FOG).monospace().size(9.5));
+                widgets::group_header(ui, "PHASER");
                 hknobs!(ui, ("MIX", &mut ph_mix, ParamMode::Free), ("RATE", &mut ph_rate, ParamMode::Free), ("DEPTH", &mut ph_depth, ParamMode::Free));
             });
 
             // ── SHAPE: waveshaper + ring mod (2×2) ─────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(egui::RichText::new("SHAPE").color(theme::FOG).monospace().size(9.5));
+                widgets::group_header(ui, "SHAPE");
                 hknobs!(ui, ("WS MIX", &mut ws_mix, ParamMode::Free), ("WS DRV", &mut ws_drive, ParamMode::Free));
                 hknobs!(ui, ("RM MIX", &mut rm_mix, ParamMode::Free), ("RM FRQ", &mut rm_freq, ParamMode::Free));
             });
 
             // ── EQ (1 row) ─────────────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(egui::RichText::new("EQ").color(theme::FOG).monospace().size(9.5));
+                widgets::group_header(ui, "EQ");
                 hknobs!(ui, ("LOW", &mut eq_low, ParamMode::Free), ("MID", &mut eq_mid, ParamMode::Free), ("HIGH", &mut eq_hi, ParamMode::Free));
             });
 
             // ── COMPRESSOR (2×2 + REVERSE toggle) ──────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(egui::RichText::new("COMP").color(theme::FOG).monospace().size(9.5));
+                widgets::group_header(ui, "COMP");
                 hknobs!(ui, ("MIX", &mut comp_mix, ParamMode::Free), ("THRESH", &mut comp_thresh, ParamMode::Free));
                 hknobs!(ui, ("RATIO", &mut comp_ratio, ParamMode::Free), ("MULTI", &mut comp_mb, pm("fx.compressor_multiband")));
                 // Attack/release swap — the envelope misses the initial
@@ -341,19 +341,19 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
             // ── SIDECHAIN (1 row) ──────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(egui::RichText::new("SIDECHAIN").color(theme::FOG).monospace().size(9.5));
+                widgets::group_header(ui, "SIDECHAIN");
                 hknobs!(ui, ("AMOUNT", &mut sc_amount, pm("fx.sidechain_amount")), ("ATTACK", &mut sc_attack, pm("fx.sidechain_attack")), ("RELEASE", &mut sc_release, pm("fx.sidechain_release")));
             });
 
             // ── TAPE (1 row) ───────────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(egui::RichText::new("TAPE").color(theme::FOG).monospace().size(9.5));
+                widgets::group_header(ui, "TAPE");
                 hknobs!(ui, ("MIX", &mut tape_mix, ParamMode::Free), ("DRIVE", &mut tape_drive, ParamMode::Free), ("FLUTTER", &mut tape_flutter, ParamMode::Free));
             });
 
             // ── MASTER (3+2+tuning) ────────────────────────────────────────────
             widgets::glass_group_fill(ui, gw, gw, |ui| {
-                ui.label(egui::RichText::new("MASTER").color(theme::FOG).monospace().size(9.5));
+                widgets::group_header(ui, "MASTER");
                 hknobs!(ui, ("DRIVE", &mut dd, ParamMode::Free), ("MIX", &mut dx, ParamMode::Free), ("VOLUME", &mut mv, ParamMode::Free));
                 ui.horizontal(|ui| {
                     let mut mp_norm = (master_pitch + 12.0) / 24.0;

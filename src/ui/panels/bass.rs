@@ -239,12 +239,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("FILTER")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "FILTER");
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
@@ -306,12 +301,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("CHARACTER")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "CHARACTER");
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
@@ -373,12 +363,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             widgets::glass_group_fill(ui, gw_mod, gw_mod, |ui| {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("MOD")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "MOD");
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
@@ -454,12 +439,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         widgets::glass_group_fill(ui, ui.available_width(), ui.available_width(), |ui| {
             ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("LFO")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "LFO");
                 // TARGET cycle button
                 let target_label = lfo_target.label();
                 if ui

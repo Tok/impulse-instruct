@@ -218,12 +218,7 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("ROOT")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "ROOT");
             // ROOT NOTE is the single primary control of the group
             // (it anchors every played pitch against the source
             // recording's natural note) — promote it to φ-bigger.
@@ -240,12 +235,7 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("MIX")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "MIX");
             widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().sample_instrument.volume;
@@ -281,12 +271,7 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("ADSR")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "ADSR");
             // Two rows of two — A/D on top, S/R on bottom — so
             // the labels can spell out fully (ATTACK / DECAY /
             // SUSTAIN / RELEASE) instead of cryptic single
@@ -328,12 +313,7 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("LOOP")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "LOOP");
             // Row 1: START / END loop-window knobs.  Row 2: the
             // LOOP / 1× toggle on its own line so the button
             // doesn't compete with the knobs for the user's
@@ -383,12 +363,7 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw * 2.0 + crate::ui::panels::GLASS_GAP, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("FILTER")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "FILTER");
             widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().sample_instrument.filter_cutoff;

@@ -82,12 +82,7 @@ pub fn draw_wavetable(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("SCAN")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "SCAN");
             widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().wavetable.position;
@@ -107,12 +102,7 @@ pub fn draw_wavetable(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("MIX")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "MIX");
             widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().wavetable.volume;

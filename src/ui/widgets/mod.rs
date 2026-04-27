@@ -378,6 +378,21 @@ pub fn glass_group_height(ctrl: ControlPrefs, extra: f32) -> f32 {
     ctrl.knob_size * 2.0 + extra
 }
 
+/// Standard glass-group header label — FOG-coloured, monospace, size 9.5.
+/// Replaces the 5-line `RichText::new(...).color(theme::FOG).monospace().size(9.5)`
+/// boilerplate that recurred at every glass-group call site.  Use this for
+/// the in-panel TONE / MIX / SCAN / etc. labels that sit above a row of
+/// knobs; the rarer 9.0 / 8.0 size variants (sequencer rows, gauges) keep
+/// their explicit RichText so the helper stays single-purpose.
+pub fn group_header(ui: &mut Ui, text: &str) {
+    ui.label(
+        egui::RichText::new(text)
+            .color(theme::FOG)
+            .monospace()
+            .size(9.5),
+    );
+}
+
 /// Compute the per-group width for an evenly-distributed row of `n` glass panels.
 /// Call this before the `ui.horizontal()` that contains the groups.
 ///

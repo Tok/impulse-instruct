@@ -51,12 +51,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // FILTER group: START, SWEEP, RESO (horizontal)
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("FILTER")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "FILTER");
             widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().hoover.filter_start;
@@ -85,12 +80,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // OSC group: DETUNE + VOL horizontal, VOICES stepper
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("OSC")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "OSC");
             widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().hoover.detune;
@@ -143,12 +133,7 @@ pub fn draw_hoover(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         // LFO group: RATE + DEPTH horizontal
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("PITCH LFO")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "PITCH LFO");
             widgets::centered_row(ui, |ui| {
                 {
                     let raw = app.state.read().hoover.pitch_lfo_rate;

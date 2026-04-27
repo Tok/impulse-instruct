@@ -52,12 +52,7 @@ pub fn draw_pluck(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("TONE")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "TONE");
             widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().pluck.damping;
@@ -77,12 +72,7 @@ pub fn draw_pluck(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         });
         widgets::glass_group_fill(ui, gw, gw, |ui| {
             ui.set_min_height(group_h);
-            ui.label(
-                egui::RichText::new("MIX")
-                    .color(theme::FOG)
-                    .monospace()
-                    .size(9.5),
-            );
+            widgets::group_header(ui, "MIX");
             widgets::centered_row(ui, |ui| {
                 {
                     let mut v = app.state.read().pluck.volume;

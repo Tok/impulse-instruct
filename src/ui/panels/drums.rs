@@ -104,21 +104,10 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let pad_budget = (avail - knob_pane_w - DRUM_KNOB_PAD_GAP - 14.0).max(90.0);
     let pad_size = (xy_size * 1.8).min(pad_budget).clamp(90.0, 144.0);
 
-    // Helper: draw a voice group — outer glass wrapping a label + a
-    // [knob-pane | pad] row, centered as a block.
-    let voice_header = |ui: &mut egui::Ui, txt: &str| {
-        ui.label(
-            egui::RichText::new(txt)
-                .color(theme::FOG)
-                .monospace()
-                .size(9.5),
-        );
-    };
-
     // ── KICK voice (2 knob rows)
     widgets::glass_group_fill(ui, avail, avail, |ui| {
         ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-        voice_header(ui, "KICK");
+        widgets::group_header(ui, "KICK");
         ui.horizontal_top(|ui| {
             widgets::glass_group_fill(ui, knob_pane_w, knob_pane_w, |ui| {
                 widgets::centered_row(ui, |ui| {
@@ -166,7 +155,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // ── SNARE voice (1 knob row)
     widgets::glass_group_fill(ui, avail, avail, |ui| {
         ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-        voice_header(ui, "SNARE");
+        widgets::group_header(ui, "SNARE");
         ui.horizontal_top(|ui| {
             widgets::glass_group_fill(ui, knob_pane_w, knob_pane_w, |ui| {
                 widgets::centered_row(ui, |ui| {
@@ -203,7 +192,7 @@ pub fn draw_kit_a(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // ── HIHAT voice (1 knob row, 3 knobs — centers inside the 4-wide pane)
     widgets::glass_group_fill(ui, avail, avail, |ui| {
         ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-        voice_header(ui, "HIHAT");
+        widgets::group_header(ui, "HIHAT");
         ui.horizontal_top(|ui| {
             widgets::glass_group_fill(ui, knob_pane_w, knob_pane_w, |ui| {
                 widgets::centered_row(ui, |ui| {
@@ -334,12 +323,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // ── KICK voice: knobs (left, 2 rows) + PITCH × DECAY × PUNCH pad (right)
     widgets::glass_group_fill(ui, avail, avail, |ui| {
         ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-        ui.label(
-            egui::RichText::new("KICK")
-                .color(theme::FOG)
-                .monospace()
-                .size(9.5),
-        );
+        widgets::group_header(ui, "KICK");
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 widgets::centered_row(ui, |ui| {
@@ -388,12 +372,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // ── SNARE voice: knobs (left) + TONE × SNAPPY × DECAY pad (right)
     widgets::glass_group_fill(ui, avail, avail, |ui| {
         ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-        ui.label(
-            egui::RichText::new("SNARE")
-                .color(theme::FOG)
-                .monospace()
-                .size(9.5),
-        );
+        widgets::group_header(ui, "SNARE");
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 widgets::centered_row(ui, |ui| {
@@ -431,12 +410,7 @@ pub fn draw_kit_b(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // ── CLAP / RIM voice: knobs (left) + DECAY × LEVEL 2-pair pad (right)
     widgets::glass_group_fill(ui, avail, avail, |ui| {
         ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-        ui.label(
-            egui::RichText::new("CLAP / RIM")
-                .color(theme::FOG)
-                .monospace()
-                .size(9.5),
-        );
+        widgets::group_header(ui, "CLAP / RIM");
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
                 widgets::centered_row(ui, |ui| {
