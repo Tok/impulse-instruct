@@ -88,6 +88,17 @@ pub fn nyquist_guard(sr: f32) -> f32 {
 /// at very low mix settings.  ≈ −60 dB below unity, well under audibility.
 pub const MIX_BYPASS_THRESHOLD: f32 = 0.001;
 
+/// Minimum / maximum pulse-width (duty cycle) for square / pulse
+/// oscillators.  Clamping the duty to `[5 %, 95 %]` keeps the band-
+/// limited PWM math well-behaved — at exactly 0 % or 100 % the
+/// pulse collapses to silence (no edge transitions at all) and the
+/// PolyBLEP correction terms can divide by tiny numbers near the
+/// extremes.  Same range used by every PWM-capable voice
+/// (bass303 / chiptune / hoover) so changing it would require
+/// touching all of them at once.
+pub const PWM_MIN: f32 = 0.05;
+pub const PWM_MAX: f32 = 0.95;
+
 /// Convert frequency in Hz to fractional MIDI note number (12-TET,
 /// A=`A4_HZ`).  Inverse of `midi_to_hz_f32`; callers round/clamp as
 /// needed.

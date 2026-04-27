@@ -2,6 +2,8 @@
 // AudioParams snapshot — copied from AppState for the audio thread.
 // This module has no side effects; all types are Copy/Clone.
 
+use super::dsp_util::{PWM_MAX, PWM_MIN};
+
 /// Maximum number of cable-declared modulation routes the audio thread
 /// will process per block.  Bounded so the array stays Copy-friendly.
 pub const MAX_MOD_ROUTES: usize = 32;
@@ -147,7 +149,7 @@ impl BassVoiceParams {
             filter_attack: b.filter_attack.clamp(0.0, 1.0),
             filter_sustain: b.filter_sustain.clamp(0.0, 1.0),
             filter_release: b.filter_release.clamp(0.0, 1.0),
-            pulse_width: b.pulse_width.clamp(0.05, 0.95),
+            pulse_width: b.pulse_width.clamp(PWM_MIN, PWM_MAX),
             lfo_target: b.lfo_target,
             lfo_rate: b.lfo_rate.clamp(0.0, 1.0),
             lfo_depth: b.lfo_depth.clamp(0.0, 1.0),

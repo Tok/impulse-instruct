@@ -1,4 +1,5 @@
 use super::dsp_util::nyquist_guard;
+use super::dsp_util::{PWM_MAX, PWM_MIN};
 // ─── Low-level voice state machines ──────────────────────────────────────────
 // Pure numeric DSP structs — no allocations.
 
@@ -602,7 +603,7 @@ impl HooverVoice {
         if self.pwm_phase >= 1.0 {
             self.pwm_phase -= 1.0;
         }
-        let pw = (0.5 + 0.35 * lfo).clamp(0.05, 0.95);
+        let pw = (0.5 + 0.35 * lfo).clamp(PWM_MIN, PWM_MAX);
         let pulse = if self.pwm_phase < pw { 1.0 } else { -1.0 };
 
         // Sub-octave sine — adds body without aliasing.

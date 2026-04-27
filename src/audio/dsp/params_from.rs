@@ -8,6 +8,7 @@
 
 use crate::state::{AppState, BPM_MAX, BPM_MIN, LfoWaveform, ModuleKind};
 
+use super::dsp_util::{PWM_MAX, PWM_MIN};
 use super::lfo_target_opcode::lfo_target_to_u8;
 use super::mod_compile::{
     compile_comparator_params, compile_crossfader_params, compile_function_gen_params,
@@ -479,7 +480,7 @@ impl AudioParams {
                 s.chiptune.osc2.release.clamp(0.0, 1.0),
                 s.chiptune.osc3.release.clamp(0.0, 1.0),
             ],
-            chiptune_pulse_width: s.chiptune.pulse_width.clamp(0.05, 0.95),
+            chiptune_pulse_width: s.chiptune.pulse_width.clamp(PWM_MIN, PWM_MAX),
             chiptune_filter_cutoff: s.chiptune.filter_cutoff.clamp(0.0, 1.0),
             chiptune_filter_resonance: s.chiptune.filter_resonance.clamp(0.0, 1.0),
             chiptune_filter_mode: s

@@ -3,6 +3,7 @@
 
 use super::AudioParams;
 use super::dsp_util::tanh;
+use super::dsp_util::{PWM_MAX, PWM_MIN};
 use super::params;
 use super::voices::{LadderFilter, NoiseGen};
 
@@ -316,7 +317,7 @@ impl Bass303 {
             // classic square; narrower = reedier, wider = less harmonic.
             // LFO PWM modulation (if routed) adds/subtracts around the
             // static pulse_width value.
-            let pw = (vp.pulse_width + lfo_pwm).clamp(0.05, 0.95);
+            let pw = (vp.pulse_width + lfo_pwm).clamp(PWM_MIN, PWM_MAX);
             if self.phase < pw { 1.0 } else { -1.0 }
         };
         self.sub_phase += self.freq * freq_mod * 0.5 / sr;

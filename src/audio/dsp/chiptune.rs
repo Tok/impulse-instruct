@@ -16,7 +16,9 @@
 // steps + 1 LFSR tick + 1 SVF process.  Allocation-free.
 
 use super::AudioParams;
-use super::dsp_util::{ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD};
+use super::dsp_util::{
+    ATTACK_HANDOVER_VALUE, PWM_MAX, PWM_MIN, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD,
+};
 use super::fx_extras::Svf;
 use crate::state::CHIPTUNE_OSCS;
 
@@ -206,7 +208,7 @@ impl ChiptuneVoice {
         // the body indexes 6+ separate per-osc arrays on the
         // params snapshot — iterator-zip across that many slices
         // is far less readable than the plain index.
-        let pulse_w = p.chiptune_pulse_width.clamp(0.05, 0.95);
+        let pulse_w = p.chiptune_pulse_width.clamp(PWM_MIN, PWM_MAX);
         let mut osc_out = [0.0_f32; CHIPTUNE_OSCS];
         let mut osc1_wrapped = false;
         #[allow(clippy::needless_range_loop)]
