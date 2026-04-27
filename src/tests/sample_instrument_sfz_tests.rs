@@ -681,6 +681,141 @@ mod sample_instrument_sfz_mode_tests {
         );
     }
 
+    /// modLfoToVolume: positive depth produces a tremolo whose RMS
+    /// envelope visibly differs from the no-mod baseline.  The RMS
+    /// over a full LFO cycle is *higher* than the unmodulated DC
+    /// level because `10^(x/200)` is convex — `mean(10^(±cb/200))
+    /// > 10^0` — so the audible effect is a measurable RMS lift on
+    /// top of the periodic swing.  Asserting RMS-divergence is more
+    /// robust than peak-comparison: even if an SVF or oversample
+    /// path nudges peaks, the tremolo's energy-domain footprint
+    /// remains.
+    #[test]
+    fn region_lfo_volume_modulates_amplitude() {
+        // Constant-DC source so the only thing varying the output
+        // amplitude is the volume LFO; any RMS divergence comes
+        // straight from `modLfoToVolume`.
+        let buf: Vec<f32> = vec![0.5_f32; 4096];
+        let arc = Arc::new(buf);
+
+        let run = |depth_cb: f32| -> f32 {
+            let mut v = SampleInstrumentVoice::new();
+            let mut r = SfzRegion {
+                lokey: 60,
+                hikey: 60,
+                pitch_keycenter: 60,
+                loop_mode: crate::state::sfz::SfzLoopMode::LoopContinuous,
+                loop_start: Some(0),
+                loop_end: Some(4095),
+                mod_lfo_freq_hz: 8.0,
+                mod_lfo_delay_s: 0.0,
+                mod_lfo_to_volume_cb: depth_cb,
+                ..Default::default()
+            };
+            r.sample_path = std::path::PathBuf::from("/lfo_vol.wav");
+            v.load_sfz(vec![SfzRegionRuntime {
+                region: r,
+                samples: arc.clone(),
+            }]);
+            let mut p = make_params();
+            p.sample_loop_enabled = false;
+            p.sample_volume = 1.0;
+            p.sample_attack = 0.0;
+            v.trigger(
+                60,
+                crate::audio::dsp::TuningSystem::TwelveTet,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+            );
+            let sr = 48_000.0;
+            let trace: Vec<f32> = (0..12_000).map(|_| v.process(sr, &p)).collect();
+            // RMS over 250 ms → covers two LFO cycles at 8 Hz.
+            (trace.iter().map(|s| s * s).sum::<f32>() / trace.len() as f32).sqrt()
+        };
+
+        let dry = run(0.0);
+        let wet = run(200.0); // 20 dB peak-to-peak swing — heavy tremolo
+        let ratio = wet / dry.max(1e-6);
+        // 10^(±1) RMS ≈ 1 + sinh-style lift; expect a noticeable
+        // divergence rather than bit-equal output.  Asserting > 5 %
+        // gives a wide safety margin while still failing if the
+        // modulation path silently no-ops.
+        assert!(
+            (ratio - 1.0).abs() > 0.05,
+            "modLfoToVolume should perturb RMS amplitude (ratio {ratio})"
+        );
+    }
+
+    /// modLfoToFilterFc: when the region carries a low-pass filter,
+    /// a heavy LFO depth on the cutoff sweeps the filter open + shut
+    /// each cycle, producing a measurably different output trace
+    /// from the no-mod baseline.  Compares sum-of-squared-deltas vs
+    /// a depth=0 reference; a working modulation path produces
+    /// non-trivial divergence.
+    #[test]
+    fn region_lfo_filter_modulates_cutoff() {
+        // Square-ish source so the filter has rich harmonics to
+        // sculpt as the cutoff sweeps.
+        let buf: Vec<f32> = (0..4096)
+            .map(|i| if (i / 32) % 2 == 0 { 0.4 } else { -0.4 })
+            .collect();
+        let arc = Arc::new(buf);
+
+        let run = |depth_cents: f32| -> Vec<f32> {
+            let mut v = SampleInstrumentVoice::new();
+            let mut r = SfzRegion {
+                lokey: 60,
+                hikey: 60,
+                pitch_keycenter: 60,
+                loop_mode: crate::state::sfz::SfzLoopMode::LoopContinuous,
+                loop_start: Some(0),
+                loop_end: Some(4095),
+                // Region filter — cutoff in the audible mid so the
+                // LFO sweep crosses harmonics on both sides.
+                cutoff_hz: 800.0,
+                resonance_db: 6.0,
+                fil_type: Some(crate::state::sfz::SfzFilType::Lpf2p),
+                mod_lfo_freq_hz: 6.0,
+                mod_lfo_delay_s: 0.0,
+                mod_lfo_to_filter_fc_cents: depth_cents,
+                ..Default::default()
+            };
+            r.sample_path = std::path::PathBuf::from("/lfo_fc.wav");
+            v.load_sfz(vec![SfzRegionRuntime {
+                region: r,
+                samples: arc.clone(),
+            }]);
+            let mut p = make_params();
+            p.sample_loop_enabled = false;
+            p.sample_volume = 1.0;
+            p.sample_attack = 0.0;
+            v.trigger(
+                60,
+                crate::audio::dsp::TuningSystem::TwelveTet,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+            );
+            let sr = 48_000.0;
+            (0..12_000).map(|_| v.process(sr, &p)).collect()
+        };
+
+        let dry = run(0.0);
+        let wet = run(2400.0); // ±2 octaves of cutoff swing
+        let diff: f32 = dry
+            .iter()
+            .zip(wet.iter())
+            .map(|(a, b)| (a - b).powi(2))
+            .sum();
+        assert!(
+            diff > 0.5,
+            "modLfoToFilterFc should sculpt the filtered output (diff {diff})"
+        );
+    }
+
     /// NoLoop region: no loop override emitted, so the slot drains
     /// to sample end and enters Release per the existing single-shot
     /// path.  Sanity check that we didn't accidentally loop everything.

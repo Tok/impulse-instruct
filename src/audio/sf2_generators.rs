@@ -36,15 +36,23 @@ pub(super) const GEN_INITIAL_FILTER_Q: u16 = 9;
 ///   3 = loop while gate held then play release tail.
 pub(super) const GEN_SAMPLE_MODES: u16 = 54;
 
-/// Modulation LFO + vibrato LFO opcodes.  V1 wires only the pitch
-/// targets; modLfoToFilterFc / modLfoToVolume / modEnvToPitch /
-/// modEnvToFilterFc are deferred to a follow-up.
+/// Modulation LFO + vibrato LFO opcodes.  Pitch + filter + volume
+/// targets are wired; modulation envelope (modEnvToPitch /
+/// modEnvToFilterFc + AHDSR) is a sibling follow-up.
 pub(super) const GEN_DELAY_MOD_LFO: u16 = 21; // timecents
 pub(super) const GEN_FREQ_MOD_LFO: u16 = 22; // absolute cents (8.176 × 2^(cents/1200))
 pub(super) const GEN_DELAY_VIB_LFO: u16 = 23;
 pub(super) const GEN_FREQ_VIB_LFO: u16 = 24;
 pub(super) const GEN_MOD_LFO_TO_PITCH: u16 = 5; // cents
 pub(super) const GEN_VIB_LFO_TO_PITCH: u16 = 6; // cents
+/// modLfoToFilterFc (cents) — modulation LFO drives the filter cutoff.
+/// Peak LFO excursion (sin = ±1) shifts the cutoff by ±depth cents.
+pub(super) const GEN_MOD_LFO_TO_FILTER_FC: u16 = 13;
+/// modLfoToVolume (centibels of attenuation) — modulation LFO drives
+/// the voice amplitude.  Peak excursion = ±depth cB applied as a
+/// multiplicative gain factor (10^(±cb/200)) so the LFO produces a
+/// symmetric tremolo around the carrier level.
+pub(super) const GEN_MOD_LFO_TO_VOLUME: u16 = 14;
 
 /// Generator accumulator — collects every relevant generator value as
 /// the walk traverses a zone, then `build_region` (in `sf2_loader.rs`)
@@ -91,6 +99,14 @@ pub(super) struct Generators {
     pub(super) delay_mod_lfo_tc: Option<i16>,
     pub(super) freq_mod_lfo_cents: Option<i16>,
     pub(super) mod_lfo_to_pitch_cents: Option<i16>,
+    /// modLfoToFilterFc — cents of cutoff swing at LFO peak (`sin = ±1`).
+    /// The mod-LFO already drives pitch via `mod_lfo_to_pitch_cents`;
+    /// adding this lets a single LFO simultaneously shape the filter
+    /// (the typical SF2 "wow + filter wobble" pairing).
+    pub(super) mod_lfo_to_filter_fc_cents: Option<i16>,
+    /// modLfoToVolume — centibels of amplitude swing at LFO peak.
+    /// 100 cB = 10 dB swing peak-to-peak (per SF2 spec 8.1.3).
+    pub(super) mod_lfo_to_volume_cb: Option<i16>,
     /// Vibrato LFO — same shape as the modulation LFO, dedicated to
     /// pitch.  Lets a region carry simultaneous independent
     /// vibrato + modulation wobbles.
@@ -121,6 +137,8 @@ impl Default for Generators {
             delay_mod_lfo_tc: None,
             freq_mod_lfo_cents: None,
             mod_lfo_to_pitch_cents: None,
+            mod_lfo_to_filter_fc_cents: None,
+            mod_lfo_to_volume_cb: None,
             delay_vib_lfo_tc: None,
             freq_vib_lfo_cents: None,
             vib_lfo_to_pitch_cents: None,
@@ -218,6 +236,16 @@ impl Generators {
             GEN_MOD_LFO_TO_PITCH => {
                 if let Ok(b) = amount.try_into() {
                     self.mod_lfo_to_pitch_cents = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_MOD_LFO_TO_FILTER_FC => {
+                if let Ok(b) = amount.try_into() {
+                    self.mod_lfo_to_filter_fc_cents = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_MOD_LFO_TO_VOLUME => {
+                if let Ok(b) = amount.try_into() {
+                    self.mod_lfo_to_volume_cb = Some(i16::from_le_bytes(b));
                 }
             }
             GEN_DELAY_VIB_LFO => {

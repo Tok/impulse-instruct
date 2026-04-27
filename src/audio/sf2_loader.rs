@@ -501,6 +501,8 @@ fn build_region(
         mod_lfo_freq_hz,
         mod_lfo_delay_s,
         mod_lfo_to_pitch_cents: gens.mod_lfo_to_pitch_cents.unwrap_or(0) as f32,
+        mod_lfo_to_filter_fc_cents: gens.mod_lfo_to_filter_fc_cents.unwrap_or(0) as f32,
+        mod_lfo_to_volume_cb: gens.mod_lfo_to_volume_cb.unwrap_or(0) as f32,
         vib_lfo_freq_hz,
         vib_lfo_delay_s,
         vib_lfo_to_pitch_cents: gens.vib_lfo_to_pitch_cents.unwrap_or(0) as f32,
@@ -870,5 +872,17 @@ mod tests {
         assert_eq!(g.freq_vib_lfo_cents, Some(0));
         assert_eq!(g.delay_vib_lfo_tc, Some(-7973));
         assert_eq!(g.vib_lfo_to_pitch_cents, Some(30));
+    }
+
+    /// modLfoToFilterFc (gen 13, cents) + modLfoToVolume (gen 14, cB)
+    /// round-trip through absorb().  Confirms the loader plumbs the
+    /// non-pitch mod-LFO targets into the Generators accumulator.
+    #[test]
+    fn generators_absorb_lfo_filter_and_volume_targets() {
+        let mut g = Generators::default();
+        g.absorb(GEN_MOD_LFO_TO_FILTER_FC, &2400_i16.to_le_bytes()); // ±2 oct cutoff
+        g.absorb(GEN_MOD_LFO_TO_VOLUME, &100_i16.to_le_bytes()); // 10 dB swing
+        assert_eq!(g.mod_lfo_to_filter_fc_cents, Some(2400));
+        assert_eq!(g.mod_lfo_to_volume_cb, Some(100));
     }
 }
