@@ -16,6 +16,7 @@
 // band).  The mid band needs no filter at all — it's just
 // `dry - low - high`.  Allocation-free.
 
+use super::dsp_util::nyquist_guard;
 use std::f32::consts::TAU;
 
 /// Low/mid crossover (Hz).  Standard DJ-mixer choice; the bass
@@ -61,7 +62,7 @@ impl Biquad {
 
     /// RBJ low-pass: 12 dB/oct rolloff above `fc`.
     fn low_pass(fc: f32, q: f32, sr: f32) -> Self {
-        let w = TAU * fc.clamp(20.0, sr * 0.45) / sr;
+        let w = TAU * fc.clamp(20.0, nyquist_guard(sr)) / sr;
         let cos_w = w.cos();
         let alpha = w.sin() / (2.0 * q.max(0.1));
         let a0 = 1.0 + alpha;
@@ -80,7 +81,7 @@ impl Biquad {
 
     /// RBJ high-pass: 12 dB/oct rolloff below `fc`.
     fn high_pass(fc: f32, q: f32, sr: f32) -> Self {
-        let w = TAU * fc.clamp(20.0, sr * 0.45) / sr;
+        let w = TAU * fc.clamp(20.0, nyquist_guard(sr)) / sr;
         let cos_w = w.cos();
         let alpha = w.sin() / (2.0 * q.max(0.1));
         let a0 = 1.0 + alpha;

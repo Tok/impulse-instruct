@@ -8,7 +8,9 @@
 // every buffer lives on the struct.
 
 use super::AudioParams;
-use super::dsp_util::{ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD};
+use super::dsp_util::{
+    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, nyquist_guard,
+};
 
 /// Modulation-index scaling.  Op `level` 0..1 multiplies into this
 /// constant when the op is acting as a modulator.  4× the standard
@@ -228,7 +230,7 @@ impl FmOpsVoice {
         let phase_inc = |freq: f32| freq * two_pi * dt;
         let mut incs = [0.0_f32; 4];
         for (i, slot) in incs.iter_mut().enumerate() {
-            let freq = (self.base_freq * ratio_mult(ratios[i])).clamp(0.05, sr * 0.45);
+            let freq = (self.base_freq * ratio_mult(ratios[i])).clamp(0.05, nyquist_guard(sr));
             *slot = phase_inc(freq);
         }
 

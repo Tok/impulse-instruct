@@ -13,6 +13,7 @@
 // Freeze) live in the sibling `fx_glitch.rs` to keep this file
 // well under the 1000-line cap as future Tier-1 FX land here.
 
+use super::dsp_util::nyquist_guard;
 use super::fx::{Biquad, MAX_FLANGER_SIZE};
 
 // ─── Flanger (short modulated delay with feedback) ───────────────────────────
@@ -230,7 +231,10 @@ impl Svf {
             return input;
         }
         // Log-mapped cutoff so the knob feels musical across the audio band.
-        let fc = 20.0 * 900.0f32.powf(cutoff.clamp(0.0, 1.0)).clamp(20.0, sr * 0.45);
+        let fc = 20.0
+            * 900.0f32
+                .powf(cutoff.clamp(0.0, 1.0))
+                .clamp(20.0, nyquist_guard(sr));
         let q = 0.5 + resonance.clamp(0.0, 1.0) * 19.5;
         let damp = (1.0 / q).min(2.0 - 1e-3);
 

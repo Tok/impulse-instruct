@@ -64,6 +64,22 @@ pub fn midi_to_hz(note: u8) -> f32 {
     midi_to_hz_f32(note as f32)
 }
 
+/// Fraction of the sample rate that filters use as a safe upper bound.
+/// True Nyquist is `sr / 2`; pulling back to 90 % of that (= 0.45 · sr)
+/// gives the SVF / EQ / band-split coefficients headroom against the
+/// trig identities going degenerate at the Nyquist limit and the
+/// resonance peak blowing up.  Empirically chosen — every filter in
+/// the codebase agreed on the same factor before this constant existed.
+pub const NYQUIST_GUARD_FACTOR: f32 = 0.45;
+
+/// Upper-bound frequency for filter clamps: 90 % of Nyquist.  Wraps
+/// the `sr * NYQUIST_GUARD_FACTOR` idiom that recurred at 18 call
+/// sites so changing the safety margin is a one-line edit.
+#[inline]
+pub fn nyquist_guard(sr: f32) -> f32 {
+    sr * NYQUIST_GUARD_FACTOR
+}
+
 /// Convert frequency in Hz to fractional MIDI note number (12-TET,
 /// A=`A4_HZ`).  Inverse of `midi_to_hz_f32`; callers round/clamp as
 /// needed.

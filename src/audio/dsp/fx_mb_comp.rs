@@ -25,6 +25,7 @@
 // Allocation-free; coefficients refresh lazily on sample-rate
 // change.
 
+use super::dsp_util::nyquist_guard;
 use std::f32::consts::TAU;
 
 const LOW_FC: f32 = 250.0;
@@ -64,7 +65,7 @@ impl Biquad {
     }
 
     fn low_pass(fc: f32, sr: f32) -> Self {
-        let w = TAU * fc.clamp(20.0, sr * 0.45) / sr;
+        let w = TAU * fc.clamp(20.0, nyquist_guard(sr)) / sr;
         let cos_w = w.cos();
         let alpha = w.sin() / (2.0 * Q);
         let a0 = 1.0 + alpha;

@@ -1,3 +1,4 @@
+use super::dsp_util::nyquist_guard;
 // ─── Low-level voice state machines ──────────────────────────────────────────
 // Pure numeric DSP structs — no allocations.
 
@@ -420,7 +421,7 @@ impl NoiseVoice {
 
         // 1-pole LP filter with modulation
         let mod_cutoff = (cutoff + lfo_mod + sh_mod).clamp(0.0, 1.0);
-        let fc = (200.0 * (100.0f32).powf(mod_cutoff)).min(sr * 0.45);
+        let fc = (200.0 * (100.0f32).powf(mod_cutoff)).min(nyquist_guard(sr));
         let a = 1.0 - (-std::f32::consts::TAU * fc / sr).exp();
         self.lp_state += a * (out - self.lp_state);
 
@@ -621,7 +622,7 @@ impl HooverVoice {
         // "oooh→dark" sweep without needing a separate BP-mix parameter.
         let lp_norm = (p.hoover_filter_start * self.filt_env).clamp(0.0, 1.0);
         // Exponential map: 0 → ~120 Hz (closed), 1 → ~12 kHz (open)
-        let lp_hz = (120.0_f32 * 100.0_f32.powf(lp_norm)).min(sr * 0.45);
+        let lp_hz = (120.0_f32 * 100.0_f32.powf(lp_norm)).min(nyquist_guard(sr));
         let f = (std::f32::consts::PI * lp_hz / sr).clamp(0.001, 0.49);
         // q = damping; low q = high resonance. 0.97 tightens the peak vs 0.95.
         let q = (1.0 - p.hoover_resonance * 0.97).max(0.03);

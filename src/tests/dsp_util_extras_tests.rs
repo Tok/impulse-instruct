@@ -9,7 +9,9 @@
 //   • `kind_is_fx` — every FxXxx kind is FX; every voice / non-FX kind
 //     is not.
 
-use crate::audio::dsp::{hz_to_midi, midi_to_hz, midi_to_hz_f32};
+use crate::audio::dsp::{
+    NYQUIST_GUARD_FACTOR, hz_to_midi, midi_to_hz, midi_to_hz_f32, nyquist_guard,
+};
 use crate::state::LfoTarget;
 use crate::state::fx_plan::kind_is_fx;
 use crate::state::{ModuleKind, fx_plan};
@@ -96,6 +98,31 @@ fn midi_to_hz_matches_midi_to_hz_f32_at_integer_notes() {
             "MIDI {n}: midi_to_hz={a}, midi_to_hz_f32={b}"
         );
     }
+}
+
+// ─── nyquist_guard ──────────────────────────────────────────────────────────
+
+/// `nyquist_guard(sr)` returns 90 % of Nyquist (45 % of sr).  Pin the
+/// factor so a future relaxation of the safety margin is a deliberate
+/// constant change, not an accidental drift.
+#[test]
+fn nyquist_guard_at_engine_sample_rates() {
+    for sr in [44_100.0_f32, 48_000.0, 96_000.0] {
+        let got = nyquist_guard(sr);
+        let want = sr * NYQUIST_GUARD_FACTOR;
+        assert!((got - want).abs() < 1e-3);
+        // Below true Nyquist by a healthy margin (≥ 10 % headroom).
+        assert!(got < sr * 0.5);
+        assert!(got > sr * 0.4);
+    }
+}
+
+#[test]
+fn nyquist_guard_factor_matches_legacy_literal() {
+    // The 18 inline `sr * 0.45` sites were the empirical baseline;
+    // the constant must reproduce that exactly, otherwise existing
+    // filter clamps would shift their cutoffs.
+    assert_eq!(NYQUIST_GUARD_FACTOR, 0.45);
 }
 
 // ─── lfo_target_to_u8 ───────────────────────────────────────────────────────

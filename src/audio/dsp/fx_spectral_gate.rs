@@ -24,6 +24,7 @@
 use std::f32::consts::TAU;
 use std::sync::Arc;
 
+use super::dsp_util::nyquist_guard;
 use rustfft::num_complex::Complex;
 use rustfft::{Fft, FftPlanner};
 
@@ -70,7 +71,7 @@ impl Biquad {
     ///   b0 =  α / a0,  b1 = 0,  b2 = -α / a0
     ///   a0 =  1 + α,   a1 = -2 cos(ω) / a0,  a2 = (1 - α) / a0
     fn band_pass(fc: f32, q: f32, sr: f32) -> Self {
-        let f = fc.clamp(20.0, sr * 0.45);
+        let f = fc.clamp(20.0, nyquist_guard(sr));
         let omega = TAU * f / sr;
         let q = q.max(0.5);
         let sin_w = omega.sin();

@@ -16,6 +16,7 @@
 // bank stays bounded.
 
 use super::AudioParams;
+use super::dsp_util::nyquist_guard;
 use crate::state::{MODAL_MODES, MODAL_RATIO_PRESETS};
 
 /// Idealised mode-frequency ratios per preset.  Values relative to
@@ -76,7 +77,7 @@ impl Resonator {
     fn set_freq_decay(&mut self, freq_hz: f32, decay_s: f32, sr: f32) {
         // Clamp freq away from Nyquist + DC so the cos doesn't
         // explode and r stays in (0, 1).
-        let f = freq_hz.clamp(20.0, sr * 0.45);
+        let f = freq_hz.clamp(20.0, nyquist_guard(sr));
         let omega = std::f32::consts::TAU * f / sr;
         let r = (-1.0_f32 / (decay_s.max(0.001) * sr)).exp();
         self.a1 = 2.0 * r * omega.cos();

@@ -1,3 +1,4 @@
+use super::dsp_util::nyquist_guard;
 // ─── FX DSP structs ───────────────────────────────────────────────────────────
 // Pure numeric DSP — no allocations inside process().
 
@@ -650,7 +651,7 @@ impl Phaser {
         let lfo = (self.lfo_phase * std::f32::consts::TAU).sin();
 
         // LFO sweeps center frequency: 300–4000 Hz
-        let fc = (1150.0 + lfo * depth * 1850.0).clamp(50.0, sr * 0.45);
+        let fc = (1150.0 + lfo * depth * 1850.0).clamp(50.0, nyquist_guard(sr));
 
         // First-order all-pass coefficient: d = (tan(π·fc/sr) − 1) / (tan(π·fc/sr) + 1)
         let t = (std::f32::consts::PI * fc / sr).tan().clamp(0.001, 999.0);

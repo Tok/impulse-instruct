@@ -12,7 +12,9 @@
 // fully-pegged spectrum stays bounded.
 
 use super::AudioParams;
-use super::dsp_util::{ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD};
+use super::dsp_util::{
+    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, nyquist_guard,
+};
 use crate::state::ADDITIVE_HARMONICS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -153,12 +155,12 @@ impl AdditiveVoice {
                 // Still advance the phase — keeps partials in
                 // sync if the user fades a slider in mid-note.
                 let h = (i + 1) as f32;
-                let freq = (self.base_freq * h).clamp(0.05, sr * 0.45);
+                let freq = (self.base_freq * h).clamp(0.05, nyquist_guard(sr));
                 self.phases[i] = (self.phases[i] + freq * two_pi * dt) % two_pi;
                 continue;
             }
             let h = (i + 1) as f32;
-            let freq = (self.base_freq * h).clamp(0.05, sr * 0.45);
+            let freq = (self.base_freq * h).clamp(0.05, nyquist_guard(sr));
             self.phases[i] = (self.phases[i] + freq * two_pi * dt) % two_pi;
             acc += self.phases[i].sin() * level;
         }
