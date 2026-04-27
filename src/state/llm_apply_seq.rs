@@ -146,7 +146,7 @@ pub(super) fn apply_amen_update(
     if let Some(v) = a.get("slice_count").and_then(|v| v.as_u64())
         && !locked.contains("amen.slice_count")
     {
-        s.amen.slice_count = (v as u8).clamp(1, 16);
+        s.amen.slice_count = (v as u8).clamp(1, crate::audio::dsp::MAX_AMEN_SLICES as u8);
     }
     s.amen.start_offset = unlocked_f32(
         s.amen.start_offset,

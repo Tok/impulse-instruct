@@ -6,6 +6,13 @@
 /// will process per block.  Bounded so the array stays Copy-friendly.
 pub const MAX_MOD_ROUTES: usize = 32;
 
+/// Per-region amen slice array cap.  16 matches the UI's slice-count
+/// selector (1/2/4/8/16) and the SF2 generator slot count.  Used as
+/// the size of every `amen_slice_*` array in `AudioParams` and as the
+/// `take(MAX_AMEN_SLICES)` cutoff when populating them from
+/// variable-length state vecs.
+pub const MAX_AMEN_SLICES: usize = 16;
+
 /// Cable-declared modulation route (Copy).  Says: "the modulation
 /// value at `cv_buf[source_buf_idx]` drives target opcode T at
 /// depth D".  Compiled from rack Mod cables in
@@ -798,20 +805,20 @@ pub struct AudioParams {
     /// Sentinel: NaN in slot [0] = unused, fall back to equal divisions.
     /// Entries 0..amen_slice_count hold explicit start positions, in
     /// ascending order.  Max 16 slices (matches UI cap).
-    pub amen_slice_positions: [f32; 16],
+    pub amen_slice_positions: [f32; MAX_AMEN_SLICES],
     /// Per-slice pitch-shift in semitones (−24..+24, NaN sentinel in slot 0
     /// = unused → all slices share the global amen_pitch).  Additive with
     /// amen_pitch and BPM-stretch, applied at trigger time.
-    pub amen_slice_pitches: [f32; 16],
+    pub amen_slice_pitches: [f32; MAX_AMEN_SLICES],
     /// Per-slice volume multiplier (0..2, NaN sentinel in slot 0 = unused
     /// → all slices share the global amen_volume).  Applied multiplicatively.
-    pub amen_slice_volumes: [f32; 16],
+    pub amen_slice_volumes: [f32; MAX_AMEN_SLICES],
     /// Per-slice playback direction override.  `-1` in a slot = inherit
     /// the global `amen_reverse` flag; `0` = force forward; `1` = force
     /// reverse.  All slots default to `-1` so unless the user / LLM
     /// populates `AmenState.slice_reverses`, the voice behaves exactly
     /// like the pre-per-slice version.
-    pub amen_slice_reverses: [i8; 16],
+    pub amen_slice_reverses: [i8; MAX_AMEN_SLICES],
     /// BPM the source sample was originally recorded at.  Used only when
     /// amen_bpm_stretch is true.
     pub amen_source_bpm: f32,

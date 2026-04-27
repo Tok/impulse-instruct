@@ -14,7 +14,7 @@ use super::mod_compile::{
     compile_logic_gate_params, compile_math_params, compile_mod_routes, compile_quantizer_params,
     compile_sample_hold_params, compile_slew_params, compile_trigger_div_params,
 };
-use super::params::{AudioParams, BassVoiceParams, LfoParamsCopy};
+use super::params::{AudioParams, BassVoiceParams, LfoParamsCopy, MAX_AMEN_SLICES};
 
 impl AudioParams {
     pub fn from_app_state(s: &AppState) -> Self {
@@ -639,29 +639,53 @@ impl AudioParams {
             amen_gate: s.amen.gate.clamp(0.05, 1.0),
             amen_stutter: s.amen.stutter.min(4),
             amen_slice_positions: {
-                let mut arr = [f32::NAN; 16];
-                for (i, p) in s.amen.slice_positions.iter().take(16).enumerate() {
+                let mut arr = [f32::NAN; MAX_AMEN_SLICES];
+                for (i, p) in s
+                    .amen
+                    .slice_positions
+                    .iter()
+                    .take(MAX_AMEN_SLICES)
+                    .enumerate()
+                {
                     arr[i] = p.clamp(0.0, 1.0);
                 }
                 arr
             },
             amen_slice_pitches: {
-                let mut arr = [f32::NAN; 16];
-                for (i, p) in s.amen.slice_pitches.iter().take(16).enumerate() {
+                let mut arr = [f32::NAN; MAX_AMEN_SLICES];
+                for (i, p) in s
+                    .amen
+                    .slice_pitches
+                    .iter()
+                    .take(MAX_AMEN_SLICES)
+                    .enumerate()
+                {
                     arr[i] = p.clamp(-24.0, 24.0);
                 }
                 arr
             },
             amen_slice_volumes: {
-                let mut arr = [f32::NAN; 16];
-                for (i, v) in s.amen.slice_volumes.iter().take(16).enumerate() {
+                let mut arr = [f32::NAN; MAX_AMEN_SLICES];
+                for (i, v) in s
+                    .amen
+                    .slice_volumes
+                    .iter()
+                    .take(MAX_AMEN_SLICES)
+                    .enumerate()
+                {
                     arr[i] = v.clamp(0.0, 2.0);
                 }
                 arr
             },
             amen_slice_reverses: {
-                let mut arr = [-1_i8; 16];
-                for (i, &rev) in s.amen.slice_reverses.iter().take(16).enumerate() {
+                let mut arr = [-1_i8; MAX_AMEN_SLICES];
+                for (i, &rev) in s
+                    .amen
+                    .slice_reverses
+                    .iter()
+                    .take(MAX_AMEN_SLICES)
+                    .enumerate()
+                {
                     arr[i] = if rev { 1 } else { 0 };
                 }
                 arr

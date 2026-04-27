@@ -1,4 +1,5 @@
 use super::*;
+use crate::audio::dsp::params::MAX_AMEN_SLICES;
 
 /// Build a ramp sample [0, 1, 2, …, n-1] as f32 so the read position
 /// is recoverable from each output value.
@@ -6,15 +7,15 @@ fn ramp_sample(n: usize) -> Arc<Vec<f32>> {
     Arc::new((0..n).map(|i| i as f32).collect())
 }
 
-fn nan16() -> [f32; 16] {
-    [f32::NAN; 16]
+fn nan16() -> [f32; MAX_AMEN_SLICES] {
+    [f32::NAN; MAX_AMEN_SLICES]
 }
 
 /// Per-slice reverse-override sentinel: every slot at `-1` means
 /// "inherit the global `reverse` flag", which preserves the legacy
 /// behaviour the existing trigger tests assert.
-fn none16() -> [i8; 16] {
-    [-1_i8; 16]
+fn none16() -> [i8; MAX_AMEN_SLICES] {
+    [-1_i8; MAX_AMEN_SLICES]
 }
 
 fn render(voice: &mut AmenVoice, n: usize) -> Vec<f32> {

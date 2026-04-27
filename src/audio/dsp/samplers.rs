@@ -6,6 +6,8 @@
 
 use std::sync::Arc;
 
+use super::params::MAX_AMEN_SLICES;
+
 // ─── Amen / WAV sampler voice ─────────────────────────────────────────────────
 
 /// Slice-aware sample playback.  Holds a pre-loaded mono f32 WAV (Arc) and
@@ -146,10 +148,10 @@ impl AmenVoice {
         reverse: bool,
         gate: f32,
         stutter: u8,
-        slice_positions: &[f32; 16],
-        slice_pitches: &[f32; 16],
-        slice_volumes: &[f32; 16],
-        slice_reverses: &[i8; 16],
+        slice_positions: &[f32; MAX_AMEN_SLICES],
+        slice_pitches: &[f32; MAX_AMEN_SLICES],
+        slice_volumes: &[f32; MAX_AMEN_SLICES],
+        slice_reverses: &[i8; MAX_AMEN_SLICES],
         bpm_stretch: bool,
         bpm_stretch_preserve: bool,
         source_bpm: f32,
@@ -185,7 +187,7 @@ impl AmenVoice {
         let use_custom = !slice_positions[0].is_nan();
         let (sstart, send) = if use_custom {
             let a = slice_positions[idx0 as usize];
-            let b_idx = (idx0 as usize + 1).min(15);
+            let b_idx = (idx0 as usize + 1).min(MAX_AMEN_SLICES - 1);
             let b = if (idx0 as usize + 1) < slices as usize && !slice_positions[b_idx].is_nan() {
                 slice_positions[b_idx]
             } else {
@@ -269,8 +271,8 @@ impl AmenVoice {
     /// and for tests).  Preserved for backward compatibility.
     #[allow(dead_code)]
     pub(super) fn trigger_whole(&mut self) {
-        let nan16 = [f32::NAN; 16];
-        let none16 = [-1_i8; 16];
+        let nan16 = [f32::NAN; MAX_AMEN_SLICES];
+        let none16 = [-1_i8; MAX_AMEN_SLICES];
         self.trigger(
             1, 1, 0.0, 1.0, false, 1.0, 0, &nan16, &nan16, &nan16, &none16, false, false, 136.0,
             170.0,
