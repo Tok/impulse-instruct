@@ -8,6 +8,34 @@
 /// constants.
 pub(super) const ACCENT_LIFT: f32 = 0.3;
 
+// ─── Envelope-stage thresholds ──────────────────────────────────────────────
+//
+// Every voice's exponential ADSR uses the same one-pole coast curve
+// (`coef = exp(-1 / (t · sr))`).  An exponential approach to a target
+// never lands exactly — the state machine has to decide when the
+// approach is "close enough" to advance to the next stage.  These three
+// constants pin those decisions in one place so attack-end / sustain-
+// reach / release-off behave identically across bass / sample / fm /
+// additive / vocal / chiptune / mod-env voices.  Tightening one of
+// them in isolation would have made one voice's envelope feel different
+// from the others.
+
+/// Attack handover — when the rising envelope reaches this value it
+/// snaps to 1.0 and enters Decay.  0.999 = 0.001 below peak ≈ −60 dB
+/// from the asymptote; below the noise floor of any musical material.
+pub const ATTACK_HANDOVER_VALUE: f32 = 0.999;
+
+/// Sustain-reach threshold — when `|value - target| < this`, Decay
+/// snaps to the sustain level and enters Sustain.  1e-3 leaves a tiny
+/// tail that's well below audibility but stops the coast curve from
+/// crawling toward the target forever.
+pub const SUSTAIN_REACH_THRESHOLD: f32 = 1e-3;
+
+/// Release-off threshold — when the decaying envelope falls below
+/// this value it snaps to 0 and the slot enters Off (no further DSP
+/// cost).  1e-5 ≈ −100 dB from peak.
+pub const RELEASE_OFF_VALUE: f32 = 1e-5;
+
 /// Fast tanh approximation (used by LadderFilter, Bass303, delay saturation).
 pub(crate) fn tanh(x: f32) -> f32 {
     let x2 = x * x;

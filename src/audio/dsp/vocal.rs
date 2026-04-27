@@ -12,6 +12,7 @@
 // rate knobs (rare relative to the audio rate).  Allocation-free.
 
 use super::AudioParams;
+use super::dsp_util::{ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD};
 
 /// Vowel formant table — F1, F2, F3 frequencies (Hz) and per-
 /// formant Q values.  Numbers from Peterson & Barney 1952 male
@@ -75,7 +76,7 @@ impl AdsrState {
                 let t = knob_to_secs(attack, 0.0005, 1.5);
                 let coef = (-1.0_f32 / (t * sr)).exp();
                 self.value = 1.0 - (1.0 - self.value) * coef;
-                if self.value >= 0.999 {
+                if self.value >= ATTACK_HANDOVER_VALUE {
                     self.value = 1.0;
                     self.stage = AdsrStage::Decay;
                 }
@@ -85,7 +86,7 @@ impl AdsrState {
                 let coef = (-1.0_f32 / (t * sr)).exp();
                 let target = sustain.clamp(0.0, 1.0);
                 self.value = target + (self.value - target) * coef;
-                if (self.value - target).abs() < 1e-3 {
+                if (self.value - target).abs() < SUSTAIN_REACH_THRESHOLD {
                     self.value = target;
                     self.stage = AdsrStage::Sustain;
                 }
@@ -98,7 +99,7 @@ impl AdsrState {
                 let t = knob_to_secs(release, 0.005, 2.0);
                 let coef = (-1.0_f32 / (t * sr)).exp();
                 self.value *= coef;
-                if self.value < 1e-5 {
+                if self.value < RELEASE_OFF_VALUE {
                     self.value = 0.0;
                     self.stage = AdsrStage::Off;
                 }

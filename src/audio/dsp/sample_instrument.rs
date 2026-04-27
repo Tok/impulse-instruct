@@ -17,6 +17,7 @@
 use std::sync::Arc;
 
 use super::AudioParams;
+use super::dsp_util::{ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD};
 use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
 use super::formant_shifter::FormantShifter;
 use super::fx_extras::Svf;
@@ -634,7 +635,7 @@ impl SampleInstrumentVoice {
             AdsrStage::Attack => {
                 let coef = (-1.0_f32 / (attack_s * sr)).exp();
                 slot.adsr_value = 1.0 - (1.0 - slot.adsr_value) * coef;
-                if slot.adsr_value >= 0.999 {
+                if slot.adsr_value >= ATTACK_HANDOVER_VALUE {
                     slot.adsr_value = 1.0;
                     slot.adsr_stage = AdsrStage::Decay;
                 }
@@ -642,7 +643,7 @@ impl SampleInstrumentVoice {
             AdsrStage::Decay => {
                 let coef = (-1.0_f32 / (decay_s * sr)).exp();
                 slot.adsr_value = sustain + (slot.adsr_value - sustain) * coef;
-                if (slot.adsr_value - sustain).abs() < 1e-3 {
+                if (slot.adsr_value - sustain).abs() < SUSTAIN_REACH_THRESHOLD {
                     slot.adsr_value = sustain;
                     slot.adsr_stage = AdsrStage::Sustain;
                 }
@@ -653,7 +654,7 @@ impl SampleInstrumentVoice {
             AdsrStage::Release => {
                 let coef = (-1.0_f32 / (release_s * sr)).exp();
                 slot.adsr_value *= coef;
-                if slot.adsr_value < 1e-5 {
+                if slot.adsr_value < RELEASE_OFF_VALUE {
                     slot.adsr_value = 0.0;
                     slot.adsr_stage = AdsrStage::Off;
                 }

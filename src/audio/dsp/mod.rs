@@ -60,7 +60,10 @@ use bass303::Bass303;
 use chiptune::ChiptuneVoice;
 use conv_reverb::ConvReverb;
 use dsp_util::*;
-pub use dsp_util::{TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_f32, midi_to_hz_tuned};
+pub use dsp_util::{
+    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, TuningSystem, hz_to_midi,
+    midi_to_hz, midi_to_hz_f32, midi_to_hz_tuned,
+};
 use fm_ops::FmOpsVoice;
 use fx::*;
 use fx_djfilter::DjFilter;

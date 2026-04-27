@@ -20,6 +20,7 @@
 // world implementations use exponential, which matches our existing
 // voice envelope so the two stay in lock-step audibly.
 
+use super::dsp_util::{ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD};
 use crate::state::SfzRegion;
 
 // ─── Pure DSP math helpers ───────────────────────────────────────────────────
@@ -331,7 +332,7 @@ impl ModEnvState {
             ModEnvStage::Attack => {
                 let coef = (-1.0_f32 / (env.attack_s.max(0.0005) * sr)).exp();
                 self.value = 1.0 - (1.0 - self.value) * coef;
-                if self.value >= 0.999 {
+                if self.value >= ATTACK_HANDOVER_VALUE {
                     self.value = 1.0;
                     self.stage = if env.hold_s > 1e-4 {
                         ModEnvStage::Hold
@@ -350,7 +351,7 @@ impl ModEnvState {
             ModEnvStage::Decay => {
                 let coef = (-1.0_f32 / (env.decay_s.max(0.0005) * sr)).exp();
                 self.value = env.sustain_level + (self.value - env.sustain_level) * coef;
-                if (self.value - env.sustain_level).abs() < 1e-3 {
+                if (self.value - env.sustain_level).abs() < SUSTAIN_REACH_THRESHOLD {
                     self.value = env.sustain_level;
                     self.stage = ModEnvStage::Sustain;
                 }
@@ -361,7 +362,7 @@ impl ModEnvState {
             ModEnvStage::Release => {
                 let coef = (-1.0_f32 / (env.release_s.max(0.0005) * sr)).exp();
                 self.value *= coef;
-                if self.value < 1e-5 {
+                if self.value < RELEASE_OFF_VALUE {
                     self.value = 0.0;
                     self.stage = ModEnvStage::Off;
                 }
