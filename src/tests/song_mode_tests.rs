@@ -52,6 +52,36 @@ mod song_mode_tests {
         assert_eq!(s.chain_overrides[0].bpm, None);
     }
 
+    /// `morph_bars` clamps to 0..=8 — 0 = classic hard cut, 1..=8
+    /// schedule a per-step crossfade across that many loop boundaries
+    /// when the chain advances into the slot.  Values beyond 8 collapse
+    /// back to 8 so a malformed API call can't widen the morph window
+    /// past the supported range.
+    #[test]
+    fn set_chain_slot_morph_clamps_to_8_bars_max() {
+        use crate::state::set_chain_slot_morph;
+        let s = AppState::default();
+        let s = chain_push(s, 0);
+        let s = set_chain_slot_morph(s, 0, 0); // hard cut
+        assert_eq!(s.chain_overrides[0].morph_bars, 0);
+        let s = set_chain_slot_morph(s, 0, 4); // mid-range
+        assert_eq!(s.chain_overrides[0].morph_bars, 4);
+        let s = set_chain_slot_morph(s, 0, 99); // way over
+        assert_eq!(s.chain_overrides[0].morph_bars, 8);
+    }
+
+    /// Writing to a slot past the chain's end is a no-op for the
+    /// morph setter too — same contract as the style/bpm/repeats
+    /// setters, keeps `chain_overrides` aligned with `chain`.
+    #[test]
+    fn set_chain_slot_morph_is_noop_beyond_chain_length() {
+        use crate::state::set_chain_slot_morph;
+        let s = AppState::default();
+        let s = chain_push(s, 0);
+        let s = set_chain_slot_morph(s, 5, 4);
+        assert_eq!(s.chain_overrides.len(), 0);
+    }
+
     #[test]
     fn set_chain_slot_is_noop_beyond_chain_length() {
         // Writing to a slot past the chain's end must not grow
