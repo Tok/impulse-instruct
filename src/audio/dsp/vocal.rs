@@ -13,8 +13,8 @@
 
 use super::AudioParams;
 use super::dsp_util::{
-    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, nyquist_guard,
-    one_pole_coef, one_pole_lp_alpha,
+    ATTACK_HANDOVER_VALUE, AUDIBLE_HZ_MIN, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD,
+    nyquist_guard, one_pole_coef, one_pole_lp_alpha,
 };
 
 /// Vowel formant table — F1, F2, F3 frequencies (Hz) and per-
@@ -151,7 +151,7 @@ impl FormantBiquad {
     ///   a0 =  1 + α,     a1 = -2 cos(ω),  a2 = 1 - α
     /// where α = sin(ω) / (2Q).
     fn set(&mut self, freq_hz: f32, q: f32, sr: f32) {
-        let f = freq_hz.clamp(20.0, nyquist_guard(sr));
+        let f = freq_hz.clamp(AUDIBLE_HZ_MIN, nyquist_guard(sr));
         let omega = std::f32::consts::TAU * f / sr;
         let q = q.max(0.5);
         let sin_w = omega.sin();

@@ -64,6 +64,15 @@ pub fn midi_to_hz(note: u8) -> f32 {
     midi_to_hz_f32(note as f32)
 }
 
+/// Audible-range frequency bounds.  20 Hz is the conventional lower
+/// edge of human hearing (well above DC, below the lowest pitched
+/// content); 20 kHz is the upper edge.  Used together as the clamp
+/// range for log-spectrum displays, EQ band-frequency sliders, and
+/// resampler-side cutoff guards where the full audible band is the
+/// natural ceiling rather than the running sample-rate Nyquist.
+pub const AUDIBLE_HZ_MIN: f32 = 20.0;
+pub const AUDIBLE_HZ_MAX: f32 = 20_000.0;
+
 /// Fraction of the sample rate that filters use as a safe upper bound.
 /// True Nyquist is `sr / 2`; pulling back to 90 % of that (= 0.45 · sr)
 /// gives the SVF / EQ / band-split coefficients headroom against the

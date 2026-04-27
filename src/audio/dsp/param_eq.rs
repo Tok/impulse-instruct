@@ -13,7 +13,7 @@
 // collapse to b0=1, b1=b2=a1=a2=0, which is still a valid pass-through
 // but we short-circuit the multiply for cache friendliness).
 
-use super::dsp_util::nyquist_guard;
+use super::dsp_util::{AUDIBLE_HZ_MIN, nyquist_guard};
 use crate::state::{ParamEqBand, ParamEqBandKind};
 
 /// Number of bands in the ParamEq cascade.
@@ -133,7 +133,7 @@ pub fn biquad_coeffs(
     q: f32,
     sr: f32,
 ) -> (f32, f32, f32, f32, f32, f32) {
-    let freq_hz = freq_hz.clamp(20.0, nyquist_guard(sr));
+    let freq_hz = freq_hz.clamp(AUDIBLE_HZ_MIN, nyquist_guard(sr));
     let q = q.clamp(0.1, 10.0);
     let gain_db = gain_db.clamp(-18.0, 18.0);
 

@@ -10,8 +10,8 @@
 //     is not.
 
 use crate::audio::dsp::{
-    NYQUIST_GUARD_FACTOR, db_to_lin, hz_to_midi, lin_to_db, midi_to_hz, midi_to_hz_f32,
-    nyquist_guard, one_pole_coef, one_pole_lp_alpha,
+    AUDIBLE_HZ_MAX, AUDIBLE_HZ_MIN, NYQUIST_GUARD_FACTOR, db_to_lin, hz_to_midi, lin_to_db,
+    midi_to_hz, midi_to_hz_f32, nyquist_guard, one_pole_coef, one_pole_lp_alpha,
 };
 use crate::state::LfoTarget;
 use crate::state::fx_plan::kind_is_fx;
@@ -289,6 +289,27 @@ fn lin_to_db_doubling_is_six_db() {
         (half - (-6.020_6)).abs() < 1e-3,
         "lin_to_db(0.5) was {half}"
     );
+}
+
+// ─── Audible-range bounds ───────────────────────────────────────────────────
+
+/// Pin the literal values: 20 Hz – 20 kHz is the conventional audible
+/// band.  Pre-existing call sites used those exact numbers; the
+/// constants must reproduce them or every filter-clamp / EQ-band
+/// upper-bound in the codebase would drift.
+#[test]
+fn audible_hz_bounds_are_canonical_values() {
+    assert_eq!(AUDIBLE_HZ_MIN, 20.0);
+    assert_eq!(AUDIBLE_HZ_MAX, 20_000.0);
+}
+
+/// Sanity: MIN sits below MAX, both finite, both positive.  Catches a
+/// future swap or sign error on the constants.
+#[test]
+fn audible_hz_bounds_are_well_ordered() {
+    assert!(AUDIBLE_HZ_MIN > 0.0);
+    assert!(AUDIBLE_HZ_MIN < AUDIBLE_HZ_MAX);
+    assert!(AUDIBLE_HZ_MAX.is_finite());
 }
 
 // ─── lfo_target_to_u8 ───────────────────────────────────────────────────────

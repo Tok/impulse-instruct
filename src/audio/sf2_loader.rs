@@ -29,6 +29,7 @@ use std::sync::Arc;
 use crate::audio::SAMPLE_RATE_HZ;
 use crate::audio::audio_load::{i16_pcm_to_f32, resample_mono_linear};
 use crate::audio::dsp::sample_instrument::SfzRegionRuntime;
+use crate::audio::dsp::{AUDIBLE_HZ_MAX, AUDIBLE_HZ_MIN};
 use crate::state::sfz::SfzRegion;
 
 /// One entry in the SoundFont's preset table.  Banks ship dozens of
@@ -442,7 +443,7 @@ fn build_region(
             // converts dB → 0..1 knob, so just pass the dB value.
             let resonance_db = (gens.initial_filter_q_cb.unwrap_or(0) as f32) / 10.0;
             (
-                hz.clamp(20.0, 20_000.0),
+                hz.clamp(AUDIBLE_HZ_MIN, AUDIBLE_HZ_MAX),
                 resonance_db.clamp(0.0, 40.0),
                 Some(crate::state::sfz::SfzFilType::Lpf2p),
             )

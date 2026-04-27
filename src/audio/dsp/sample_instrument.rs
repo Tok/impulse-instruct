@@ -18,7 +18,8 @@ use std::sync::Arc;
 
 use super::AudioParams;
 use super::dsp_util::{
-    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, db_to_lin, one_pole_coef,
+    ATTACK_HANDOVER_VALUE, AUDIBLE_HZ_MAX, AUDIBLE_HZ_MIN, RELEASE_OFF_VALUE,
+    SUSTAIN_REACH_THRESHOLD, db_to_lin, one_pole_coef,
 };
 use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
 use super::formant_shifter::FormantShifter;
@@ -94,7 +95,7 @@ struct TriggerShape {
 /// internally, inverted.  Clamped so a hot knob can't scrub past
 /// the SVF's audible range.
 fn hz_to_svf_knob(hz: f32) -> f32 {
-    let h = hz.clamp(20.0, 20_000.0);
+    let h = hz.clamp(AUDIBLE_HZ_MIN, AUDIBLE_HZ_MAX);
     (h / 20.0).log(900.0).clamp(0.0, 1.0)
 }
 

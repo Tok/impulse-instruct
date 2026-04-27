@@ -1,5 +1,5 @@
-use super::dsp_util::MIX_BYPASS_THRESHOLD;
 use super::dsp_util::nyquist_guard;
+use super::dsp_util::{AUDIBLE_HZ_MIN, MIX_BYPASS_THRESHOLD};
 // ─── audio/dsp/fx_djfilter.rs ────────────────────────────────────────────────
 // DJ filter — single-knob morph LP↔HP through BP with the classic
 // resonance peak at the crossover.  Live-friendly one-knob FX from
@@ -54,7 +54,7 @@ impl DjFilter {
         // regardless of resonance.  Heavy on the low end at morph=0
         // (everything but the bass cut), heavy on the high end at
         // morph=1 (everything but the air cut).
-        let fc = 80.0 * 100.0_f32.powf(m).clamp(20.0, nyquist_guard(sr));
+        let fc = 80.0 * 100.0_f32.powf(m).clamp(AUDIBLE_HZ_MIN, nyquist_guard(sr));
         // Resonance peak emerges at the morph midpoint where the BP
         // weight dominates.  `bp_emphasis` is triangular 0..1 with
         // its peak at m=0.5; multiplied into the user's resonance so

@@ -28,7 +28,7 @@
 
 use std::f32::consts::TAU;
 
-use super::dsp_util::{MIX_BYPASS_THRESHOLD, midi_to_hz_f32, nyquist_guard};
+use super::dsp_util::{AUDIBLE_HZ_MIN, MIX_BYPASS_THRESHOLD, midi_to_hz_f32, nyquist_guard};
 
 const NUM_VOICES: usize = 6;
 const NUM_CHORDS: usize = 6;
@@ -79,7 +79,7 @@ impl Biquad {
     }
 
     fn set(&mut self, freq_hz: f32, q: f32, sr: f32) {
-        let f = freq_hz.clamp(20.0, nyquist_guard(sr));
+        let f = freq_hz.clamp(AUDIBLE_HZ_MIN, nyquist_guard(sr));
         let omega = TAU * f / sr;
         let q = q.max(0.5);
         let sin_w = omega.sin();

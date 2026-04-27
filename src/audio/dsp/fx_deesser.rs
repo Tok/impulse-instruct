@@ -22,7 +22,7 @@
 // move appreciably.
 
 use super::dsp_util::nyquist_guard;
-use super::dsp_util::{MIX_BYPASS_THRESHOLD, one_pole_coef};
+use super::dsp_util::{AUDIBLE_HZ_MIN, MIX_BYPASS_THRESHOLD, one_pole_coef};
 use std::f32::consts::TAU;
 
 /// One RBJ-cookbook HP biquad.  Same shape as the one in
@@ -59,7 +59,7 @@ impl Biquad {
 
     fn low_pass(fc: f32, sr: f32) -> Self {
         let q = 0.707; // Butterworth-flat — clean rolloff, no resonance.
-        let w = TAU * fc.clamp(20.0, nyquist_guard(sr)) / sr;
+        let w = TAU * fc.clamp(AUDIBLE_HZ_MIN, nyquist_guard(sr)) / sr;
         let cos_w = w.cos();
         let alpha = w.sin() / (2.0 * q);
         let a0 = 1.0 + alpha;

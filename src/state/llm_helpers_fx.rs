@@ -15,6 +15,7 @@ use std::collections::HashSet;
 
 use super::AppState;
 use super::llm_helpers::unlocked_f32;
+use crate::audio::dsp::{AUDIBLE_HZ_MAX, AUDIBLE_HZ_MIN};
 
 /// Apply FX fields from an LLM JSON update object.
 pub(super) fn apply_fx_update(
@@ -416,7 +417,7 @@ pub(super) fn apply_fx_update(
             if !locked.contains(&lock_freq)
                 && let Some(f) = obj.get("freq").and_then(|v| v.as_f64())
             {
-                band.freq_hz = (f as f32).clamp(20.0, 20_000.0);
+                band.freq_hz = (f as f32).clamp(AUDIBLE_HZ_MIN, AUDIBLE_HZ_MAX);
             }
             if !locked.contains(&lock_gain)
                 && let Some(g) = obj.get("gain").and_then(|v| v.as_f64())
