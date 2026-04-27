@@ -4,6 +4,49 @@ A detailed log of what's built.
 
 ---
 
+### SF2 sample loop modes — per-region loop honour
+
+The SF2 loader and SampleInstrument audio thread now honour per-
+region loop info from `sampleModes` (generator 54).  Earlier
+ships passed loop_start / loop_end through into `SfzRegion` but
+the audio path always looped (or always didn't, depending on the
+global `sample_loop_enabled` knob); now SF2 patches that ship
+sustained / one-shot / release-tail samples behave per spec.
+
+**SF2 loader.**  New `GEN_SAMPLE_MODES = 54` constant + parser:
+- 0 / 2 / absent → `SfzLoopMode::NoLoop`.
+- 1 → `SfzLoopMode::LoopContinuous`.
+- 3 → `SfzLoopMode::LoopSustain` (loop while gate held, then
+  play release tail).
+
+`build_region` now sets `region.loop_mode` instead of leaving it
+at the SfzRegion default.
+
+**Audio thread.**  `TriggerShape` and `SampleInstrumentSlot`
+gain a `region_loop: Option<(SfzLoopMode, usize, usize)>` field
+mirroring the existing `region_adsr` / `region_filter` override
+pattern:
+- `Some` only when the region declares LoopContinuous /
+  LoopSustain AND has a usable loop window.
+- Single-WAV mode passes `None` so the global `sample_loop_*`
+  knobs stay live (preserving V1 behaviour).
+
+`process_slot`'s loop branch consumes `slot.region_loop` first;
+LoopContinuous loops while alive, LoopSustain loops while
+`slot.gate` is true and falls through to play-to-end after
+gate-off.  Falls back to global knobs for the no-override path.
+
+**Tests.**  +3 in `tests/sample_instrument_sfz_tests.rs`:
+LoopContinuous override survives `sample_loop_enabled = false`;
+LoopSustain releases past `le` after `gate_off()` then drains;
+NoLoop region must not loop even when global loop is enabled.
+Suite **2298 → 2301**.
+
+This entry closes out the second SF2 wishlist line in PLAN.md
+(the first remaining is mod env / mod LFO / vib LFO generators).
+
+---
+
 ### Crossfader CV utility (`Crossfader`)
 
 Single-knob A/B blend between two CV sources.  More direct

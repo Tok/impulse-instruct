@@ -60,6 +60,13 @@ struct TriggerShape {
     /// of the user's global filter-mix setting.  All values are
     /// pre-converted to the SVF's 0..1 knob range at trigger time.
     region_filter: Option<(f32, f32, u8)>,
+    /// Per-region loop override — `(mode, start_sample, end_sample)`.
+    /// `Some` = the SFZ / SF2 region carries explicit loop info;
+    /// the audio thread uses these bounds + mode and ignores the
+    /// global `sample_loop_*` knobs for this slot.  `None` = the
+    /// single-WAV / no-region path, which keeps consuming the
+    /// global knobs so the user's loop window stays live.
+    region_loop: Option<(crate::state::sfz::SfzLoopMode, usize, usize)>,
 }
 
 /// Convert a cutoff frequency in Hz into the 0..1 knob value the
@@ -125,6 +132,8 @@ struct SampleInstrumentSlot {
     /// regardless of the global filter-mix knob; `None` defers to
     /// the global `sample_filter_*` params.
     region_filter: Option<(f32, f32, u8)>,
+    /// Per-slot loop override — see `TriggerShape.region_loop`.
+    region_loop: Option<(crate::state::sfz::SfzLoopMode, usize, usize)>,
     /// Monotonic counter set at trigger time — lowest = oldest slot.
     age: u64,
     /// Per-slot SVF state for the per-voice filter.  Each slot keeps
@@ -173,6 +182,7 @@ impl SampleInstrumentSlot {
             region_gain: 1.0,
             region_adsr: None,
             region_filter: None,
+            region_loop: None,
             age: 0,
             filter: Svf::new(),
             formant: FormantShifter::new(),
@@ -413,6 +423,30 @@ impl SampleInstrumentVoice {
                     )),
                     _ => None,
                 };
+                // Per-region loop override.  `Some` only when the
+                // region declares a real loop mode (Continuous /
+                // Sustain) AND the SHDR / SFZ supplied a usable
+                // loop window.  NoLoop / OneShot fall back to None
+                // so the playback path treats the slot as a one-shot
+                // (read to sample end, then enter Release).
+                let buf_n = r.samples.len();
+                let region_loop = match r.region.loop_mode {
+                    crate::state::sfz::SfzLoopMode::LoopContinuous
+                    | crate::state::sfz::SfzLoopMode::LoopSustain => {
+                        let ls = r.region.loop_start.unwrap_or(0) as usize;
+                        let le = r
+                            .region
+                            .loop_end
+                            .map(|v| v as usize)
+                            .unwrap_or(buf_n.saturating_sub(1));
+                        if le > ls + 1 && le < buf_n {
+                            Some((r.region.loop_mode, ls, le))
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
                 pending[count] = Some(TriggerShape {
                     samples: r.samples.clone(),
                     root_freq: midi_to_hz_tuned(r.region.pitch_keycenter, tuning).max(20.0),
@@ -420,6 +454,7 @@ impl SampleInstrumentVoice {
                     region_gain: 10.0_f32.powf(v / 20.0) * cf_gain,
                     region_adsr,
                     region_filter,
+                    region_loop,
                 });
                 count += 1;
             }
@@ -439,6 +474,7 @@ impl SampleInstrumentVoice {
                 // immediately.  No region overrides apply here.
                 region_adsr: None,
                 region_filter: None,
+                region_loop: None,
             };
             self.fire_slot(&shape, accent);
         }
@@ -457,6 +493,7 @@ impl SampleInstrumentVoice {
         slot.region_gain = shape.region_gain;
         slot.region_adsr = shape.region_adsr;
         slot.region_filter = shape.region_filter;
+        slot.region_loop = shape.region_loop;
         slot.pos = 0.0;
         slot.adsr_stage = AdsrStage::Attack;
         slot.adsr_value = 0.0;
@@ -633,10 +670,30 @@ impl SampleInstrumentVoice {
             rate *= flutter_factor;
         }
 
-        let ls = (p.sample_loop_start.clamp(0.0, 1.0) * n as f32) as usize;
-        let le_raw = (p.sample_loop_end.clamp(0.0, 1.0) * n as f32) as usize;
-        let le = le_raw.min(n.saturating_sub(1));
-        let loop_active = p.sample_loop_enabled && le > ls + 1;
+        // Resolve loop bounds + active flag.  Per-region override
+        // (SFZ / SF2 path) wins when present; falls back to the
+        // global `sample_loop_*` knobs for the single-WAV path.
+        // LoopSustain mode releases the loop hold once the slot's
+        // gate flips false — at that point the read head spills past
+        // `le` and the trailing tail plays through to sample end
+        // (the standard SF2 "loop until release" semantics).
+        let (ls, le, loop_active) = if let Some((mode, rl_s, rl_e)) = slot.region_loop {
+            let mode_loops = match mode {
+                crate::state::sfz::SfzLoopMode::LoopContinuous => true,
+                crate::state::sfz::SfzLoopMode::LoopSustain => slot.gate,
+                _ => false,
+            };
+            (
+                rl_s.min(n.saturating_sub(2)),
+                rl_e.min(n.saturating_sub(1)),
+                mode_loops && rl_e > rl_s + 1,
+            )
+        } else {
+            let ls = (p.sample_loop_start.clamp(0.0, 1.0) * n as f32) as usize;
+            let le_raw = (p.sample_loop_end.clamp(0.0, 1.0) * n as f32) as usize;
+            let le = le_raw.min(n.saturating_sub(1));
+            (ls, le, p.sample_loop_enabled && le > ls + 1)
+        };
 
         let pos_idx = (slot.pos as usize).min(n - 1);
         let frac = slot.pos - pos_idx as f32;

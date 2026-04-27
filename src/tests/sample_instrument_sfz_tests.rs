@@ -422,4 +422,190 @@ mod sample_instrument_sfz_mode_tests {
             "default ampeg should use global knob — short release should fire"
         );
     }
+
+    /// LoopContinuous: with global loop disabled, the per-region loop
+    /// override should still keep the slot reading inside the loop
+    /// window rather than draining to silence at sample end.  The
+    /// previous behaviour (always honour the global `loop_enabled`
+    /// knob) made SF2 sustained patches with `sampleModes = 1` go
+    /// silent on long-held notes.
+    #[test]
+    fn region_loop_continuous_overrides_global_loop_disabled() {
+        let mut v = SampleInstrumentVoice::new();
+        // Region carries an explicit LoopContinuous loop window; the
+        // sample buffer is short enough that without looping the
+        // playhead would have walked past the end inside ~64 ms.
+        let mut r = SfzRegion {
+            lokey: 60,
+            hikey: 60,
+            pitch_keycenter: 60,
+            loop_mode: crate::state::sfz::SfzLoopMode::LoopContinuous,
+            loop_start: Some(64),
+            loop_end: Some(192),
+            ..Default::default()
+        };
+        r.sample_path = std::path::PathBuf::from("/loop.wav");
+        let buf: Vec<f32> = (0..256).map(|i| (i as f32 * 0.01).sin() * 0.5).collect();
+        v.load_sfz(vec![SfzRegionRuntime {
+            region: r,
+            samples: Arc::new(buf),
+        }]);
+
+        // Disable global loop so the only path that keeps the slot
+        // alive is the per-region override.
+        let mut p = make_params();
+        p.sample_loop_enabled = false;
+        p.sample_volume = 1.0;
+        p.sample_attack = 0.0;
+        p.sample_release = 0.5;
+
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+        );
+        // Run ~250 ms — far longer than the 256-sample buffer would
+        // play unlooped at 48 kHz.  Active output post-buffer-end
+        // proves the loop override is the load-bearing path.
+        let sr = 48_000.0;
+        let mut total_energy = 0.0_f32;
+        for _ in 0..12_000 {
+            let s = v.process(sr, &p);
+            total_energy += s * s;
+        }
+        assert!(
+            total_energy > 0.05,
+            "region LoopContinuous should keep producing audio (energy {total_energy})"
+        );
+    }
+
+    /// LoopSustain: while gate held, slot loops inside the region's
+    /// window.  After gate_off the loop is released and the playhead
+    /// spills past `le` toward sample end — the standard SF2 "loop
+    /// until release" semantics.
+    #[test]
+    fn region_loop_sustain_releases_after_gate_off() {
+        let mut v = SampleInstrumentVoice::new();
+        let mut r = SfzRegion {
+            lokey: 60,
+            hikey: 60,
+            pitch_keycenter: 60,
+            loop_mode: crate::state::sfz::SfzLoopMode::LoopSustain,
+            loop_start: Some(32),
+            loop_end: Some(96),
+            ..Default::default()
+        };
+        r.sample_path = std::path::PathBuf::from("/sustain.wav");
+        let buf: Vec<f32> = vec![0.4; 256];
+        v.load_sfz(vec![SfzRegionRuntime {
+            region: r,
+            samples: Arc::new(buf),
+        }]);
+
+        let mut p = make_params();
+        p.sample_loop_enabled = false;
+        p.sample_volume = 1.0;
+        p.sample_attack = 0.0;
+        // Snappy release so the post-gate-off ADSR doesn't dominate
+        // the test budget — we're checking the loop release behaviour,
+        // not the envelope's tail.
+        p.sample_release = 0.01;
+
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+        );
+        // While gate held, the slot loops inside [32, 96] — the
+        // playhead should still be alive after many buffer-lengths
+        // worth of samples.
+        let sr = 48_000.0;
+        let mut held_energy = 0.0_f32;
+        for _ in 0..6_000 {
+            let s = v.process(sr, &p);
+            held_energy += s * s;
+        }
+        assert!(
+            held_energy > 0.05,
+            "LoopSustain should hold the loop while gate is true (energy {held_energy})"
+        );
+
+        // Release the gate; the loop is now released and the slot
+        // plays through to sample end then enters Release silence.
+        // After ADSR release time + ~10 ms of buffer drain the slot
+        // should be inactive.
+        v.gate_off();
+        // Drain past sample-end + release tail (≥25 ms with knob=0.01).
+        for _ in 0..24_000 {
+            let _ = v.process(sr, &p);
+        }
+        let mut late_energy = 0.0_f32;
+        for _ in 0..1_000 {
+            let s = v.process(sr, &p);
+            late_energy += s * s;
+        }
+        assert!(
+            late_energy < 1e-3,
+            "LoopSustain should release after gate_off (late energy {late_energy})"
+        );
+    }
+
+    /// NoLoop region: no loop override emitted, so the slot drains
+    /// to sample end and enters Release per the existing single-shot
+    /// path.  Sanity check that we didn't accidentally loop everything.
+    #[test]
+    fn region_no_loop_drains_to_silence() {
+        let mut v = SampleInstrumentVoice::new();
+        let mut r = SfzRegion {
+            lokey: 60,
+            hikey: 60,
+            pitch_keycenter: 60,
+            loop_mode: crate::state::sfz::SfzLoopMode::NoLoop,
+            loop_start: Some(64),
+            loop_end: Some(192),
+            ..Default::default()
+        };
+        r.sample_path = std::path::PathBuf::from("/noloop.wav");
+        let buf: Vec<f32> = vec![0.4; 256];
+        v.load_sfz(vec![SfzRegionRuntime {
+            region: r,
+            samples: Arc::new(buf),
+        }]);
+
+        let mut p = make_params();
+        // Explicitly disable global loop so the only thing that could
+        // hold the slot alive past the buffer is the override — which
+        // must NOT fire for a NoLoop region.
+        p.sample_loop_enabled = false;
+        p.sample_volume = 1.0;
+        p.sample_release = 0.01;
+
+        v.trigger(
+            60,
+            crate::audio::dsp::TuningSystem::TwelveTet,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+        );
+        let sr = 48_000.0;
+        for _ in 0..20_000 {
+            let _ = v.process(sr, &p);
+        }
+        let mut late_energy = 0.0_f32;
+        for _ in 0..2_000 {
+            let s = v.process(sr, &p);
+            late_energy += s * s;
+        }
+        assert!(
+            late_energy < 1e-3,
+            "NoLoop region must not loop (late energy {late_energy})"
+        );
+    }
 }

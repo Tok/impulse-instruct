@@ -289,6 +289,11 @@ const GEN_RELEASE_VOL_ENV: u16 = 38;
 const GEN_INITIAL_FILTER_FC: u16 = 8;
 const GEN_INITIAL_FILTER_Q: u16 = 9;
 
+/// Generator 54 — `sampleModes`.  Bitfield (bits 0–1):
+///   0 = no loop, 1 = loop continuously, 2 = no loop (alt encoding),
+///   3 = loop while gate held then play release tail.
+const GEN_SAMPLE_MODES: u16 = 54;
+
 /// Generator accumulator — collects every relevant generator value as
 /// we walk a zone, then `materialise` builds the final SfzRegion at
 /// instrument-zone time.  Defaults match the SF2 spec defaults so a
@@ -322,6 +327,11 @@ struct Generators {
     /// Filter resonance peak gain in centibels of attenuation
     /// (Q_linear = 10^(cB / 200)).  `None` = generator absent.
     initial_filter_q_cb: Option<i16>,
+    /// `sampleModes` (gen 54) — controls loop behaviour.  `None` =
+    /// generator absent, which the SF2 spec treats as "no loop"
+    /// regardless of any loop window in the SHDR.  Stored as the
+    /// raw u16 so build_region maps it to `SfzLoopMode`.
+    sample_modes: Option<u16>,
 }
 
 impl Default for Generators {
@@ -342,6 +352,7 @@ impl Default for Generators {
             release_vol_env_tc: None,
             initial_filter_fc_cents: None,
             initial_filter_q_cb: None,
+            sample_modes: None,
         }
     }
 }
@@ -414,6 +425,13 @@ impl Generators {
             GEN_INITIAL_FILTER_Q => {
                 if let Ok(b) = amount.try_into() {
                     self.initial_filter_q_cb = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_SAMPLE_MODES => {
+                if let Ok(b) = amount.try_into() {
+                    // Stored as a u16 — the spec only defines bits 0–1
+                    // but the field is a 16-bit word.
+                    self.sample_modes = Some(u16::from_le_bytes(b));
                 }
             }
             _ => {}
@@ -604,10 +622,15 @@ fn build_region(
         _ => (0.0, 0.0, None),
     };
 
-    // Build the SfzRegion.  Loop fields are passed through so a
-    // future loop-aware DSP path can use them; the current
-    // SampleInstrument always loops, which matches the SF2 default
-    // for tonal samples.
+    // sampleModes (gen 54) → SfzLoopMode: 1=Continuous, 3=Sustain,
+    // 0/2/absent=NoLoop.  Audio path consumes loop_mode + the
+    // SHDR-supplied loop window.
+    let loop_mode = match gens.sample_modes {
+        Some(1) => crate::state::sfz::SfzLoopMode::LoopContinuous,
+        Some(3) => crate::state::sfz::SfzLoopMode::LoopSustain,
+        _ => crate::state::sfz::SfzLoopMode::NoLoop,
+    };
+
     let mut region = SfzRegion {
         sample_path: std::path::PathBuf::from(format!("«sf2:sample{sample_idx}»")),
         lokey: gens.lokey,
@@ -615,6 +638,7 @@ fn build_region(
         pitch_keycenter: root,
         lovel: gens.lovel,
         hivel: gens.hivel.max(gens.lovel),
+        loop_mode,
         loop_start: Some(loop_start.saturating_sub(start)),
         loop_end: Some(loop_end.saturating_sub(start)),
         // Convert SF2 attenuation (centibels, 0.1 dB) to volume_db.

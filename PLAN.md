@@ -18,9 +18,6 @@ Pick from the top down; each row is one focused commit.
   modEnvToFilterFc), modulation LFO (modLfoToPitch /
   modLfoToFilterFc / modLfoToVolume), vibrato LFO
   (vibLfoToPitch).
-- [ ] **Sample modes** — one-shot / loop continuous / loop until
-  release.  Tied to the `sampleModes` (54) generator + the SfzRegion
-  loop fields the parser already populates.
 
 ---
 
