@@ -800,7 +800,7 @@ pub fn load_wav_to_44100(path: &str) -> Option<Arc<Vec<f32>>> {
                 break;
             }
             let raw = i16::from_le_bytes(bytes[off..off + 2].try_into().ok()?);
-            sum += raw as f32 / 32768.0;
+            sum += audio_load::i16_pcm_to_f32(raw);
         }
         mono.push(sum / channels as f32);
     }
@@ -893,7 +893,7 @@ pub fn load_wav_stereo_to_engine(path: &str) -> Option<(Arc<Vec<f32>>, u8)> {
                 break;
             }
             let raw = i16::from_le_bytes(bytes[off..off + 2].try_into().ok()?);
-            interleaved.push(raw as f32 / 32768.0);
+            interleaved.push(audio_load::i16_pcm_to_f32(raw));
         }
     }
 

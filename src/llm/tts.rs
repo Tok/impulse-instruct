@@ -158,7 +158,7 @@ fn read_wav_f32_bytes(bytes: &[u8], target_sr: u32) -> Option<Vec<f32>> {
                 break;
             }
             let raw = i16::from_le_bytes(bytes[off..off + 2].try_into().ok()?);
-            sum += raw as f32 / 32768.0;
+            sum += crate::audio::audio_load::i16_pcm_to_f32(raw);
         }
         mono.push(sum / channels as f32);
     }

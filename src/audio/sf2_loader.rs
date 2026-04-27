@@ -27,7 +27,7 @@
 use std::sync::Arc;
 
 use crate::audio::SAMPLE_RATE_HZ;
-use crate::audio::audio_load::resample_mono_linear;
+use crate::audio::audio_load::{i16_pcm_to_f32, resample_mono_linear};
 use crate::audio::dsp::sample_instrument::SfzRegionRuntime;
 use crate::state::sfz::SfzRegion;
 
@@ -394,7 +394,7 @@ fn build_region(
     } else {
         let mut mono: Vec<f32> = Vec::with_capacity(raw.len() / 2);
         for chunk in raw.chunks_exact(2) {
-            let s = i16::from_le_bytes([chunk[0], chunk[1]]) as f32 / 32768.0;
+            let s = i16_pcm_to_f32(i16::from_le_bytes([chunk[0], chunk[1]]));
             mono.push(s);
         }
         let resampled = if sample_rate == SAMPLE_RATE_HZ {

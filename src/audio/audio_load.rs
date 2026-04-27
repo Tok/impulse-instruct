@@ -161,7 +161,7 @@ fn load_aiff_to_engine(path: &str) -> Option<Arc<Vec<f32>>> {
             // AIFF is big-endian; that's the only difference from
             // the WAV PCM path.
             let raw = i16::from_be_bytes(bytes[off..off + 2].try_into().ok()?);
-            sum += raw as f32 / 32768.0;
+            sum += i16_pcm_to_f32(raw);
         }
         mono.push(sum / channels as f32);
     }
@@ -201,6 +201,17 @@ pub(crate) fn resample_mono_linear(mono: &[f32], src_rate: u32) -> Vec<f32> {
             a + (b - a) * frac
         })
         .collect()
+}
+
+/// Convert one signed 16-bit PCM sample into a normalised f32 in
+/// `[-1.0, 1.0)`.  Divisor is `2^15 = 32768.0`, the magnitude of
+/// `i16::MIN` — full-scale PCM (`i16::MAX = 32767`) maps to
+/// `0.999969…`, just under unity, matching every other PCM-normalising
+/// audio library.  Used by the WAV / FLAC / AIFF / SF2 loaders + the
+/// scope ring capture + the NeuTTS i16 decoder.
+#[inline]
+pub(crate) fn i16_pcm_to_f32(raw: i16) -> f32 {
+    raw as f32 / 32768.0
 }
 
 /// Decode an AIFF 80-bit IEEE 754 extended-precision float into a
@@ -244,6 +255,20 @@ fn aiff_extended_to_u32(bytes: &[u8]) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `i16_pcm_to_f32` maps the canonical PCM landmarks: 0 → 0.0,
+    /// peak positive (32767) → just under 1.0, full negative
+    /// (-32768) → exactly −1.0.  Sub-range linearity follows from
+    /// the divisor; pinning the endpoints is enough to catch a
+    /// future drift on the constant.
+    #[test]
+    fn i16_pcm_to_f32_endpoints() {
+        assert_eq!(i16_pcm_to_f32(0), 0.0);
+        assert_eq!(i16_pcm_to_f32(i16::MIN), -1.0);
+        assert!((i16_pcm_to_f32(i16::MAX) - 0.999_969_5).abs() < 1e-5);
+        assert!((i16_pcm_to_f32(16384) - 0.5).abs() < 1e-6);
+        assert!((i16_pcm_to_f32(-16384) - (-0.5)).abs() < 1e-6);
+    }
 
     #[test]
     fn aiff_extended_decodes_44100() {
