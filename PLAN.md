@@ -13,13 +13,12 @@ Pick from the top down; each row is one focused commit.
 
 ### SF2 follow-up
 
-- [ ] **Modulator / LFO generators — remaining targets**.  Pitch
-  targets shipped (modLfoToPitch + vibLfoToPitch).  Remaining:
-  modLfoToFilterFc, modLfoToVolume, modulation envelope
-  (modEnvToPitch / modEnvToFilterFc).  Each requires per-slot
-  state + per-sample apply in the SampleInstrument voice; mod
-  envelope also needs the AHDSR state machine (5 timecents fields:
-  delay/attack/hold/decay/release + sustain attenuation).
+(SF2 modulator + envelope surface fully wired — pitch / filter / volume
+LFO targets and the five-stage modulation envelope all shipped.  Next
+candidates would be SF2 modulators 8.2 ("default modulators" — CC1
+mod-wheel → vib-LFO depth, CC11 expression, etc.) but those are an
+orthogonal subsystem from the generator-driven envelope work and not
+on the critical path for any current demo.)
 
 ---
 
@@ -33,7 +32,11 @@ the speculative reorgs.
   `state/transitions.rs`, `audio/dsp/params.rs`, `llm/lanes.rs`,
   `sequencer/mod.rs`, `ui/rack_content_fx_extras.rs`,
   `audio/analysis.rs`, `llm/mod.rs`.  Split sibling-style only
-  when an actual edit pushes one over.
+  when an actual edit pushes one over.  (Most recent: SF2 mod-env
+  ship pushed `audio/dsp/sample_instrument.rs` past 1000 lines;
+  resolved by lifting the modulation surface — `RegionLfos` +
+  `LfoSlotState` + `RegionModEnv` + `ModEnvState` — into a sibling
+  `sample_instrument_modulation.rs`, leaving the voice file at 984.)
 - [ ] **Shared `resample_mono`** — `audio/audio_load.rs` and
   `audio/sf2_loader.rs` both carry near-identical linear-interp
   resamplers.  Lift into a shared helper once a third caller
