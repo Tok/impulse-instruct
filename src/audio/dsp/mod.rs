@@ -62,8 +62,8 @@ use conv_reverb::ConvReverb;
 use dsp_util::*;
 pub use dsp_util::{
     ATTACK_HANDOVER_VALUE, MIX_BYPASS_THRESHOLD, NYQUIST_GUARD_FACTOR, PWM_MAX, PWM_MIN,
-    RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, TuningSystem, db_to_lin, hz_to_midi, midi_to_hz,
-    midi_to_hz_f32, midi_to_hz_tuned, nyquist_guard, one_pole_coef, one_pole_lp_alpha,
+    RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, TuningSystem, db_to_lin, hz_to_midi, lin_to_db,
+    midi_to_hz, midi_to_hz_f32, midi_to_hz_tuned, nyquist_guard, one_pole_coef, one_pole_lp_alpha,
 };
 use fm_ops::FmOpsVoice;
 use fx::*;

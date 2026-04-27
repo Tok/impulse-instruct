@@ -131,7 +131,7 @@ fn to_db(linear: f32) -> f32 {
     if linear <= 0.0 {
         -96.0
     } else {
-        (20.0 * linear.log10()).max(-96.0)
+        crate::audio::dsp::lin_to_db(linear).max(-96.0)
     }
 }
 

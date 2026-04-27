@@ -381,7 +381,7 @@ pub fn filter_response(
             FilterMode::Lowpass => mag_lp,
         };
 
-        let db = 20.0 * mag.max(0.001).log10();
+        let db = crate::audio::dsp::lin_to_db(mag.max(0.001));
         let db_norm = ((db + 48.0) / 60.0).clamp(0.0, 1.0);
 
         let x = rect.min.x + pad + t * inner_w;

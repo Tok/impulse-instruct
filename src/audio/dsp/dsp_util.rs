@@ -141,6 +141,18 @@ pub fn db_to_lin(db: f32) -> f32 {
     10.0_f32.powf(db / 20.0)
 }
 
+/// Convert a linear amplitude into decibels via `20 · log10(lin)`.
+/// Inverse of [`db_to_lin`].  Caller is responsible for flooring
+/// the input (or the output) — at `lin = 0` this returns `-inf`,
+/// and the call sites differ on what floor / clamp they want
+/// (typically `.max(1e-9)` on the input side or `.max(-96.0)` on
+/// the output side, depending on whether the dB value or the linear
+/// value is the meaningful unit downstream).
+#[inline]
+pub fn lin_to_db(lin: f32) -> f32 {
+    20.0 * lin.log10()
+}
+
 /// Convert frequency in Hz to fractional MIDI note number (12-TET,
 /// A=`A4_HZ`).  Inverse of `midi_to_hz_f32`; callers round/clamp as
 /// needed.

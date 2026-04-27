@@ -52,7 +52,7 @@ pub fn linear_to_gr_db(linear: f32) -> f32 {
     if linear <= 1e-6 {
         -60.0
     } else {
-        (20.0 * linear.log10()).clamp(-60.0, 0.0)
+        crate::audio::dsp::lin_to_db(linear).clamp(-60.0, 0.0)
     }
 }
 

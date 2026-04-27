@@ -10,8 +10,8 @@
 //     is not.
 
 use crate::audio::dsp::{
-    NYQUIST_GUARD_FACTOR, db_to_lin, hz_to_midi, midi_to_hz, midi_to_hz_f32, nyquist_guard,
-    one_pole_coef, one_pole_lp_alpha,
+    NYQUIST_GUARD_FACTOR, db_to_lin, hz_to_midi, lin_to_db, midi_to_hz, midi_to_hz_f32,
+    nyquist_guard, one_pole_coef, one_pole_lp_alpha,
 };
 use crate::state::LfoTarget;
 use crate::state::fx_plan::kind_is_fx;
@@ -252,6 +252,43 @@ fn db_to_lin_negation_is_reciprocal() {
             up * down
         );
     }
+}
+
+// ─── lin_to_db ─────────────────────────────────────────────────────────────
+
+/// Unity (1.0 linear) maps to 0 dB exactly — the reference point.
+#[test]
+fn lin_to_db_unity_is_zero() {
+    assert_eq!(lin_to_db(1.0), 0.0);
+}
+
+/// Round-trips with `db_to_lin` for any finite dB value within
+/// audible range.  Pins the inverse-pair invariant so a formula
+/// drift on one side surfaces as a failed round-trip.
+#[test]
+fn lin_to_db_round_trips_through_db_to_lin() {
+    for &db in &[-96.0_f32, -48.0, -6.0, 0.0, 6.0, 24.0, 48.0] {
+        let lin = db_to_lin(db);
+        let back = lin_to_db(lin);
+        assert!(
+            (back - db).abs() < 1e-3,
+            "round-trip dB drifted at {db}: got {back}"
+        );
+    }
+}
+
+/// Doubling linear amplitude is +6.0206 dB (the canonical "double =
+/// 6 dB" landmark).  Tighter than `db_to_lin_known_values` because
+/// here we test the *exact* lin→dB direction.
+#[test]
+fn lin_to_db_doubling_is_six_db() {
+    let two = lin_to_db(2.0);
+    assert!((two - 6.020_6).abs() < 1e-3, "lin_to_db(2.0) was {two}");
+    let half = lin_to_db(0.5);
+    assert!(
+        (half - (-6.020_6)).abs() < 1e-3,
+        "lin_to_db(0.5) was {half}"
+    );
 }
 
 // ─── lfo_target_to_u8 ───────────────────────────────────────────────────────

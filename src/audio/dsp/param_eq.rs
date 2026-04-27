@@ -219,7 +219,7 @@ pub fn cascade_db(bands: &[ParamEqBand], sr: f32, freq_hz: f32) -> f32 {
     for b in bands {
         let mag = band_magnitude(b, sr, freq_hz);
         if mag > 1e-9 {
-            total_db += 20.0 * mag.log10();
+            total_db += super::dsp_util::lin_to_db(mag);
         }
     }
     total_db

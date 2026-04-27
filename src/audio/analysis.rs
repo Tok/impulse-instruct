@@ -295,7 +295,7 @@ fn to_db(linear: f32) -> f32 {
     if linear <= 1e-9 {
         return -96.0;
     }
-    (20.0 * linear.log10()).max(-96.0)
+    crate::audio::dsp::lin_to_db(linear).max(-96.0)
 }
 
 // ─── Stereo correlation ──────────────────────────────────────────────────────

@@ -1,5 +1,4 @@
-use super::dsp_util::nyquist_guard;
-use super::dsp_util::{MIX_BYPASS_THRESHOLD, db_to_lin};
+use super::dsp_util::{MIX_BYPASS_THRESHOLD, db_to_lin, lin_to_db, nyquist_guard};
 // ─── FX DSP structs ───────────────────────────────────────────────────────────
 // Pure numeric DSP — no allocations inside process().
 
@@ -462,7 +461,7 @@ impl Compressor {
         } else {
             *env * rel + level * (1.0 - rel)
         };
-        let env_db = 20.0 * env.max(1e-9).log10();
+        let env_db = lin_to_db(env.max(1e-9));
         let gain_db = if env_db > thresh_db {
             (env_db - thresh_db) * (1.0 - 1.0 / ratio_val)
         } else {
@@ -507,7 +506,7 @@ impl Compressor {
             } else {
                 self.env * rel + level * (1.0 - rel)
             };
-            let env_db = 20.0 * self.env.max(1e-9).log10();
+            let env_db = lin_to_db(self.env.max(1e-9));
             let gain_db = if env_db > thresh_db {
                 (env_db - thresh_db) * (1.0 - 1.0 / ratio_val)
             } else {
