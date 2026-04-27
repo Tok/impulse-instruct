@@ -131,7 +131,7 @@ impl DspState {
                 p.svf_cutoff,
                 p.svf_resonance,
                 p.svf_drive,
-                p.svf_mode,
+                super::fx_extras::SvfMode::from_u8(p.svf_mode),
                 p.svf_mix,
                 sr,
             ),

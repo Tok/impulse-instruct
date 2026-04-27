@@ -798,28 +798,36 @@ mod limiter_tests {
 
 #[cfg(test)]
 mod svf_tests {
-    use crate::audio::dsp::fx_extras::Svf;
+    use crate::audio::dsp::fx_extras::{Svf, SvfMode};
 
     #[test]
     fn zero_mix_returns_dry() {
         let mut f = Svf::new();
-        assert_eq!(f.process(0.4, 0.5, 0.5, 0.0, 0, 0.0, 48_000.0), 0.4);
+        assert_eq!(
+            f.process(0.4, 0.5, 0.5, 0.0, SvfMode::Lowpass, 0.0, 48_000.0),
+            0.4
+        );
     }
 
     #[test]
     fn full_wet_each_mode_is_finite_and_audible() {
-        for mode in 0..=3u8 {
+        for mode in [
+            SvfMode::Lowpass,
+            SvfMode::Bandpass,
+            SvfMode::Highpass,
+            SvfMode::Notch,
+        ] {
             let mut f = Svf::new();
             let mut nonzero = false;
             for i in 0..4_000 {
                 let x = 0.5 * (i as f32 * 0.05).sin();
                 let out = f.process(x, 0.7, 0.4, 0.0, mode, 1.0, 48_000.0);
-                assert!(out.is_finite(), "mode {mode} produced NaN");
+                assert!(out.is_finite(), "mode {mode:?} produced NaN");
                 if out.abs() > 0.01 {
                     nonzero = true;
                 }
             }
-            assert!(nonzero, "SVF mode {mode} fell silent");
+            assert!(nonzero, "SVF mode {mode:?} fell silent");
         }
     }
 }

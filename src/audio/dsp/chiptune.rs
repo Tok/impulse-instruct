@@ -279,7 +279,7 @@ impl ChiptuneVoice {
             p.chiptune_filter_cutoff,
             p.chiptune_filter_resonance,
             0.0, // no drive — kept clean
-            p.chiptune_filter_mode,
+            super::fx_extras::SvfMode::from_u8(p.chiptune_filter_mode),
             1.0, // SVF process always outputs full wet; we
             // crossfade with `dry` below.
             sr,

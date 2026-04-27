@@ -214,7 +214,7 @@ impl Svf {
     /// `cutoff`: 0–1 → 20 Hz–18 kHz logarithmic.
     /// `resonance`: 0–1 → Q ≈ 0.5..20.
     /// `drive`: 0–1 → 0..6 pre-saturation.
-    /// `mode`: 0=LP, 1=BP, 2=HP, 3=Notch.
+    /// `mode`: see [`SvfMode`].
     /// `mix`: 0–1 wet/dry.
     pub(crate) fn process(
         &mut self,
@@ -222,7 +222,7 @@ impl Svf {
         cutoff: f32,
         resonance: f32,
         drive: f32,
-        mode: u8,
+        mode: SvfMode,
         mix: f32,
         sr: f32,
     ) -> f32 {
@@ -251,13 +251,48 @@ impl Svf {
             let high = xin - self.low - damp * self.band;
             self.band += f * high;
             wet = match mode {
-                0 => self.low,
-                1 => self.band,
-                2 => high,
-                _ => self.low + high, // notch = LP + HP
+                SvfMode::Lowpass => self.low,
+                SvfMode::Bandpass => self.band,
+                SvfMode::Highpass => high,
+                SvfMode::Notch => self.low + high,
             };
         }
         input * (1.0 - mix) + wet * mix
+    }
+}
+
+/// SVF filter mode.  Discriminants match the persisted `u8` in
+/// `AudioParams.svf_mode` / `chiptune_filter_mode` / `sample_filter_mode`
+/// alongside the LLM's JSON schema (`"minimum": 0, "maximum": 3`) so
+/// old session files load and audio-thread snapshots stay byte-stable.
+///
+/// Replaces a previous `match mode: u8 { 0 => ..., 1 => ..., ... }`
+/// pattern that was duplicated at every Svf::process call site.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub(crate) enum SvfMode {
+    #[default]
+    Lowpass = 0,
+    Bandpass = 1,
+    Highpass = 2,
+    /// Notch ≈ LP + HP at the same cutoff — the residual once the
+    /// resonant peak is removed.  Surfaced by the global SVF FX
+    /// module but not by the per-voice filter UIs.
+    Notch = 3,
+}
+
+impl SvfMode {
+    /// Decode an audio-thread `u8` mode.  Anything outside 0..=3
+    /// falls back to the historical "notch" branch that the prior
+    /// `_ =>` arm produced — preserves bit-identical output for
+    /// stored snapshots that survived a clamp narrowing.
+    pub(crate) fn from_u8(v: u8) -> Self {
+        match v {
+            0 => Self::Lowpass,
+            1 => Self::Bandpass,
+            2 => Self::Highpass,
+            _ => Self::Notch,
+        }
     }
 }
 
@@ -624,5 +659,43 @@ impl RevDelay {
         }
 
         input * (1.0 - mix) + wet * mix
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `SvfMode::from_u8` covers the four spec values exactly + falls
+    /// back to `Notch` for any out-of-range u8 (matches the historical
+    /// `_ =>` arm before this enum existed, so stored snapshots stay
+    /// bit-identical after the migration).
+    #[test]
+    fn svf_mode_from_u8_known_values() {
+        assert_eq!(SvfMode::from_u8(0), SvfMode::Lowpass);
+        assert_eq!(SvfMode::from_u8(1), SvfMode::Bandpass);
+        assert_eq!(SvfMode::from_u8(2), SvfMode::Highpass);
+        assert_eq!(SvfMode::from_u8(3), SvfMode::Notch);
+    }
+
+    #[test]
+    fn svf_mode_from_u8_out_of_range_falls_back_to_notch() {
+        for v in [4_u8, 99, 255] {
+            assert_eq!(SvfMode::from_u8(v), SvfMode::Notch);
+        }
+    }
+
+    /// Discriminants match the persisted u8: round-tripping `as u8`
+    /// then `from_u8` is the identity for the four canonical values.
+    #[test]
+    fn svf_mode_u8_round_trip_is_identity() {
+        for m in [
+            SvfMode::Lowpass,
+            SvfMode::Bandpass,
+            SvfMode::Highpass,
+            SvfMode::Notch,
+        ] {
+            assert_eq!(SvfMode::from_u8(m as u8), m);
+        }
     }
 }

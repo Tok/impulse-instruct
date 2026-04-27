@@ -20,7 +20,7 @@ use super::AudioParams;
 use super::dsp_util::{ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD};
 use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
 use super::formant_shifter::FormantShifter;
-use super::fx_extras::Svf;
+use super::fx_extras::{Svf, SvfMode};
 use super::sample_instrument_modulation::{
     LfoSlotState, ModEnvState, RegionLfos, RegionModEnv, cb_to_linear_gain,
     cents_to_exact_rate_factor, cents_to_taylor_rate_factor, filter_cents_to_knob_delta,
@@ -65,7 +65,7 @@ struct TriggerShape {
     /// `mix = 1` so an explicit SFZ / SF2 filter applies regardless
     /// of the user's global filter-mix setting.  All values are
     /// pre-converted to the SVF's 0..1 knob range at trigger time.
-    region_filter: Option<(f32, f32, u8)>,
+    region_filter: Option<(f32, f32, SvfMode)>,
     /// Per-region loop override — `(mode, start_sample, end_sample)`.
     /// `Some` = the SFZ / SF2 region carries explicit loop info;
     /// the audio thread uses these bounds + mode and ignores the
@@ -104,15 +104,15 @@ fn db_to_svf_resonance_knob(db: f32) -> f32 {
     ((q_linear - 0.5) / 19.5).clamp(0.0, 1.0)
 }
 
-/// Map an `SfzFilType` to the `Svf::process` mode byte (LP=0, BP=1,
-/// HP=2 — same ordering as the SVF API + the existing global
-/// `sample_filter_mode`).
-fn sfz_fil_type_to_svf_mode(t: crate::state::sfz::SfzFilType) -> u8 {
+/// Map an `SfzFilType` to the `Svf::process` mode.  SFZ only defines
+/// the three pole-pair filter types (LP/BP/HP); SVF's Notch isn't
+/// reachable from an SFZ region.
+fn sfz_fil_type_to_svf_mode(t: crate::state::sfz::SfzFilType) -> SvfMode {
     use crate::state::sfz::SfzFilType;
     match t {
-        SfzFilType::Lpf2p => 0,
-        SfzFilType::Bpf2p => 1,
-        SfzFilType::Hpf2p => 2,
+        SfzFilType::Lpf2p => SvfMode::Lowpass,
+        SfzFilType::Bpf2p => SvfMode::Bandpass,
+        SfzFilType::Hpf2p => SvfMode::Highpass,
     }
 }
 
@@ -149,7 +149,7 @@ struct SampleInstrumentSlot {
     /// `Some` forces the SVF to apply with the region's settings
     /// regardless of the global filter-mix knob; `None` defers to
     /// the global `sample_filter_*` params.
-    region_filter: Option<(f32, f32, u8)>,
+    region_filter: Option<(f32, f32, SvfMode)>,
     /// Per-slot loop override — see `TriggerShape.region_loop`.
     region_loop: Option<(crate::state::sfz::SfzLoopMode, usize, usize)>,
     /// Per-slot SF2 LFO modulation — see `TriggerShape.region_lfos`.
@@ -899,7 +899,7 @@ impl SampleInstrumentVoice {
                 p.sample_filter_cutoff,
                 p.sample_filter_resonance,
                 0.0,
-                p.sample_filter_mode,
+                SvfMode::from_u8(p.sample_filter_mode),
                 p.sample_filter_mix,
                 sr,
             )
