@@ -67,7 +67,7 @@ pub(super) fn colorize_log(text: &str, _default_color: egui::Color32) -> egui::t
 
     // Hz → chromatic semitone 0..12
     let freq_semitone = |hz: f64| -> u8 {
-        let midi = 69.0 + 12.0 * (hz / 440.0_f64).log2();
+        let midi = crate::audio::dsp::hz_to_midi(hz as f32);
         (midi.round() as i64).rem_euclid(12) as u8
     };
 

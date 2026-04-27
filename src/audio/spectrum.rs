@@ -108,8 +108,7 @@ pub fn spectrum_temperature(magnitudes: &[f32], bin_hz: f32, semi_temps: &[f32; 
             continue;
         }
         let hz = i as f32 * bin_hz;
-        // Hz → fractional MIDI (12-TET, A4 = 440), then rounded pitch class.
-        let semi = (69.0 + 12.0 * (hz / 440.0).log2()).round() as i32;
+        let semi = crate::audio::dsp::hz_to_midi(hz).round() as i32;
         let pc = semi.rem_euclid(12) as usize;
         weighted_sum += w * semi_temps[pc];
         total_weight += w;

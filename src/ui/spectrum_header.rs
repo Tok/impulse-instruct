@@ -97,7 +97,7 @@ pub fn draw_spectrum_bars(
             // norm=0 the bar is `base` gray, at norm=1 it's full Huth.
             let f =
                 ((log_lo + (log_hi - log_lo) * (i as f32 + 0.5) / NUM_BANDS as f32).exp()).max(1.0);
-            let midi = (69.0 + 12.0 * (f / 440.0).log2()).round().clamp(0.0, 127.0) as u8;
+            let midi = crate::audio::dsp::hz_to_midi(f).round().clamp(0.0, 127.0) as u8;
             lerp_color(base, theme::note_color(midi), (norm * 0.85).clamp(0.0, 1.0))
         } else {
             // Pure grayscale: brightness ramps 40..200 with amplitude,

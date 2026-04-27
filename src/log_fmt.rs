@@ -266,7 +266,7 @@ fn note_spans(line: &str) -> Vec<(usize, usize, u8)> {
                 && let Ok(hz) = num_str.parse::<f64>()
                 && hz >= 20.0
             {
-                let midi = 69.0 + 12.0 * (hz / 440.0_f64).log2();
+                let midi = crate::audio::dsp::hz_to_midi(hz as f32);
                 let st = (midi.round() as i64).rem_euclid(12) as u8;
                 out.push((pos, k + 2, st));
                 pos = k + 2;

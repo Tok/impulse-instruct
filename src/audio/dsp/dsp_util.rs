@@ -14,15 +14,33 @@ pub(crate) fn tanh(x: f32) -> f32 {
     x * (27.0 + x2) / (27.0 + 9.0 * x2)
 }
 
-/// Convert MIDI note number to frequency in Hz (12-TET, A4=440).
-pub fn midi_to_hz(note: u8) -> f32 {
-    440.0 * 2.0f32.powf((note as f32 - 69.0) / 12.0)
+/// A4 reference frequency (Hz) and its MIDI note number.  Centralised
+/// so the MIDI ↔ Hz conversions in this module + every caller go
+/// through a single source of truth.  Switching reference (e.g. A=432)
+/// would otherwise mean editing the same magic numbers in a dozen
+/// places.
+pub const A4_HZ: f32 = 440.0;
+pub const A4_MIDI: f32 = 69.0;
+
+/// Convert a fractional MIDI note number to Hz (12-TET, A=`A4_HZ`).
+/// `midi = 69` is the reference; each ±1 = ±1 semitone.  Useful when
+/// the input is already fractional (chord-bank intervals, pitch bend
+/// CV).  For integer MIDI notes the typed [`midi_to_hz`] wrapper is
+/// usually clearer.
+pub fn midi_to_hz_f32(midi: f32) -> f32 {
+    A4_HZ * 2.0f32.powf((midi - A4_MIDI) / 12.0)
 }
 
-/// Convert frequency in Hz to fractional MIDI note number (12-TET, A4=440).
-/// Inverse of `midi_to_hz`; callers round/clamp as needed.
+/// Convert MIDI note number to frequency in Hz (12-TET, A=`A4_HZ`).
+pub fn midi_to_hz(note: u8) -> f32 {
+    midi_to_hz_f32(note as f32)
+}
+
+/// Convert frequency in Hz to fractional MIDI note number (12-TET,
+/// A=`A4_HZ`).  Inverse of `midi_to_hz_f32`; callers round/clamp as
+/// needed.
 pub fn hz_to_midi(hz: f32) -> f32 {
-    69.0 + 12.0 * (hz / 440.0).log2()
+    A4_MIDI + 12.0 * (hz / A4_HZ).log2()
 }
 
 /// Tuning system used by `midi_to_hz_tuned`.  The integer discriminants

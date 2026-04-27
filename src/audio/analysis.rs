@@ -467,12 +467,11 @@ pub fn chroma_from_spectrum(mags: &[f32], bin_hz: f32) -> [f32; 12] {
             continue;
         }
         let lin = 10.0f32.powf(m_db / 20.0);
-        // MIDI = 69 + 12*log2(f/440); split contribution across the two
-        // nearest pitch classes by fractional MIDI so a 440 Hz peak
-        // landing in an off-centre FFT bin (1024-FFT @ 48 kHz has only
-        // ~46 Hz resolution) doesn't round into a neighbouring pitch
-        // class on its own.
-        let midi = 69.0 + 12.0 * (f / 440.0).log2();
+        // Split contribution across the two nearest pitch classes by
+        // fractional MIDI so a 440 Hz peak landing in an off-centre
+        // FFT bin (1024-FFT @ 48 kHz has only ~46 Hz resolution)
+        // doesn't round into a neighbouring pitch class on its own.
+        let midi = crate::audio::dsp::hz_to_midi(f);
         let lo = midi.floor();
         let frac = midi - lo;
         let pc_lo = (lo as i32).rem_euclid(12) as usize;

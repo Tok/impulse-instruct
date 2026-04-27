@@ -28,6 +28,8 @@
 
 use std::f32::consts::TAU;
 
+use super::dsp_util::midi_to_hz_f32;
+
 const NUM_VOICES: usize = 6;
 const NUM_CHORDS: usize = 6;
 
@@ -161,8 +163,7 @@ impl ResBankFx {
             let intervals = &CHORD_INTERVALS[chord_idx as usize];
             for (i, &ivl) in intervals.iter().enumerate() {
                 let midi = (root_midi + ivl as f32).clamp(0.0, 127.0);
-                // Standard MIDI → Hz: 440 * 2^((m-69)/12).
-                let hz = 440.0 * 2.0_f32.powf((midi - 69.0) / 12.0);
+                let hz = midi_to_hz_f32(midi);
                 self.voices[i].set(hz, q, sr);
             }
             self.cached_root = root_clamped;

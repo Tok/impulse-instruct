@@ -9,7 +9,7 @@
 //   • `kind_is_fx` — every FxXxx kind is FX; every voice / non-FX kind
 //     is not.
 
-use crate::audio::dsp::{hz_to_midi, midi_to_hz};
+use crate::audio::dsp::{hz_to_midi, midi_to_hz, midi_to_hz_f32};
 use crate::state::LfoTarget;
 use crate::state::fx_plan::kind_is_fx;
 use crate::state::{ModuleKind, fx_plan};
@@ -42,6 +42,60 @@ fn hz_to_midi_octave_gap_is_twelve_semitones() {
     let lo = hz_to_midi(220.0);
     let hi = hz_to_midi(440.0);
     assert!((hi - lo - 12.0).abs() < 1e-4);
+}
+
+// ─── midi_to_hz_f32 ─────────────────────────────────────────────────────────
+
+/// `midi_to_hz_f32(69.0)` is exactly the A4 reference (440 Hz) — no
+/// integer→float rounding noise to mask a wrong constant.
+#[test]
+fn midi_to_hz_f32_at_a4_returns_440() {
+    assert!((midi_to_hz_f32(69.0) - 440.0).abs() < 1e-4);
+}
+
+/// Quarter-tone between A4 (69) and Bb4 (70) lands at the geometric
+/// mean of their frequencies — the property a fractional MIDI helper
+/// is supposed to deliver.
+#[test]
+fn midi_to_hz_f32_quarter_tone_is_geometric_mean() {
+    let a4 = midi_to_hz_f32(69.0);
+    let bb4 = midi_to_hz_f32(70.0);
+    let quarter = midi_to_hz_f32(69.5);
+    let geom = (a4 * bb4).sqrt();
+    assert!(
+        (quarter - geom).abs() < 1e-3,
+        "quarter-tone {quarter} should equal geometric mean {geom}"
+    );
+}
+
+/// Composes with `hz_to_midi` for any fractional MIDI input — covers
+/// the chord-bank / pitch-bend use case where the input isn't an
+/// integer note.
+#[test]
+fn midi_to_hz_f32_round_trips_through_hz_to_midi() {
+    for &m in &[24.5_f32, 48.25, 60.0, 72.7, 96.123] {
+        let hz = midi_to_hz_f32(m);
+        let back = hz_to_midi(hz);
+        assert!(
+            (back - m).abs() < 1e-3,
+            "fractional MIDI {m} drifted on round trip (got {back})"
+        );
+    }
+}
+
+/// Integer-MIDI helper still produces the same answer as the
+/// fractional primitive — guards against a future divergence between
+/// `midi_to_hz(u8)` and `midi_to_hz_f32(f32)`.
+#[test]
+fn midi_to_hz_matches_midi_to_hz_f32_at_integer_notes() {
+    for n in [0_u8, 24, 48, 60, 69, 72, 96, 127] {
+        let a = midi_to_hz(n);
+        let b = midi_to_hz_f32(n as f32);
+        assert!(
+            (a - b).abs() < 1e-4,
+            "MIDI {n}: midi_to_hz={a}, midi_to_hz_f32={b}"
+        );
+    }
 }
 
 // ─── lfo_target_to_u8 ───────────────────────────────────────────────────────
