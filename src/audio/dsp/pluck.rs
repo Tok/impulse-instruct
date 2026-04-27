@@ -14,7 +14,7 @@
 // AMP envelope provides soft attack so retriggers don't click.
 
 use super::AudioParams;
-use super::dsp_util::{TuningSystem, midi_to_hz_tuned, one_pole_coef};
+use super::dsp_util::{TuningSystem, midi_to_hz_tuned, one_pole_coef, one_pole_lp_alpha};
 
 /// Max delay-line length — sized for the lowest musically useful
 /// fundamental we expect.  At 48 kHz a 4096-sample delay line covers
@@ -152,7 +152,7 @@ impl PluckVoice {
         // math in the hot path — no `exp` per sample.
         let bright = p.pluck_brightness.clamp(0.0, 1.0);
         let fc = 400.0 + bright * 15_000.0;
-        let coeff = 1.0 - (-std::f32::consts::TAU * fc / sr).exp();
+        let coeff = one_pole_lp_alpha(fc, sr);
         self.bright_lp += coeff * (y - self.bright_lp);
 
         // Accent scales the final output, matching the convention the

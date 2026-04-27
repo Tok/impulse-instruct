@@ -118,6 +118,19 @@ pub fn one_pole_coef(time_s: f32, sr: f32) -> f32 {
     (-1.0 / (time_s * sr)).exp()
 }
 
+/// One-pole low-pass smoothing coefficient `alpha` from a cutoff
+/// frequency.  `alpha = 1 − exp(−2π · fc / sr)`; the per-sample
+/// state update is `y = y + alpha · (x − y)` (input `x`, state `y`).
+/// Distinct from [`one_pole_coef`] which expresses the same filter
+/// in terms of a time-constant — same family, different
+/// parametrisation.  Used by the conv-reverb damping LP, the vocal
+/// formant LP, and the click-suppression LP on the modal / pluck /
+/// noise voices.
+#[inline]
+pub fn one_pole_lp_alpha(fc: f32, sr: f32) -> f32 {
+    1.0 - (-std::f32::consts::TAU * fc / sr).exp()
+}
+
 /// Convert frequency in Hz to fractional MIDI note number (12-TET,
 /// A=`A4_HZ`).  Inverse of `midi_to_hz_f32`; callers round/clamp as
 /// needed.

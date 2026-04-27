@@ -26,7 +26,7 @@ use std::sync::Arc;
 use rustfft::num_complex::Complex;
 use rustfft::{Fft, FftPlanner};
 
-use super::dsp_util::MIX_BYPASS_THRESHOLD;
+use super::dsp_util::{MIX_BYPASS_THRESHOLD, one_pole_lp_alpha};
 use super::pitch_shift::PitchShift;
 
 /// Predelay ring buffer length — covers the full 0..200 ms knob range at
@@ -344,7 +344,7 @@ impl ConvReverb {
         let damp = damp.clamp(0.0, 1.0);
         if damp > 0.001 {
             let fc = 20_000.0 * (400.0_f32 / 20_000.0).powf(damp);
-            let a = 1.0 - (-std::f32::consts::TAU * fc / sr).exp();
+            let a = one_pole_lp_alpha(fc, sr);
             let mid = (wet_l + wet_r) * 0.5;
             self.lp_state += a * (mid - self.lp_state);
             let delta = self.lp_state - mid;
@@ -357,7 +357,7 @@ impl ConvReverb {
         let lowcut = lowcut.clamp(0.0, 1.0);
         if lowcut > 0.001 {
             let fc = 20.0 * (800.0_f32 / 20.0).powf(lowcut);
-            let a = 1.0 - (-std::f32::consts::TAU * fc / sr).exp();
+            let a = one_pole_lp_alpha(fc, sr);
             let mid = (wet_l + wet_r) * 0.5;
             self.hp_lp_state += a * (mid - self.hp_lp_state);
             wet_l -= self.hp_lp_state;

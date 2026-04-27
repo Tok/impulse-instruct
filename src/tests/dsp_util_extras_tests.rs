@@ -11,6 +11,7 @@
 
 use crate::audio::dsp::{
     NYQUIST_GUARD_FACTOR, hz_to_midi, midi_to_hz, midi_to_hz_f32, nyquist_guard, one_pole_coef,
+    one_pole_lp_alpha,
 };
 use crate::state::LfoTarget;
 use crate::state::fx_plan::kind_is_fx;
@@ -169,6 +170,51 @@ fn one_pole_coef_is_monotone_in_time() {
         assert!(c > prev, "coef should grow with time (t={t}: {c} ≤ {prev})");
         prev = c;
     }
+}
+
+// ─── one_pole_lp_alpha ───────────────────────────────────────────────────────
+
+/// Bit-identity with the inline `1 − exp(−2π · fc / sr)` formula
+/// across a span of musical cutoffs.  Refactor must not perturb any
+/// existing damping / smoothing curve.
+#[test]
+fn one_pole_lp_alpha_matches_inline_formula() {
+    let sr = 48_000.0_f32;
+    for &fc in &[1.0_f32, 20.0, 200.0, 2_000.0, 12_000.0] {
+        let inline = 1.0_f32 - (-std::f32::consts::TAU * fc / sr).exp();
+        let helper = one_pole_lp_alpha(fc, sr);
+        assert_eq!(helper, inline, "drift at fc={fc}");
+    }
+}
+
+/// Endpoints: at fc=0 the LP is fully closed (alpha→0, no input
+/// passes); at fc≫sr/(2π) the LP is fully open (alpha→1, output
+/// equals input).  The smoothing intuition has to hold.
+#[test]
+fn one_pole_lp_alpha_has_correct_endpoints() {
+    let sr = 48_000.0_f32;
+    let alpha_zero = one_pole_lp_alpha(0.0, sr);
+    let alpha_huge = one_pole_lp_alpha(sr * 10.0, sr);
+    assert!(alpha_zero.abs() < 1e-6, "alpha(0) should be ~0");
+    assert!(
+        (alpha_huge - 1.0).abs() < 1e-3,
+        "alpha(huge fc) should approach 1 (got {alpha_huge})"
+    );
+}
+
+/// At fc = `sr / (2π)` the alpha is exactly `1 − 1/e ≈ 0.632`
+/// (the classic τ = 1 sample point).  Pin the closed-form value
+/// so a wrong constant in the formula would surface immediately.
+#[test]
+fn one_pole_lp_alpha_at_unit_time_constant() {
+    let sr = 48_000.0_f32;
+    let fc = sr / std::f32::consts::TAU;
+    let alpha = one_pole_lp_alpha(fc, sr);
+    let expected = 1.0 - (1.0_f32 / std::f32::consts::E);
+    assert!(
+        (alpha - expected).abs() < 1e-5,
+        "alpha at fc=sr/2π should equal 1−1/e (got {alpha}, want {expected})"
+    );
 }
 
 // ─── lfo_target_to_u8 ───────────────────────────────────────────────────────

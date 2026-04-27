@@ -1,5 +1,5 @@
 use super::dsp_util::nyquist_guard;
-use super::dsp_util::{PWM_MAX, PWM_MIN, one_pole_coef};
+use super::dsp_util::{PWM_MAX, PWM_MIN, one_pole_coef, one_pole_lp_alpha};
 // ─── Low-level voice state machines ──────────────────────────────────────────
 // Pure numeric DSP structs — no allocations.
 
@@ -423,7 +423,7 @@ impl NoiseVoice {
         // 1-pole LP filter with modulation
         let mod_cutoff = (cutoff + lfo_mod + sh_mod).clamp(0.0, 1.0);
         let fc = (200.0 * (100.0f32).powf(mod_cutoff)).min(nyquist_guard(sr));
-        let a = 1.0 - (-std::f32::consts::TAU * fc / sr).exp();
+        let a = one_pole_lp_alpha(fc, sr);
         self.lp_state += a * (out - self.lp_state);
 
         self.lp_state * self.env * volume

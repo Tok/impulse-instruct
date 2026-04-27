@@ -16,7 +16,7 @@
 // bank stays bounded.
 
 use super::AudioParams;
-use super::dsp_util::{nyquist_guard, one_pole_coef};
+use super::dsp_util::{nyquist_guard, one_pole_coef, one_pole_lp_alpha};
 use crate::state::{MODAL_MODES, MODAL_RATIO_PRESETS};
 
 /// Idealised mode-frequency ratios per preset.  Values relative to
@@ -202,7 +202,7 @@ impl ModalVoice {
         // → fc ≈ 12 kHz (almost unfiltered).  Cheap one-pole smoother.
         let bright = p.modal_brightness.clamp(0.0, 1.0);
         let fc = 200.0 * 60.0_f32.powf(bright); // log sweep 200 Hz → 12 kHz
-        let alpha = 1.0 - (-std::f32::consts::TAU * fc / sr).exp();
+        let alpha = one_pole_lp_alpha(fc, sr);
         self.excitation_lp += alpha * (raw - self.excitation_lp);
 
         // Sum of levels for normalisation — keeps a fully-pegged

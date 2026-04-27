@@ -13,7 +13,8 @@
 
 use super::AudioParams;
 use super::dsp_util::{
-    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, nyquist_guard, one_pole_coef,
+    ATTACK_HANDOVER_VALUE, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD, nyquist_guard,
+    one_pole_coef, one_pole_lp_alpha,
 };
 
 /// Vowel formant table — F1, F2, F3 frequencies (Hz) and per-
@@ -297,7 +298,7 @@ impl VocalVoice {
         // across rates.
         let bright = p.vocal_brightness.clamp(0.0, 1.0);
         let fc = 200.0 * 60.0_f32.powf(bright); // 200 Hz → 12 kHz log
-        let alpha = 1.0 - (-std::f32::consts::TAU * fc / sr).exp();
+        let alpha = one_pole_lp_alpha(fc, sr);
         self.bright_lp += alpha * (saw - self.bright_lp);
         let source = self.bright_lp;
 
