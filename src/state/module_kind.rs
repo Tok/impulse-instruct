@@ -192,25 +192,17 @@ pub enum ModuleKind {
     /// HF rolloff together so users dial "more worn-out tape" with
     /// one gesture.
     FxTapeEcho,
-    /// Plate reverb — Dattorro-style figure-of-eight tank of
-    /// modulated allpasses + delays + LP damping.  Distinct from
-    /// `FxReverb` (Schroeder parallel-comb + series-allpass; brighter,
-    /// less dense) and `FxConvReverb` (IR-driven, file-loaded).
-    /// Captures the dense, slightly metallic Lexicon / EMT plate
-    /// character.
+    /// Plate reverb — Dattorro figure-of-eight tank.  Distinct
+    /// from `FxReverb` (Schroeder) + `FxConvReverb` (IR).  Dense
+    /// metallic Lexicon / EMT plate character.
     FxPlate,
-    /// Trance gate — 16-cell pattern-driven gate synced to the
-    /// sequencer clock.  Distinct from `FxGate` (envelope-driven
-    /// sidechain ducker / noise gate): cell traversal is rhythmic
-    /// rather than amplitude-triggered, with a per-cell-edge ramp
-    /// to suppress clicks.  Classic trance / EDM "chopped pad" FX.
+    /// Trance gate — 16-cell pattern gate synced to the sequencer
+    /// clock.  Distinct from `FxGate` (envelope-driven): rhythmic
+    /// cell traversal with per-cell-edge ramp.
     FxTranceGate,
-    /// Wavefolder — West Coast (Buchla / Serge / Make Noise) fold
-    /// distortion.  Distinct from the clip / drive / saturation /
-    /// waveshaper bank: those compress signal into a soft / hard
-    /// ceiling, the fold reflects it, multiplying harmonics into
-    /// the bright timbres these West Coast modules are known for.
-    /// Two fold curves (sine + triangle) blend via the symmetry knob.
+    /// Wavefolder — West Coast fold distortion.  Reflects signal
+    /// at ±threshold (vs. soft/hard clip of the saturation bank);
+    /// sine + triangle fold curves blended by symmetry knob.
     FxWaveFolder,
     // ── Analysis ──────────────────────────────────────────────────────────────
     SpectrumAnalyzer,
@@ -272,11 +264,9 @@ pub enum ModuleKind {
     /// `LoudnessMeter` (sum only): exposes per-voice contribution.
     VoiceMeterStrip,
     /// Gain-reduction history scope — rolling waveform of the
-    /// momentary gain reduction across the dynamics FX
-    /// (FxCompressor / FxLimiter / FxMultibandComp).  Distinct from
-    /// `LoudnessMeter` (output level only) — this shows how hard
-    /// the chain is being compressed.  UI-only; samples the audio
-    /// thread's atomic GR snapshot once per repaint.
+    /// momentary GR across `FxCompressor` / `FxLimiter` /
+    /// `FxMultibandComp`.  UI-only; samples the audio thread's
+    /// atomic GR snapshot once per repaint.
     GrHistory,
     /// Onset / beat-grid overlay — rolling envelope of the master
     /// audio for the last bar with the 16 sequencer step-tick
@@ -343,6 +333,10 @@ pub enum ModuleKind {
     /// distinct from `LfoModule` (free-running) and `CvSequencer`
     /// (step-table).
     FunctionGen,
+    /// Crossfader CV utility — single-knob A/B blend between two
+    /// CV sources.  More direct than Math's Blend mode for the
+    /// common A/B case.
+    Crossfader,
     LlmAgent,
     // ── LLM console (singleton, Global zone) ──────────────────────────────
     LlmConsole,
@@ -448,6 +442,7 @@ impl ModuleKind {
             Self::TriggerDiv => "TRIG DIV",
             Self::LogicGate => "LOGIC",
             Self::FunctionGen => "FUNC GEN",
+            Self::Crossfader => "XFADE",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
             Self::MasterOutput => "MASTER",
@@ -595,6 +590,8 @@ impl ModuleKind {
             Self::LogicGate => (2, 1),
             // FunctionGen — 3 knobs (attack, release, curve), fits 2×2.
             Self::FunctionGen => (2, 2),
+            // Crossfader — single MIX knob, compact 2×1.
+            Self::Crossfader => (2, 1),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
             // Convolution Reverb — 6 knobs in a glass-grouped 2-row
@@ -766,7 +763,8 @@ impl ModuleKind {
             | Self::Math
             | Self::TriggerDiv
             | Self::LogicGate
-            | Self::FunctionGen => Zone::FxMod,
+            | Self::FunctionGen
+            | Self::Crossfader => Zone::FxMod,
         }
     }
 
@@ -961,6 +959,7 @@ impl ModuleKind {
                 | Self::TriggerDiv
                 | Self::LogicGate
                 | Self::FunctionGen
+                | Self::Crossfader
                 | Self::LlmAgent
         )
     }

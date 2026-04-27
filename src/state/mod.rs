@@ -65,6 +65,7 @@ pub mod sequencer_state;
 pub use sequencer_state::{SequencerState, Step, TB303Step};
 
 pub mod comparator;
+pub mod crossfader;
 pub mod cv_seq;
 pub mod function_gen;
 pub mod fx;
@@ -76,6 +77,7 @@ pub mod sample_hold;
 pub mod slew;
 pub mod trigger_div;
 pub use comparator::{COMPARATOR_SLOTS, ComparatorSlot};
+pub use crossfader::{CROSSFADER_SLOTS, CrossfaderSlot};
 pub use cv_seq::{CV_SEQ_SLOTS, CV_SEQ_STEPS, CvSeqSlot};
 pub use function_gen::{FUNCTION_GEN_SLOTS, FunctionGenSlot};
 pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
@@ -294,6 +296,8 @@ pub struct AppState {
     #[serde(default)]
     pub function_gen: [FunctionGenSlot; FUNCTION_GEN_SLOTS],
     #[serde(default)]
+    pub crossfader: [CrossfaderSlot; CROSSFADER_SLOTS],
+    #[serde(default)]
     pub free_eg: FreeEg,
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
@@ -471,6 +475,7 @@ impl Default for AppState {
             trigger_div: std::array::from_fn(|_| TriggerDivSlot::default()),
             logic_gate: std::array::from_fn(|_| LogicGateSlot::default()),
             function_gen: std::array::from_fn(|_| FunctionGenSlot::default()),
+            crossfader: std::array::from_fn(|_| CrossfaderSlot::default()),
             free_eg: Default::default(),
             noise_voice: Default::default(),
             theremin: Default::default(),

@@ -223,6 +223,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // release / curve) are not LFO-modulatable in V1; the
         // Selector slot is for the gate input cable.
         FunctionGen => &[Selector],
+        // Crossfader — two CV inputs (A, B) via cable.to.index 0/1
+        // (same dispatch as Math).  Mix knob isn't currently
+        // CV-modulatable.
+        Crossfader => &[Selector, Selector],
     }
 }
 
@@ -648,7 +652,8 @@ pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
         | ModuleKind::Math
         | ModuleKind::TriggerDiv
         | ModuleKind::LogicGate
-        | ModuleKind::FunctionGen => PortKind::Cv,
+        | ModuleKind::FunctionGen
+        | ModuleKind::Crossfader => PortKind::Cv,
         _ => PortKind::Audio,
     }
 }

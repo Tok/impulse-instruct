@@ -727,6 +727,8 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                             crate::ui::rack_content_util::draw_logic_gate_content(app, ui, id);
                         } else if kind == ModuleKind::FunctionGen {
                             crate::ui::rack_content_util::draw_function_gen_content(app, ui, id);
+                        } else if kind == ModuleKind::Crossfader {
+                            crate::ui::rack_content_util::draw_crossfader_content(app, ui, id);
                         } else if kind == ModuleKind::SpectrumAnalyzer {
                             crate::ui::panels::draw_spectrum(app, ui);
                         } else if kind == ModuleKind::StereoMeter {

@@ -198,6 +198,27 @@ impl Default for FunctionGenParamsCopy {
     }
 }
 
+/// Per-slot Crossfader configuration.  Two CV inputs (A, B) +
+/// blend knob; output = lerp(A, B, mix).
+#[derive(Clone, Copy, Debug)]
+pub struct CrossfaderParamsCopy {
+    pub enabled: bool,
+    pub mix: f32,
+    pub cv_in_a_buf_idx: u8,
+    pub cv_in_b_buf_idx: u8,
+}
+
+impl Default for CrossfaderParamsCopy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            mix: 0.5,
+            cv_in_a_buf_idx: u8::MAX,
+            cv_in_b_buf_idx: u8::MAX,
+        }
+    }
+}
+
 /// Per-slot Math configuration.  Two CV-input ports (resolved by
 /// the cable compile pass into `cv_in_a_buf_idx` and
 /// `cv_in_b_buf_idx`) and an op selector + blend knob.

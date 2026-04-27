@@ -4,6 +4,44 @@ A detailed log of what's built.
 
 ---
 
+### Crossfader CV utility (`Crossfader`)
+
+Single-knob A/B blend between two CV sources.  More direct
+than Math's Blend mode for the common A/B case — one MIX knob,
+no op selector.
+
+**State.**  `CrossfaderSlot { enabled, mix }` with
+`CROSSFADER_SLOTS = 4`.  Default mix = 0.5 (centred).
+
+**Audio thread.**  `MOD_BUF_CROSSFADER_BASE = 40`.  Two CV
+inputs (A, B) per slot via `cable.to.index` (0 = A, 1 = B),
+same dispatch as Math / LogicGate.  `eval_crossfader` in
+`process_block_util.rs`: `out = a * (1 - mix) + b * mix`.
+Disabled = passthrough of A.
+
+**UI.**  ON/OFF toggle + MIX knob.  Caption: "CV A · CV B →
+lerp(A, B, MIX) → CV out".
+
+**Wiring.**  Standard utility ritual.  ModuleKind `Crossfader`
+("XFADE" label, 2×1 grid, FxMod zone, sort-group 35,
+Selector × 2 mod inputs, PortKind::Cv output).  Aliases
+crossfader / xfade / xfader / ablend / abblend / ab.  Allows
+multiple.
+
+This entry closes out the modulation-utilities wishlist
+section in PLAN.md (TriggerDiv → LogicGate → FunctionGen →
+Crossfader landed in successive ships of this session).
+
+**Tests.**  +6 (2 state-side: defaults, slot round-trip; +4
+module: label, alias parsing, FxMod zone, allows_multiple).
+Suite **2292 → 2298**.
+
+Files: new `src/state/crossfader.rs`, new
+`src/ui/panels/crossfader.rs`, new
+`src/tests/crossfader_tests.rs`.
+
+---
+
 ### FunctionGen CV utility (`FunctionGen`)
 
 Re-triggerable AR envelope with curve shaping — Maths-style:

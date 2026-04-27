@@ -89,17 +89,17 @@ use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 pub use lfo_target_opcode::lfo_target_to_u8;
 pub use mod_compile::{
-    compile_comparator_params, compile_function_gen_params, compile_logic_gate_params,
-    compile_math_params, compile_mod_routes, compile_quantizer_params, compile_sample_hold_params,
-    compile_slew_params, compile_trigger_div_params,
+    compile_comparator_params, compile_crossfader_params, compile_function_gen_params,
+    compile_logic_gate_params, compile_math_params, compile_mod_routes, compile_quantizer_params,
+    compile_sample_hold_params, compile_slew_params, compile_trigger_div_params,
 };
 use ms_master::MsMaster;
 use param_eq::ParamEq;
 pub use params::{
-    AudioParams, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CV_SEQ_BASE,
-    MOD_BUF_FUNCTION_GEN_BASE, MOD_BUF_LFO_BASE, MOD_BUF_LOGIC_GATE_BASE, MOD_BUF_MATH_BASE,
-    MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE, MOD_BUF_SIZE, MOD_BUF_SLEW_BASE,
-    MOD_BUF_TRIGGER_DIV_BASE, MOD_UTIL_SLOTS,
+    AudioParams, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CROSSFADER_BASE,
+    MOD_BUF_CV_SEQ_BASE, MOD_BUF_FUNCTION_GEN_BASE, MOD_BUF_LFO_BASE, MOD_BUF_LOGIC_GATE_BASE,
+    MOD_BUF_MATH_BASE, MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE, MOD_BUF_SIZE,
+    MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE, MOD_UTIL_SLOTS,
 };
 use pendulum::PendulumVoice;
 use pitch_shift::PitchShift;

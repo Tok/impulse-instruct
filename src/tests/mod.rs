@@ -16,6 +16,7 @@ mod compile_mod_routes_tests;
 mod conditional_trigger_tests;
 mod conv_reverb_tests;
 mod coverage_tests;
+mod crossfader_tests;
 mod cv_seq_tests;
 mod cv_utility_tests;
 mod drum_voice_tests;

@@ -108,6 +108,7 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::TriggerDiv => Some("trigger_div".to_string()),
         ModuleKind::LogicGate => Some("logic_gate".to_string()),
         ModuleKind::FunctionGen => Some("function_gen".to_string()),
+        ModuleKind::Crossfader => Some("crossfader".to_string()),
         _ => None,
     }
 }
@@ -215,6 +216,7 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "logicgate" | "logic_gate" | "logic" | "boolean" | "andorxor" => Some(LogicGate),
         "functiongen" | "function_gen" | "funcgen" | "function" | "ar" | "ad" | "envelope"
         | "transientenv" | "maths" => Some(FunctionGen),
+        "crossfader" | "xfade" | "xfader" | "ablend" | "abblend" | "ab" => Some(Crossfader),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
         "activitytimeline" | "timeline" | "activity" | "log" => Some(ActivityTimeline),
@@ -423,6 +425,10 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
                 | "ad"
                 | "envelope"
                 | "maths"
+        ),
+        ModuleKind::Crossfader => matches!(
+            n.as_str(),
+            "crossfader" | "xfade" | "xfader" | "ablend" | "abblend" | "ab"
         ),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),

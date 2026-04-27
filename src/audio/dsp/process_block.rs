@@ -222,12 +222,13 @@ impl DspState {
         }
         self.prev_seq_step = cur_step;
 
-        // ── TriggerDiv / LogicGate / FunctionGen utilities ────────────────────
+        // ── TriggerDiv / LogicGate / FunctionGen / Crossfader utilities ──
         // Methods live in `process_block_util.rs` (sibling) to keep this
         // file under the 1000-line cap.  Same `impl DspState` block.
         self.eval_trigger_div(&p_base, &mut p);
         self.eval_logic_gate(&p_base, &mut p);
         self.eval_function_gen(&p_base, &mut p);
+        self.eval_crossfader(&p_base, &mut p);
 
         // ── Math utility ──────────────────────────────────────────────────────
         // Combine two CV inputs per the slot's op selector.

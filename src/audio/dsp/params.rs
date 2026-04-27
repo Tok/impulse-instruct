@@ -57,14 +57,16 @@ pub const MOD_BUF_TRIGGER_DIV_BASE: usize = 28;
 pub const MOD_BUF_LOGIC_GATE_BASE: usize = 32;
 /// FunctionGen utility output range starts here.
 pub const MOD_BUF_FUNCTION_GEN_BASE: usize = 36;
+/// Crossfader utility output range starts here.
+pub const MOD_BUF_CROSSFADER_BASE: usize = 40;
 
 // Per-utility ParamsCopy structs live in `params_utils.rs` (sibling)
 // since this file crossed the 1000-line cap during the LogicGate ship.
 // Re-exported below so consumers continue to import them from `params`.
 pub use super::params_utils::{
-    ComparatorParamsCopy, CvSeqParamsCopy, FunctionGenParamsCopy, LfoParamsCopy,
-    LogicGateParamsCopy, MathParamsCopy, QuantizerParamsCopy, SampleHoldParamsCopy, SlewParamsCopy,
-    TriggerDivParamsCopy,
+    ComparatorParamsCopy, CrossfaderParamsCopy, CvSeqParamsCopy, FunctionGenParamsCopy,
+    LfoParamsCopy, LogicGateParamsCopy, MathParamsCopy, QuantizerParamsCopy, SampleHoldParamsCopy,
+    SlewParamsCopy, TriggerDivParamsCopy,
 };
 
 /// Per-voice bass synth params — one per Bass303 instance.
@@ -436,6 +438,7 @@ pub struct AudioParams {
     pub trigger_div: [TriggerDivParamsCopy; crate::state::TRIGGER_DIV_SLOTS],
     pub logic_gate: [LogicGateParamsCopy; crate::state::LOGIC_GATE_SLOTS],
     pub function_gen: [FunctionGenParamsCopy; crate::state::FUNCTION_GEN_SLOTS],
+    pub crossfader: [CrossfaderParamsCopy; crate::state::CROSSFADER_SLOTS],
     pub sample_hold: [SampleHoldParamsCopy; crate::state::SAMPLE_HOLD_SLOTS],
     pub math: [MathParamsCopy; crate::state::MATH_SLOTS],
     /// Per-block modulation source buffer.  The audio thread fills

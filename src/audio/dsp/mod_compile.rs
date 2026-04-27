@@ -14,11 +14,12 @@
 
 use super::lfo_target_opcode::lfo_target_to_u8;
 use super::params::{
-    ComparatorParamsCopy, FunctionGenParamsCopy, LogicGateParamsCopy, MAX_MOD_ROUTES,
-    MOD_BUF_COMPARATOR_BASE, MOD_BUF_CV_SEQ_BASE, MOD_BUF_FUNCTION_GEN_BASE, MOD_BUF_LFO_BASE,
-    MOD_BUF_LOGIC_GATE_BASE, MOD_BUF_MATH_BASE, MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE,
-    MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE, MathParamsCopy, ModRouteCopy, QuantizerParamsCopy,
-    SampleHoldParamsCopy, SlewParamsCopy, TriggerDivParamsCopy,
+    ComparatorParamsCopy, CrossfaderParamsCopy, FunctionGenParamsCopy, LogicGateParamsCopy,
+    MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CROSSFADER_BASE, MOD_BUF_CV_SEQ_BASE,
+    MOD_BUF_FUNCTION_GEN_BASE, MOD_BUF_LFO_BASE, MOD_BUF_LOGIC_GATE_BASE, MOD_BUF_MATH_BASE,
+    MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE, MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE,
+    MathParamsCopy, ModRouteCopy, QuantizerParamsCopy, SampleHoldParamsCopy, SlewParamsCopy,
+    TriggerDivParamsCopy,
 };
 use crate::state::{AppState, LfoTarget, ModuleKind, PortKind};
 
@@ -36,6 +37,7 @@ struct CvSourceMaps {
     trigger_div: Vec<u32>,
     logic_gate: Vec<u32>,
     function_gen: Vec<u32>,
+    crossfader: Vec<u32>,
 }
 
 impl CvSourceMaps {
@@ -50,6 +52,7 @@ impl CvSourceMaps {
         let mut trigger_div = Vec::new();
         let mut logic_gate = Vec::new();
         let mut function_gen = Vec::new();
+        let mut crossfader = Vec::new();
         for m in &s.rack.modules {
             match m.kind {
                 ModuleKind::LfoModule => lfo.push(m.id),
@@ -62,6 +65,7 @@ impl CvSourceMaps {
                 ModuleKind::TriggerDiv => trigger_div.push(m.id),
                 ModuleKind::LogicGate => logic_gate.push(m.id),
                 ModuleKind::FunctionGen => function_gen.push(m.id),
+                ModuleKind::Crossfader => crossfader.push(m.id),
                 _ => {}
             }
         }
@@ -76,6 +80,7 @@ impl CvSourceMaps {
             trigger_div,
             logic_gate,
             function_gen,
+            crossfader,
         }
     }
 
@@ -142,6 +147,12 @@ impl CvSourceMaps {
                 return None;
             }
             return Some((MOD_BUF_FUNCTION_GEN_BASE + idx) as u8);
+        }
+        if let Some(idx) = self.crossfader.iter().position(|id| *id == src_module_id) {
+            if idx >= crate::state::CROSSFADER_SLOTS {
+                return None;
+            }
+            return Some((MOD_BUF_CROSSFADER_BASE + idx) as u8);
         }
         None
     }
@@ -523,6 +534,50 @@ pub fn compile_function_gen_params(
         }
         if let Some(buf_idx) = maps.resolve(s, cable.from.module_id) {
             out[idx].cv_in_buf_idx = buf_idx;
+        }
+    }
+    out
+}
+
+/// Walk the rack's cables and produce the Crossfader utility-slot
+/// snapshot.  Two CV inputs (A, B) per slot via cable.to.index
+/// 0 / 1 — same dispatch as Math / LogicGate.
+pub fn compile_crossfader_params(
+    s: &AppState,
+) -> [CrossfaderParamsCopy; crate::state::CROSSFADER_SLOTS] {
+    let mut out = [CrossfaderParamsCopy::default(); crate::state::CROSSFADER_SLOTS];
+    let maps = CvSourceMaps::build(s);
+    let ids = &maps.crossfader;
+    for (i, slot) in s
+        .crossfader
+        .iter()
+        .enumerate()
+        .take(crate::state::CROSSFADER_SLOTS)
+    {
+        out[i] = CrossfaderParamsCopy {
+            enabled: slot.enabled,
+            mix: slot.mix.clamp(0.0, 1.0),
+            cv_in_a_buf_idx: u8::MAX,
+            cv_in_b_buf_idx: u8::MAX,
+        };
+    }
+    for cable in &s.rack.cables {
+        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
+            continue;
+        }
+        let Some(idx) = ids.iter().position(|id| *id == cable.to.module_id) else {
+            continue;
+        };
+        if idx >= crate::state::CROSSFADER_SLOTS {
+            continue;
+        }
+        let Some(buf_idx) = maps.resolve(s, cable.from.module_id) else {
+            continue;
+        };
+        match cable.to.index {
+            0 => out[idx].cv_in_a_buf_idx = buf_idx,
+            1 => out[idx].cv_in_b_buf_idx = buf_idx,
+            _ => {}
         }
     }
     out

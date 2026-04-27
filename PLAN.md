@@ -11,12 +11,6 @@ ship, not held here as history.
 Concrete additions to fill genuine gaps in the current inventory.
 Pick from the top down; each row is one focused commit.
 
-### Modulation — new utilities
-
-- [ ] **Crossfader** (`Crossfader`) — single-knob A/B blend
-  between two CV sources.  Mix knob = 0 → A only; 1 → B only.
-  More direct than Math's Blend mode for the common A/B case.
-
 ### SF2 follow-up
 
 - [ ] **Modulator / LFO generators**.  Volume envelope + filter

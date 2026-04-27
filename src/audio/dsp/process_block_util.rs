@@ -12,7 +12,8 @@
 
 use super::DspState;
 use super::params::{
-    AudioParams, MOD_BUF_FUNCTION_GEN_BASE, MOD_BUF_LOGIC_GATE_BASE, MOD_BUF_TRIGGER_DIV_BASE,
+    AudioParams, MOD_BUF_CROSSFADER_BASE, MOD_BUF_FUNCTION_GEN_BASE, MOD_BUF_LOGIC_GATE_BASE,
+    MOD_BUF_TRIGGER_DIV_BASE,
 };
 
 impl DspState {
@@ -148,6 +149,31 @@ impl DspState {
                 _ => 0.0,
             };
             p.cv_buf[out_idx] = env;
+        }
+    }
+
+    /// Evaluate the Crossfader slots.  `out = lerp(A, B, mix)` with
+    /// the per-slot mix knob (0..1).  Disabled slots pass A through
+    /// unchanged so the user can disable without rewiring.
+    pub(super) fn eval_crossfader(&mut self, p_base: &AudioParams, p: &mut AudioParams) {
+        for (i, xf) in p_base.crossfader.iter().enumerate() {
+            let out_idx = MOD_BUF_CROSSFADER_BASE + i;
+            let a = if xf.cv_in_a_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[xf.cv_in_a_buf_idx as usize]
+            };
+            let b = if xf.cv_in_b_buf_idx == u8::MAX {
+                0.0
+            } else {
+                p.cv_buf[xf.cv_in_b_buf_idx as usize]
+            };
+            if !xf.enabled {
+                p.cv_buf[out_idx] = a;
+                continue;
+            }
+            let mix = xf.mix.clamp(0.0, 1.0);
+            p.cv_buf[out_idx] = a * (1.0 - mix) + b * mix;
         }
     }
 }

@@ -30,6 +30,11 @@ pub(super) fn draw_function_gen_content(app: &mut ImpulseApp, ui: &mut egui::Ui,
     crate::ui::panels::draw_function_gen(app, ui, slot);
 }
 
+pub(super) fn draw_crossfader_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let slot = slot_index_for(app, ModuleKind::Crossfader, module_id);
+    crate::ui::panels::draw_crossfader(app, ui, slot);
+}
+
 /// Resolve the rack-order slot index for `module_id` among modules of
 /// `kind`.  Returns 0 if the module isn't found — the same fallback
 /// the original utility content dispatchers use, since the index
