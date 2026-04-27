@@ -106,6 +106,22 @@ pub struct SfzRegion {
     pub vib_lfo_freq_hz: f32,
     pub vib_lfo_delay_s: f32,
     pub vib_lfo_to_pitch_cents: f32,
+    /// Modulation envelope — five stages plus a sustain level.  Times
+    /// in seconds (already converted from SF2 timecents at load
+    /// time); sustain is the linear 0..1 level the env decays to.
+    /// Defaults (0 s on every stage, sustain 1.0, depths 0) leave
+    /// the envelope inert so a region without these generators is
+    /// bit-identical to the pre-modenv path.
+    pub mod_env_delay_s: f32,
+    pub mod_env_attack_s: f32,
+    pub mod_env_hold_s: f32,
+    pub mod_env_decay_s: f32,
+    pub mod_env_sustain_level: f32,
+    pub mod_env_release_s: f32,
+    /// Cents shift on the read-rate at full envelope value (env = 1).
+    pub mod_env_to_pitch_cents: f32,
+    /// Cents shift on the filter cutoff knob at full envelope value.
+    pub mod_env_to_filter_fc_cents: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -172,6 +188,14 @@ impl Default for SfzRegion {
             vib_lfo_freq_hz: 8.176,
             vib_lfo_delay_s: 0.0,
             vib_lfo_to_pitch_cents: 0.0,
+            mod_env_delay_s: 0.0,
+            mod_env_attack_s: 0.0,
+            mod_env_hold_s: 0.0,
+            mod_env_decay_s: 0.0,
+            mod_env_sustain_level: 1.0,
+            mod_env_release_s: 0.0,
+            mod_env_to_pitch_cents: 0.0,
+            mod_env_to_filter_fc_cents: 0.0,
         }
     }
 }

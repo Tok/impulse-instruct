@@ -47,6 +47,7 @@ mod process_block;
 mod process_block_util;
 mod rev_tap;
 pub mod sample_instrument;
+pub mod sample_instrument_modulation;
 pub mod samplers;
 pub mod theremin;
 mod trigger_handler;

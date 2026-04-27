@@ -110,6 +110,7 @@ mod rack_reach_tests;
 mod rack_scope_tests;
 mod rack_tests;
 mod rec_chop_tests;
+mod sample_instrument_modulation_tests;
 mod sample_instrument_sfz_tests;
 mod sample_instrument_tests;
 mod seed_patterns_tests;

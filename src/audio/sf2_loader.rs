@@ -473,6 +473,21 @@ fn build_region(
     let mod_lfo_delay_s = sf2_timecents_to_secs(gens.delay_mod_lfo_tc);
     let vib_lfo_delay_s = sf2_timecents_to_secs(gens.delay_vib_lfo_tc);
 
+    // Modulation envelope — convert timecents to seconds (None /
+    // -12000 ≈ "instant" → 0 s) and 0.1 % attenuation units to a
+    // linear 0..1 sustain level.  `sustainModEnv` of 0 (or absent)
+    // means "full level" = sustain at 1.0; 1000 = full attenuation;
+    // values in between map linearly via `1 - n/1000`.
+    let mod_env_delay_s = sf2_timecents_to_secs(gens.delay_mod_env_tc);
+    let mod_env_attack_s = sf2_timecents_to_secs(gens.attack_mod_env_tc);
+    let mod_env_hold_s = sf2_timecents_to_secs(gens.hold_mod_env_tc);
+    let mod_env_decay_s = sf2_timecents_to_secs(gens.decay_mod_env_tc);
+    let mod_env_release_s = sf2_timecents_to_secs(gens.release_mod_env_tc);
+    let mod_env_sustain_level = match gens.sustain_mod_env_thousandths {
+        Some(n) if n > 0 => (1.0 - (n as f32) / 1000.0).clamp(0.0, 1.0),
+        _ => 1.0,
+    };
+
     let mut region = SfzRegion {
         sample_path: std::path::PathBuf::from(format!("«sf2:sample{sample_idx}»")),
         lokey: gens.lokey,
@@ -506,6 +521,14 @@ fn build_region(
         vib_lfo_freq_hz,
         vib_lfo_delay_s,
         vib_lfo_to_pitch_cents: gens.vib_lfo_to_pitch_cents.unwrap_or(0) as f32,
+        mod_env_delay_s,
+        mod_env_attack_s,
+        mod_env_hold_s,
+        mod_env_decay_s,
+        mod_env_sustain_level,
+        mod_env_release_s,
+        mod_env_to_pitch_cents: gens.mod_env_to_pitch_cents.unwrap_or(0) as f32,
+        mod_env_to_filter_fc_cents: gens.mod_env_to_filter_fc_cents.unwrap_or(0) as f32,
         ..SfzRegion::default()
     };
     // Defensive clamps on the key range — degenerate SF2s sometimes
@@ -884,5 +907,30 @@ mod tests {
         g.absorb(GEN_MOD_LFO_TO_VOLUME, &100_i16.to_le_bytes()); // 10 dB swing
         assert_eq!(g.mod_lfo_to_filter_fc_cents, Some(2400));
         assert_eq!(g.mod_lfo_to_volume_cb, Some(100));
+    }
+
+    /// Modulation envelope opcodes (gen 7, 11, 25–30) — five timing
+    /// fields, sustain attenuation, and two depth targets all
+    /// round-trip through absorb().  Sustain is in 0.1 % units
+    /// (1000 = full attenuation).
+    #[test]
+    fn generators_absorb_modulation_envelope() {
+        let mut g = Generators::default();
+        g.absorb(GEN_DELAY_MOD_ENV, &(-7973_i16).to_le_bytes()); // ~10 ms
+        g.absorb(GEN_ATTACK_MOD_ENV, &(-3863_i16).to_le_bytes()); // ~100 ms
+        g.absorb(GEN_HOLD_MOD_ENV, &(-2400_i16).to_le_bytes()); // ~250 ms
+        g.absorb(GEN_DECAY_MOD_ENV, &(-1200_i16).to_le_bytes()); // ~500 ms
+        g.absorb(GEN_SUSTAIN_MOD_ENV, &600_i16.to_le_bytes()); // 60 % attenuation
+        g.absorb(GEN_RELEASE_MOD_ENV, &0_i16.to_le_bytes()); // 1 s
+        g.absorb(GEN_MOD_ENV_TO_PITCH, &1200_i16.to_le_bytes()); // ±1 oct
+        g.absorb(GEN_MOD_ENV_TO_FILTER_FC, &2400_i16.to_le_bytes()); // ±2 oct
+        assert_eq!(g.delay_mod_env_tc, Some(-7973));
+        assert_eq!(g.attack_mod_env_tc, Some(-3863));
+        assert_eq!(g.hold_mod_env_tc, Some(-2400));
+        assert_eq!(g.decay_mod_env_tc, Some(-1200));
+        assert_eq!(g.sustain_mod_env_thousandths, Some(600));
+        assert_eq!(g.release_mod_env_tc, Some(0));
+        assert_eq!(g.mod_env_to_pitch_cents, Some(1200));
+        assert_eq!(g.mod_env_to_filter_fc_cents, Some(2400));
     }
 }

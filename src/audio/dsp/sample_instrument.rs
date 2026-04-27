@@ -20,6 +20,7 @@ use super::AudioParams;
 use super::dsp_util::{TuningSystem, midi_to_hz_tuned};
 use super::formant_shifter::FormantShifter;
 use super::fx_extras::Svf;
+use super::sample_instrument_modulation::{LfoSlotState, ModEnvState, RegionLfos, RegionModEnv};
 use crate::state::SfzRegion;
 
 /// One region from a parsed `.sfz` file paired with its pre-loaded mono
@@ -31,31 +32,6 @@ use crate::state::SfzRegion;
 pub struct SfzRegionRuntime {
     pub region: SfzRegion,
     pub samples: Arc<Vec<f32>>,
-}
-
-/// SF2 LFO modulation block — copied per-trigger when the region
-/// declares any non-zero LFO depth.  Mod LFO drives three targets
-/// (pitch / filter cutoff / volume); vib LFO drives pitch only.
-/// SF2 modulation envelope is a sibling follow-up.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct RegionLfos {
-    pub(crate) mod_freq_hz: f32,
-    pub(crate) mod_delay_s: f32,
-    pub(crate) mod_to_pitch_cents: f32,
-    /// Filter-cutoff swing in cents at LFO peak (`sin = ±1`).  Added
-    /// to the active filter's cutoff in cents — only audible when the
-    /// region also declares an `initialFilterFc` (otherwise the
-    /// 13500-cent default reads as "no filter" and the region_filter
-    /// path never engages).
-    pub(crate) mod_to_filter_cents: f32,
-    /// Volume swing in centibels at LFO peak.  100 cB = 10 dB swing
-    /// peak-to-peak per SF2 spec 8.1.3; applied as a multiplicative
-    /// gain factor `10^(lfo · depth / 200)` so positive depth boosts
-    /// at the LFO peak (matches FluidSynth's polarity convention).
-    pub(crate) mod_to_volume_cb: f32,
-    pub(crate) vib_freq_hz: f32,
-    pub(crate) vib_delay_s: f32,
-    pub(crate) vib_to_pitch_cents: f32,
 }
 
 /// Polyphony cap.  Default per PLAN.md — 8 slots covers chord stabs,
@@ -98,6 +74,12 @@ struct TriggerShape {
     /// depth is non-zero (no point running an LFO that doesn't
     /// modulate anything).  V1 wires the pitch targets only.
     region_lfos: Option<RegionLfos>,
+    /// Per-region modulation envelope — `Some` only when at least one
+    /// of the two depths (`to_pitch_cents`, `to_filter_cents`) is
+    /// non-zero.  Mirrors the `region_lfos` activation gate so
+    /// regions without a mod env stay on the bit-identical pre-modenv
+    /// path.
+    region_mod_env: Option<RegionModEnv>,
 }
 
 /// Convert a cutoff frequency in Hz into the 0..1 knob value the
@@ -167,16 +149,17 @@ struct SampleInstrumentSlot {
     region_loop: Option<(crate::state::sfz::SfzLoopMode, usize, usize)>,
     /// Per-slot SF2 LFO modulation — see `TriggerShape.region_lfos`.
     region_lfos: Option<RegionLfos>,
-    /// Mod LFO running phase (0..1).  Reset on trigger.
-    mod_lfo_phase: f32,
-    /// Mod LFO delay countdown in samples.  Counts down to 0; the
-    /// LFO depth is silent until then (the spec's per-LFO delay
-    /// generator).
-    mod_lfo_delay_remain_s: f32,
-    /// Vib LFO running phase (0..1).
-    vib_lfo_phase: f32,
-    /// Vib LFO delay countdown in samples.
-    vib_lfo_delay_remain_s: f32,
+    /// Running LFO state (mod + vib phases + delay countdowns).
+    /// Lives independently of `region_lfos` so two simultaneous
+    /// notes don't lock-step their wobble.
+    lfo_state: LfoSlotState,
+    /// Per-slot SF2 modulation envelope config + running state.
+    /// Config is `Some` when the region declares any non-zero depth
+    /// target; `mod_env_state` is always live but stays `Off` when
+    /// `region_mod_env` is `None` so the per-sample step is a single
+    /// match arm in the inactive case.
+    region_mod_env: Option<RegionModEnv>,
+    mod_env_state: ModEnvState,
     /// Monotonic counter set at trigger time — lowest = oldest slot.
     age: u64,
     /// Per-slot SVF state for the per-voice filter.  Each slot keeps
@@ -227,10 +210,9 @@ impl SampleInstrumentSlot {
             region_filter: None,
             region_loop: None,
             region_lfos: None,
-            mod_lfo_phase: 0.0,
-            mod_lfo_delay_remain_s: 0.0,
-            vib_lfo_phase: 0.0,
-            vib_lfo_delay_remain_s: 0.0,
+            lfo_state: LfoSlotState::new(),
+            region_mod_env: None,
+            mod_env_state: ModEnvState::new(),
             age: 0,
             filter: Svf::new(),
             formant: FormantShifter::new(),
@@ -309,6 +291,7 @@ impl SampleInstrumentVoice {
             s.adsr_value = 0.0;
             s.gate = false;
             s.pos = 0.0;
+            s.mod_env_state = ModEnvState::new();
         }
     }
 
@@ -521,6 +504,31 @@ impl SampleInstrumentVoice {
                 } else {
                     None
                 };
+                // SF2 modulation envelope — Some only when one of the
+                // two depth targets has audible reach.  Threshold 0.5
+                // (cents) skips the spec-default zero cleanly.  Times
+                // / sustain are clamped at construction so a malformed
+                // SF2 with negative / huge timecents can't stall the
+                // state machine.
+                let region_mod_env = if r.region.mod_env_to_pitch_cents.abs() > 0.5
+                    || r.region.mod_env_to_filter_fc_cents.abs() > 0.5
+                {
+                    Some(RegionModEnv {
+                        delay_s: r.region.mod_env_delay_s.clamp(0.0, 20.0),
+                        attack_s: r.region.mod_env_attack_s.clamp(0.0, 20.0),
+                        hold_s: r.region.mod_env_hold_s.clamp(0.0, 20.0),
+                        decay_s: r.region.mod_env_decay_s.clamp(0.0, 20.0),
+                        sustain_level: r.region.mod_env_sustain_level.clamp(0.0, 1.0),
+                        release_s: r.region.mod_env_release_s.clamp(0.0, 20.0),
+                        to_pitch_cents: r.region.mod_env_to_pitch_cents.clamp(-12000.0, 12000.0),
+                        to_filter_cents: r
+                            .region
+                            .mod_env_to_filter_fc_cents
+                            .clamp(-12000.0, 12000.0),
+                    })
+                } else {
+                    None
+                };
                 pending[count] = Some(TriggerShape {
                     samples: r.samples.clone(),
                     root_freq: midi_to_hz_tuned(r.region.pitch_keycenter, tuning).max(20.0),
@@ -530,6 +538,7 @@ impl SampleInstrumentVoice {
                     region_filter,
                     region_loop,
                     region_lfos,
+                    region_mod_env,
                 });
                 count += 1;
             }
@@ -551,6 +560,7 @@ impl SampleInstrumentVoice {
                 region_filter: None,
                 region_loop: None,
                 region_lfos: None,
+                region_mod_env: None,
             };
             self.fire_slot(&shape, accent);
         }
@@ -571,12 +581,22 @@ impl SampleInstrumentVoice {
         slot.region_filter = shape.region_filter;
         slot.region_loop = shape.region_loop;
         slot.region_lfos = shape.region_lfos;
+        slot.region_mod_env = shape.region_mod_env;
         // Reset LFO phases + delay countdowns on every trigger so
         // each new note starts the LFO cycle from zero.
-        slot.mod_lfo_phase = 0.0;
-        slot.vib_lfo_phase = 0.0;
-        slot.mod_lfo_delay_remain_s = shape.region_lfos.map(|l| l.mod_delay_s).unwrap_or(0.0);
-        slot.vib_lfo_delay_remain_s = shape.region_lfos.map(|l| l.vib_delay_s).unwrap_or(0.0);
+        match shape.region_lfos {
+            Some(lfos) => slot.lfo_state.trigger(&lfos),
+            None => slot.lfo_state = LfoSlotState::new(),
+        }
+        // Reset the modulation envelope.  When the region carries a
+        // mod env the state machine enters Delay (or Attack if the
+        // delay is zero); otherwise it stays Off and the per-sample
+        // step short-circuits.
+        if let Some(env) = shape.region_mod_env {
+            slot.mod_env_state.trigger(&env);
+        } else {
+            slot.mod_env_state = ModEnvState::new();
+        }
         slot.pos = 0.0;
         slot.adsr_stage = AdsrStage::Attack;
         slot.adsr_value = 0.0;
@@ -615,6 +635,10 @@ impl SampleInstrumentVoice {
                 if s.adsr_stage != AdsrStage::Off {
                     s.adsr_stage = AdsrStage::Release;
                 }
+                // Mod envelope releases independently of the volume
+                // envelope so its own decay tail can outlast (or be
+                // shorter than) the audible release.
+                s.mod_env_state.release();
             }
         }
     }
@@ -756,42 +780,15 @@ impl SampleInstrumentVoice {
         // SF2 LFO modulation — mod LFO drives three targets (pitch /
         // filter cutoff / volume), vib LFO drives pitch only.  Both
         // LFOs have a per-spec delay (silent until elapsed) + their
-        // own frequency.  The raw sine values are captured here so
-        // the filter + volume stages downstream can read them without
-        // re-evaluating the phase.  Independent state per slot keeps
-        // polyphonic voices from lock-stepping their wobble.
-        let mut mod_lfo_value: f32 = 0.0;
-        let mut vib_lfo_value: f32 = 0.0;
+        // own frequency.  `step()` returns the raw sine values so
+        // the filter + volume stages downstream can read them
+        // without re-evaluating the phase.  Independent state per
+        // slot keeps polyphonic voices from lock-stepping.
+        let (mod_lfo_value, vib_lfo_value) = match slot.region_lfos {
+            Some(lfos) => slot.lfo_state.step(&lfos, sr),
+            None => (0.0, 0.0),
+        };
         if let Some(lfos) = slot.region_lfos {
-            let dt = 1.0 / sr;
-            // Mod LFO.
-            let mod_active = if slot.mod_lfo_delay_remain_s > 0.0 {
-                slot.mod_lfo_delay_remain_s -= dt;
-                false
-            } else {
-                true
-            };
-            slot.mod_lfo_phase += lfos.mod_freq_hz * dt;
-            if slot.mod_lfo_phase >= 1.0 {
-                slot.mod_lfo_phase -= 1.0;
-            }
-            if mod_active {
-                mod_lfo_value = (slot.mod_lfo_phase * std::f32::consts::TAU).sin();
-            }
-            // Vib LFO.
-            let vib_active = if slot.vib_lfo_delay_remain_s > 0.0 {
-                slot.vib_lfo_delay_remain_s -= dt;
-                false
-            } else {
-                true
-            };
-            slot.vib_lfo_phase += lfos.vib_freq_hz * dt;
-            if slot.vib_lfo_phase >= 1.0 {
-                slot.vib_lfo_phase -= 1.0;
-            }
-            if vib_active {
-                vib_lfo_value = (slot.vib_lfo_phase * std::f32::consts::TAU).sin();
-            }
             // Pitch target — mod + vib depths sum into one cents
             // offset, converted to a rate factor via the
             // `1 + cents · ln(2)/1200` small-angle approximation
@@ -799,8 +796,26 @@ impl SampleInstrumentVoice {
             // range applied at trigger time).
             let total_cents =
                 mod_lfo_value * lfos.mod_to_pitch_cents + vib_lfo_value * lfos.vib_to_pitch_cents;
-            let lfo_factor = 1.0 + total_cents * 0.000_577_6;
-            rate *= lfo_factor;
+            rate *= 1.0 + total_cents * 0.000_577_6;
+        }
+
+        // SF2 modulation envelope — five-stage AHDSR shared between
+        // pitch + filter targets.  `step` returns a 0..1 value that
+        // the depth fields scale into cents.  Done once per sample
+        // here so both the rate-modulation block above and the
+        // filter-cutoff block below read the same instantaneous env.
+        // Pitch uses exact `2^(cents/1200)` rather than the LFO's
+        // Taylor approximation because the env can swing ±12000
+        // cents (10 octaves), well outside the small-angle range.
+        let mod_env_value = match slot.region_mod_env {
+            Some(env) => slot.mod_env_state.step(&env, sr),
+            None => 0.0,
+        };
+        if let Some(env) = slot.region_mod_env {
+            let env_pitch_cents = mod_env_value * env.to_pitch_cents;
+            if env_pitch_cents.abs() > 0.05 {
+                rate *= 2.0_f32.powf(env_pitch_cents / 1200.0);
+            }
         }
 
         // Resolve loop bounds + active flag.  Per-region override
@@ -903,11 +918,21 @@ impl SampleInstrumentVoice {
             // `2^(dC/1200)` and shifts the knob by
             // `dC · ln(2) / (1200 · ln(900)) ≈ dC · 8.491e-5`.
             // No `powf` per sample — keeps the per-voice cost flat.
-            let modulated_cutoff = match slot.region_lfos {
-                Some(lfos) if lfos.mod_to_filter_cents.abs() > 0.5 => {
-                    (cutoff + mod_lfo_value * lfos.mod_to_filter_cents * 8.491e-5).clamp(0.0, 1.0)
-                }
-                _ => cutoff,
+            // Both the mod LFO (sin × depth) and the mod envelope
+            // (env × depth) contribute additive cents.
+            let lfo_filter_cents = match slot.region_lfos {
+                Some(lfos) => mod_lfo_value * lfos.mod_to_filter_cents,
+                None => 0.0,
+            };
+            let env_filter_cents = match slot.region_mod_env {
+                Some(env) => mod_env_value * env.to_filter_cents,
+                None => 0.0,
+            };
+            let filter_cents = lfo_filter_cents + env_filter_cents;
+            let modulated_cutoff = if filter_cents.abs() > 0.5 {
+                (cutoff + filter_cents * 8.491e-5).clamp(0.0, 1.0)
+            } else {
+                cutoff
             };
             slot.filter
                 .process(dry, modulated_cutoff, resonance, 0.0, mode, 1.0, sr)

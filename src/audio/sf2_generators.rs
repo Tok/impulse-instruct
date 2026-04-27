@@ -54,6 +54,22 @@ pub(super) const GEN_MOD_LFO_TO_FILTER_FC: u16 = 13;
 /// symmetric tremolo around the carrier level.
 pub(super) const GEN_MOD_LFO_TO_VOLUME: u16 = 14;
 
+/// Modulation envelope generators — five-stage AHDSR (Delay → Attack →
+/// Hold → Decay → Sustain → Release) shared between two depth targets:
+///   * modEnvToPitch (gen 7): cents at full envelope value (env = 1).
+///   * modEnvToFilterFc (gen 11): cents of cutoff swing at env = 1.
+///
+/// Times are timecents (`secs = 2^(tc/1200)`); sustain is in 0.1 %
+/// units of attenuation from peak (1000 = full attenuation).
+pub(super) const GEN_MOD_ENV_TO_PITCH: u16 = 7;
+pub(super) const GEN_MOD_ENV_TO_FILTER_FC: u16 = 11;
+pub(super) const GEN_DELAY_MOD_ENV: u16 = 25;
+pub(super) const GEN_ATTACK_MOD_ENV: u16 = 26;
+pub(super) const GEN_HOLD_MOD_ENV: u16 = 27;
+pub(super) const GEN_DECAY_MOD_ENV: u16 = 28;
+pub(super) const GEN_SUSTAIN_MOD_ENV: u16 = 29;
+pub(super) const GEN_RELEASE_MOD_ENV: u16 = 30;
+
 /// Generator accumulator — collects every relevant generator value as
 /// the walk traverses a zone, then `build_region` (in `sf2_loader.rs`)
 /// builds the final SfzRegion at instrument-zone time.  Defaults
@@ -113,6 +129,20 @@ pub(super) struct Generators {
     pub(super) delay_vib_lfo_tc: Option<i16>,
     pub(super) freq_vib_lfo_cents: Option<i16>,
     pub(super) vib_lfo_to_pitch_cents: Option<i16>,
+    /// Modulation envelope — five stages (delay/attack/hold/decay/
+    /// release) plus a sustain level.  Times are timecents; sustain is
+    /// in 0.1 % attenuation units (1000 = full silence).  `None` =
+    /// generator absent (the spec defaults of -12000 tc on times +
+    /// 0 on sustain read as "no envelope" so we treat them
+    /// identically to absent).
+    pub(super) delay_mod_env_tc: Option<i16>,
+    pub(super) attack_mod_env_tc: Option<i16>,
+    pub(super) hold_mod_env_tc: Option<i16>,
+    pub(super) decay_mod_env_tc: Option<i16>,
+    pub(super) sustain_mod_env_thousandths: Option<i16>,
+    pub(super) release_mod_env_tc: Option<i16>,
+    pub(super) mod_env_to_pitch_cents: Option<i16>,
+    pub(super) mod_env_to_filter_fc_cents: Option<i16>,
 }
 
 impl Default for Generators {
@@ -142,6 +172,14 @@ impl Default for Generators {
             delay_vib_lfo_tc: None,
             freq_vib_lfo_cents: None,
             vib_lfo_to_pitch_cents: None,
+            delay_mod_env_tc: None,
+            attack_mod_env_tc: None,
+            hold_mod_env_tc: None,
+            decay_mod_env_tc: None,
+            sustain_mod_env_thousandths: None,
+            release_mod_env_tc: None,
+            mod_env_to_pitch_cents: None,
+            mod_env_to_filter_fc_cents: None,
         }
     }
 }
@@ -261,6 +299,46 @@ impl Generators {
             GEN_VIB_LFO_TO_PITCH => {
                 if let Ok(b) = amount.try_into() {
                     self.vib_lfo_to_pitch_cents = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_DELAY_MOD_ENV => {
+                if let Ok(b) = amount.try_into() {
+                    self.delay_mod_env_tc = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_ATTACK_MOD_ENV => {
+                if let Ok(b) = amount.try_into() {
+                    self.attack_mod_env_tc = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_HOLD_MOD_ENV => {
+                if let Ok(b) = amount.try_into() {
+                    self.hold_mod_env_tc = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_DECAY_MOD_ENV => {
+                if let Ok(b) = amount.try_into() {
+                    self.decay_mod_env_tc = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_SUSTAIN_MOD_ENV => {
+                if let Ok(b) = amount.try_into() {
+                    self.sustain_mod_env_thousandths = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_RELEASE_MOD_ENV => {
+                if let Ok(b) = amount.try_into() {
+                    self.release_mod_env_tc = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_MOD_ENV_TO_PITCH => {
+                if let Ok(b) = amount.try_into() {
+                    self.mod_env_to_pitch_cents = Some(i16::from_le_bytes(b));
+                }
+            }
+            GEN_MOD_ENV_TO_FILTER_FC => {
+                if let Ok(b) = amount.try_into() {
+                    self.mod_env_to_filter_fc_cents = Some(i16::from_le_bytes(b));
                 }
             }
             _ => {}
