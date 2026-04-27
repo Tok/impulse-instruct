@@ -33,6 +33,20 @@ pub struct SfzRegionRuntime {
     pub samples: Arc<Vec<f32>>,
 }
 
+/// SF2 LFO modulation block — copied per-trigger when the region
+/// declares non-zero `mod_lfo_to_pitch_cents` or `vib_lfo_to_pitch_cents`.
+/// V1 wires only the pitch targets; filter / volume targets and the
+/// SF2 modulation envelope are deferred follow-ups.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct RegionLfos {
+    pub(crate) mod_freq_hz: f32,
+    pub(crate) mod_delay_s: f32,
+    pub(crate) mod_to_pitch_cents: f32,
+    pub(crate) vib_freq_hz: f32,
+    pub(crate) vib_delay_s: f32,
+    pub(crate) vib_to_pitch_cents: f32,
+}
+
 /// Polyphony cap.  Default per PLAN.md — 8 slots covers chord stabs,
 /// release-tail overlap, and short stutters without over-allocating
 /// state.  When every slot is busy, the trigger steals the oldest.
@@ -67,6 +81,12 @@ struct TriggerShape {
     /// single-WAV / no-region path, which keeps consuming the
     /// global knobs so the user's loop window stays live.
     region_loop: Option<(crate::state::sfz::SfzLoopMode, usize, usize)>,
+    /// Per-region LFO config — `(mod_freq_hz, mod_delay_s,
+    /// mod_to_pitch_cents, vib_freq_hz, vib_delay_s,
+    /// vib_to_pitch_cents)`.  `Some` only when at least one pitch
+    /// depth is non-zero (no point running an LFO that doesn't
+    /// modulate anything).  V1 wires the pitch targets only.
+    region_lfos: Option<RegionLfos>,
 }
 
 /// Convert a cutoff frequency in Hz into the 0..1 knob value the
@@ -134,6 +154,18 @@ struct SampleInstrumentSlot {
     region_filter: Option<(f32, f32, u8)>,
     /// Per-slot loop override — see `TriggerShape.region_loop`.
     region_loop: Option<(crate::state::sfz::SfzLoopMode, usize, usize)>,
+    /// Per-slot SF2 LFO modulation — see `TriggerShape.region_lfos`.
+    region_lfos: Option<RegionLfos>,
+    /// Mod LFO running phase (0..1).  Reset on trigger.
+    mod_lfo_phase: f32,
+    /// Mod LFO delay countdown in samples.  Counts down to 0; the
+    /// LFO depth is silent until then (the spec's per-LFO delay
+    /// generator).
+    mod_lfo_delay_remain_s: f32,
+    /// Vib LFO running phase (0..1).
+    vib_lfo_phase: f32,
+    /// Vib LFO delay countdown in samples.
+    vib_lfo_delay_remain_s: f32,
     /// Monotonic counter set at trigger time — lowest = oldest slot.
     age: u64,
     /// Per-slot SVF state for the per-voice filter.  Each slot keeps
@@ -183,6 +215,11 @@ impl SampleInstrumentSlot {
             region_adsr: None,
             region_filter: None,
             region_loop: None,
+            region_lfos: None,
+            mod_lfo_phase: 0.0,
+            mod_lfo_delay_remain_s: 0.0,
+            vib_lfo_phase: 0.0,
+            vib_lfo_delay_remain_s: 0.0,
             age: 0,
             filter: Svf::new(),
             formant: FormantShifter::new(),
@@ -447,6 +484,23 @@ impl SampleInstrumentVoice {
                     }
                     _ => None,
                 };
+                // SF2 LFOs — Some only when at least one pitch
+                // depth is non-zero.  V1 wires the pitch targets only;
+                // filter / volume / mod-env follow-ups are deferred.
+                let region_lfos = if r.region.mod_lfo_to_pitch_cents.abs() > 0.5
+                    || r.region.vib_lfo_to_pitch_cents.abs() > 0.5
+                {
+                    Some(RegionLfos {
+                        mod_freq_hz: r.region.mod_lfo_freq_hz.clamp(0.05, 20.0),
+                        mod_delay_s: r.region.mod_lfo_delay_s.clamp(0.0, 5.0),
+                        mod_to_pitch_cents: r.region.mod_lfo_to_pitch_cents.clamp(-1200.0, 1200.0),
+                        vib_freq_hz: r.region.vib_lfo_freq_hz.clamp(0.05, 20.0),
+                        vib_delay_s: r.region.vib_lfo_delay_s.clamp(0.0, 5.0),
+                        vib_to_pitch_cents: r.region.vib_lfo_to_pitch_cents.clamp(-1200.0, 1200.0),
+                    })
+                } else {
+                    None
+                };
                 pending[count] = Some(TriggerShape {
                     samples: r.samples.clone(),
                     root_freq: midi_to_hz_tuned(r.region.pitch_keycenter, tuning).max(20.0),
@@ -455,6 +509,7 @@ impl SampleInstrumentVoice {
                     region_adsr,
                     region_filter,
                     region_loop,
+                    region_lfos,
                 });
                 count += 1;
             }
@@ -475,6 +530,7 @@ impl SampleInstrumentVoice {
                 region_adsr: None,
                 region_filter: None,
                 region_loop: None,
+                region_lfos: None,
             };
             self.fire_slot(&shape, accent);
         }
@@ -494,6 +550,13 @@ impl SampleInstrumentVoice {
         slot.region_adsr = shape.region_adsr;
         slot.region_filter = shape.region_filter;
         slot.region_loop = shape.region_loop;
+        slot.region_lfos = shape.region_lfos;
+        // Reset LFO phases + delay countdowns on every trigger so
+        // each new note starts the LFO cycle from zero.
+        slot.mod_lfo_phase = 0.0;
+        slot.vib_lfo_phase = 0.0;
+        slot.mod_lfo_delay_remain_s = shape.region_lfos.map(|l| l.mod_delay_s).unwrap_or(0.0);
+        slot.vib_lfo_delay_remain_s = shape.region_lfos.map(|l| l.vib_delay_s).unwrap_or(0.0);
         slot.pos = 0.0;
         slot.adsr_stage = AdsrStage::Attack;
         slot.adsr_value = 0.0;
@@ -668,6 +731,55 @@ impl SampleInstrumentVoice {
             let cents = tri * 80.0 * depth; // ±40 cents at depth=1
             let flutter_factor = 1.0 + cents * 0.000_577_6; // ln(2)/1200
             rate *= flutter_factor;
+        }
+
+        // SF2 LFO pitch modulation — modLfoToPitch + vibLfoToPitch.
+        // Each LFO has its own delay (silent until elapsed) +
+        // frequency; the depths sum into a single cents offset that
+        // converts to a multiplicative rate factor via the same
+        // `1 + cents · ln(2)/1200` small-angle approximation
+        // Mellotron uses.  Independent state per slot so polyphonic
+        // notes don't lock-step their wobble.
+        if let Some(lfos) = slot.region_lfos {
+            let dt = 1.0 / sr;
+            // Mod LFO.
+            let mod_active = if slot.mod_lfo_delay_remain_s > 0.0 {
+                slot.mod_lfo_delay_remain_s -= dt;
+                false
+            } else {
+                true
+            };
+            slot.mod_lfo_phase += lfos.mod_freq_hz * dt;
+            if slot.mod_lfo_phase >= 1.0 {
+                slot.mod_lfo_phase -= 1.0;
+            }
+            let mod_cents = if mod_active {
+                (slot.mod_lfo_phase * std::f32::consts::TAU).sin() * lfos.mod_to_pitch_cents
+            } else {
+                0.0
+            };
+            // Vib LFO.
+            let vib_active = if slot.vib_lfo_delay_remain_s > 0.0 {
+                slot.vib_lfo_delay_remain_s -= dt;
+                false
+            } else {
+                true
+            };
+            slot.vib_lfo_phase += lfos.vib_freq_hz * dt;
+            if slot.vib_lfo_phase >= 1.0 {
+                slot.vib_lfo_phase -= 1.0;
+            }
+            let vib_cents = if vib_active {
+                (slot.vib_lfo_phase * std::f32::consts::TAU).sin() * lfos.vib_to_pitch_cents
+            } else {
+                0.0
+            };
+            let total_cents = mod_cents + vib_cents;
+            // ln(2) / 1200 — same Taylor-series approximation used in
+            // the Mellotron flutter path.  Accurate to <0.01 % within
+            // ±1200 cents (the clamp range applied at trigger time).
+            let lfo_factor = 1.0 + total_cents * 0.000_577_6;
+            rate *= lfo_factor;
         }
 
         // Resolve loop bounds + active flag.  Per-region override

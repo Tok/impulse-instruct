@@ -7,6 +7,7 @@ pub mod audio_load;
 pub mod dsp;
 pub mod gr_levels;
 pub mod onset;
+pub(crate) mod sf2_generators;
 pub mod sf2_loader;
 pub mod sfz_loader;
 pub mod spectrum;

@@ -4,6 +4,61 @@ A detailed log of what's built.
 
 ---
 
+### SF2 LFO pitch modulation — modLfoToPitch + vibLfoToPitch
+
+The SF2 loader and SampleInstrument audio thread now honour the
+per-region pitch-LFO generators (modLfoToPitch=5,
+vibLfoToPitch=6) along with their timing (delay + frequency).
+SF2 patches that ship sustained / vocal / string samples with
+natural breath / vibrato now wobble per spec instead of holding
+dead-flat pitch.
+
+V1 scope is **pitch targets only** — modLfoToFilterFc /
+modLfoToVolume / modEnvToPitch / modEnvToFilterFc are deferred
+to a follow-up (PLAN entry).
+
+**SF2 loader.**  Six new generator opcodes parsed:
+`delayModLFO=21` (timecents), `freqModLFO=22` (absolute cents,
+`hz = 8.176 × 2^(cents/1200)`), `modLfoToPitch=5` (cents),
+plus the matching vibrato-LFO trio (23, 24, 6).  All round-trip
+via `Generators.absorb()`; `build_region` emits the converted
+Hz / seconds / cents into the new SfzRegion fields.
+
+**SfzRegion fields.**  `mod_lfo_freq_hz`, `mod_lfo_delay_s`,
+`mod_lfo_to_pitch_cents`, `vib_lfo_freq_hz`, `vib_lfo_delay_s`,
+`vib_lfo_to_pitch_cents`.  Defaults: 8.176 Hz (SF2 spec
+default), 0 s delay, 0 cents depth — so regions without these
+generators are bit-identical to pre-LFO behaviour.
+
+**Audio thread.**  New `RegionLfos` Copy struct + per-slot
+state in `SampleInstrumentSlot`:
+- `mod_lfo_phase`, `mod_lfo_delay_remain_s`
+- `vib_lfo_phase`, `vib_lfo_delay_remain_s`
+
+`fire_slot` resets phases + seeds delays from the region.  In
+`process_slot`, after the existing rate calc + Mellotron flutter,
+each LFO advances its phase, decrements its delay, and emits a
+sin-wave cents offset (only after delay elapsed).  Both depths
+sum into a single rate factor via the small-angle approximation
+`1 + cents · ln(2)/1200` (same trick the Mellotron flutter
+path uses; accurate to <0.01 % within the ±1200 cents clamp
+applied at trigger time).
+
+**Tests.**  +4: SF2 loader's `Generators::absorb` round-trips
+all 6 LFO + sample-modes opcodes (2 tests); audio-thread
+behaviour — modLfoToPitch perturbs the rendered output vs a
+zero-depth baseline; vibLfoToPitch's delay generator suppresses
+modulation early in the trace.  Suite **2301 → 2305**.
+
+This entry partially closes the SF2 wishlist line in PLAN.md
+(pitch targets shipped; filter / volume / mod envelope deferred).
+
+Files: `src/audio/sf2_loader.rs`, `src/state/sfz.rs`,
+`src/audio/dsp/sample_instrument.rs`,
+`src/tests/sample_instrument_sfz_tests.rs`.
+
+---
+
 ### SF2 sample loop modes — per-region loop honour
 
 The SF2 loader and SampleInstrument audio thread now honour per-

@@ -267,183 +267,10 @@ pub fn parse_sf2_preset_regions(bytes: &[u8], preset_idx: usize) -> Option<Vec<S
     Some(regions)
 }
 
-// ─── Generator opcode constants ──────────────────────────────────────────────
-const GEN_PAN: u16 = 17;
-const GEN_KEYRANGE: u16 = 43;
-const GEN_VELRANGE: u16 = 44;
-const GEN_INSTRUMENT: u16 = 41;
-const GEN_SAMPLE_ID: u16 = 53;
-const GEN_OVERRIDING_ROOT_KEY: u16 = 58;
-const GEN_COARSE_TUNE: u16 = 51;
-const GEN_FINE_TUNE: u16 = 52;
-const GEN_INITIAL_ATTENUATION: u16 = 48;
-// Volume envelope generators (timecents for times,
-// centibels of attenuation for sustain).
-const GEN_ATTACK_VOL_ENV: u16 = 34;
-const GEN_DECAY_VOL_ENV: u16 = 36;
-const GEN_SUSTAIN_VOL_ENV: u16 = 37;
-const GEN_RELEASE_VOL_ENV: u16 = 38;
-// Filter generators.  initialFilterFc is in absolute cents
-// (hz = 8.176 × 2^(cents/1200)); initialFilterQ is in centibels of
-// resonance peak gain (Q_linear = 10^(cB / 200)).
-const GEN_INITIAL_FILTER_FC: u16 = 8;
-const GEN_INITIAL_FILTER_Q: u16 = 9;
-
-/// Generator 54 — `sampleModes`.  Bitfield (bits 0–1):
-///   0 = no loop, 1 = loop continuously, 2 = no loop (alt encoding),
-///   3 = loop while gate held then play release tail.
-const GEN_SAMPLE_MODES: u16 = 54;
-
-/// Generator accumulator — collects every relevant generator value as
-/// we walk a zone, then `materialise` builds the final SfzRegion at
-/// instrument-zone time.  Defaults match the SF2 spec defaults so a
-/// zone with zero generators still produces a valid region.
-#[derive(Clone, Debug)]
-struct Generators {
-    lokey: u8,
-    hikey: u8,
-    lovel: u8,
-    hivel: u8,
-    /// `None` means "use the sample header's originalPitch".
-    overriding_root: Option<u8>,
-    coarse_tune_st: i16,
-    fine_tune_cents: i16,
-    pan_per_thousand: i16,       // SF2 pan is -500..+500 = -100..+100 %
-    initial_attenuation_cb: i16, // 0.1 dB units; positive = attenuation
-    /// Volume envelope generators in their native SF2 units.  `None`
-    /// = generator absent (the spec default of -12000 timecents = ~1
-    /// ms = "instant" applies).  Times are timecents
-    /// (`secs = 2^(tc / 1200)`); sustain is centibels of attenuation
-    /// from peak (0 cB = full sustain, 1000 cB = 10 dB attenuation).
-    attack_vol_env_tc: Option<i16>,
-    decay_vol_env_tc: Option<i16>,
-    sustain_vol_env_cb: Option<i16>,
-    release_vol_env_tc: Option<i16>,
-    /// Filter cutoff in absolute cents.  `None` = generator absent;
-    /// the spec default 13500 (~20 kHz) reads as "filter off" so we
-    /// still surface it but build_region collapses high-cutoff
-    /// regions back to "no filter" for the SfzRegion contract.
-    initial_filter_fc_cents: Option<i16>,
-    /// Filter resonance peak gain in centibels of attenuation
-    /// (Q_linear = 10^(cB / 200)).  `None` = generator absent.
-    initial_filter_q_cb: Option<i16>,
-    /// `sampleModes` (gen 54) — controls loop behaviour.  `None` =
-    /// generator absent, which the SF2 spec treats as "no loop"
-    /// regardless of any loop window in the SHDR.  Stored as the
-    /// raw u16 so build_region maps it to `SfzLoopMode`.
-    sample_modes: Option<u16>,
-}
-
-impl Default for Generators {
-    fn default() -> Self {
-        Self {
-            lokey: 0,
-            hikey: 127,
-            lovel: 0,
-            hivel: 127,
-            overriding_root: None,
-            coarse_tune_st: 0,
-            fine_tune_cents: 0,
-            pan_per_thousand: 0,
-            initial_attenuation_cb: 0,
-            attack_vol_env_tc: None,
-            decay_vol_env_tc: None,
-            sustain_vol_env_cb: None,
-            release_vol_env_tc: None,
-            initial_filter_fc_cents: None,
-            initial_filter_q_cb: None,
-            sample_modes: None,
-        }
-    }
-}
-
-impl Generators {
-    fn absorb(&mut self, oper: u16, amount: &[u8]) {
-        match oper {
-            GEN_KEYRANGE if amount.len() == 2 => {
-                self.lokey = amount[0];
-                self.hikey = amount[1];
-            }
-            GEN_VELRANGE if amount.len() == 2 => {
-                self.lovel = amount[0];
-                self.hivel = amount[1];
-            }
-            GEN_OVERRIDING_ROOT_KEY => {
-                if let Ok(b) = amount.try_into() {
-                    let v = i16::from_le_bytes(b);
-                    // Spec: -1 means "use sample originalPitch".
-                    if (0..=127).contains(&v) {
-                        self.overriding_root = Some(v as u8);
-                    }
-                }
-            }
-            GEN_COARSE_TUNE => {
-                if let Ok(b) = amount.try_into() {
-                    self.coarse_tune_st = i16::from_le_bytes(b);
-                }
-            }
-            GEN_FINE_TUNE => {
-                if let Ok(b) = amount.try_into() {
-                    self.fine_tune_cents = i16::from_le_bytes(b);
-                }
-            }
-            GEN_PAN => {
-                if let Ok(b) = amount.try_into() {
-                    self.pan_per_thousand = i16::from_le_bytes(b);
-                }
-            }
-            GEN_INITIAL_ATTENUATION => {
-                if let Ok(b) = amount.try_into() {
-                    self.initial_attenuation_cb = i16::from_le_bytes(b);
-                }
-            }
-            GEN_ATTACK_VOL_ENV => {
-                if let Ok(b) = amount.try_into() {
-                    self.attack_vol_env_tc = Some(i16::from_le_bytes(b));
-                }
-            }
-            GEN_DECAY_VOL_ENV => {
-                if let Ok(b) = amount.try_into() {
-                    self.decay_vol_env_tc = Some(i16::from_le_bytes(b));
-                }
-            }
-            GEN_SUSTAIN_VOL_ENV => {
-                if let Ok(b) = amount.try_into() {
-                    self.sustain_vol_env_cb = Some(i16::from_le_bytes(b));
-                }
-            }
-            GEN_RELEASE_VOL_ENV => {
-                if let Ok(b) = amount.try_into() {
-                    self.release_vol_env_tc = Some(i16::from_le_bytes(b));
-                }
-            }
-            GEN_INITIAL_FILTER_FC => {
-                if let Ok(b) = amount.try_into() {
-                    self.initial_filter_fc_cents = Some(i16::from_le_bytes(b));
-                }
-            }
-            GEN_INITIAL_FILTER_Q => {
-                if let Ok(b) = amount.try_into() {
-                    self.initial_filter_q_cb = Some(i16::from_le_bytes(b));
-                }
-            }
-            GEN_SAMPLE_MODES => {
-                if let Ok(b) = amount.try_into() {
-                    // Stored as a u16 — the spec only defines bits 0–1
-                    // but the field is a 16-bit word.
-                    self.sample_modes = Some(u16::from_le_bytes(b));
-                }
-            }
-            _ => {}
-        }
-    }
-
-    // (No explicit `layer()` helper — the walk uses clone + absorb to
-    // accumulate generators per zone.  preset_global → preset zone →
-    // walk_instrument(preset_zone) → inst zone is the sequence; each
-    // step clones the previous Generators and absorbs new overrides
-    // on top.  Cleaner than a separate merge fn would be.)
-}
+// Generator opcodes + the `Generators` accumulator live in
+// `sf2_generators.rs` (sibling) since this file crossed the
+// 1000-line cap during the SF2 LFO ship.
+use super::sf2_generators::*;
 
 #[allow(clippy::too_many_arguments)]
 fn walk_instrument(
@@ -631,6 +458,21 @@ fn build_region(
         _ => crate::state::sfz::SfzLoopMode::NoLoop,
     };
 
+    // Modulation + vibrato LFO frequencies — absolute cents converted
+    // to Hz via 8.176 × 2^(cents / 1200).  Spec defaults (0 cents =
+    // 8.176 Hz) apply when the generator is absent.
+    let mod_lfo_freq_hz = match gens.freq_mod_lfo_cents {
+        Some(c) => 8.176_f32 * 2.0_f32.powf(c as f32 / 1200.0),
+        None => 8.176,
+    };
+    let vib_lfo_freq_hz = match gens.freq_vib_lfo_cents {
+        Some(c) => 8.176_f32 * 2.0_f32.powf(c as f32 / 1200.0),
+        None => 8.176,
+    };
+    // Delays — timecents (None = -12000 ≈ "instant" → 0 s).
+    let mod_lfo_delay_s = sf2_timecents_to_secs(gens.delay_mod_lfo_tc);
+    let vib_lfo_delay_s = sf2_timecents_to_secs(gens.delay_vib_lfo_tc);
+
     let mut region = SfzRegion {
         sample_path: std::path::PathBuf::from(format!("«sf2:sample{sample_idx}»")),
         lokey: gens.lokey,
@@ -656,6 +498,12 @@ fn build_region(
         cutoff_hz,
         resonance_db,
         fil_type,
+        mod_lfo_freq_hz,
+        mod_lfo_delay_s,
+        mod_lfo_to_pitch_cents: gens.mod_lfo_to_pitch_cents.unwrap_or(0) as f32,
+        vib_lfo_freq_hz,
+        vib_lfo_delay_s,
+        vib_lfo_to_pitch_cents: gens.vib_lfo_to_pitch_cents.unwrap_or(0) as f32,
         ..SfzRegion::default()
     };
     // Defensive clamps on the key range — degenerate SF2s sometimes
@@ -991,5 +839,36 @@ mod tests {
         g.absorb(GEN_INITIAL_FILTER_Q, &120_i16.to_le_bytes());
         assert_eq!(g.initial_filter_fc_cents, Some(8302));
         assert_eq!(g.initial_filter_q_cb, Some(120));
+    }
+
+    /// `sampleModes` (gen 54) covers the SF2 loop-mode bit: 0/2 = no
+    /// loop, 1 = loop continuously, 3 = loop until release.
+    #[test]
+    fn generators_absorb_sample_modes() {
+        let mut g = Generators::default();
+        g.absorb(GEN_SAMPLE_MODES, &1u16.to_le_bytes());
+        assert_eq!(g.sample_modes, Some(1));
+        g.absorb(GEN_SAMPLE_MODES, &3u16.to_le_bytes());
+        assert_eq!(g.sample_modes, Some(3));
+    }
+
+    /// LFO timing + pitch-depth generators round-trip through absorb().
+    /// Frequency is absolute cents (8.176 × 2^(cents/1200)); delay is
+    /// timecents; depth is cents.
+    #[test]
+    fn generators_absorb_lfo_pitch_depths() {
+        let mut g = Generators::default();
+        g.absorb(GEN_FREQ_MOD_LFO, &(-700_i16).to_le_bytes()); // ~5 Hz
+        g.absorb(GEN_DELAY_MOD_LFO, &(-3863_i16).to_le_bytes()); // ~100 ms
+        g.absorb(GEN_MOD_LFO_TO_PITCH, &50_i16.to_le_bytes()); // ±50 cents
+        g.absorb(GEN_FREQ_VIB_LFO, &0_i16.to_le_bytes()); // 8.176 Hz default
+        g.absorb(GEN_DELAY_VIB_LFO, &(-7973_i16).to_le_bytes()); // ~10 ms
+        g.absorb(GEN_VIB_LFO_TO_PITCH, &30_i16.to_le_bytes()); // ±30 cents
+        assert_eq!(g.freq_mod_lfo_cents, Some(-700));
+        assert_eq!(g.delay_mod_lfo_tc, Some(-3863));
+        assert_eq!(g.mod_lfo_to_pitch_cents, Some(50));
+        assert_eq!(g.freq_vib_lfo_cents, Some(0));
+        assert_eq!(g.delay_vib_lfo_tc, Some(-7973));
+        assert_eq!(g.vib_lfo_to_pitch_cents, Some(30));
     }
 }

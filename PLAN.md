@@ -13,11 +13,13 @@ Pick from the top down; each row is one focused commit.
 
 ### SF2 follow-up
 
-- [ ] **Modulator / LFO generators**.  Volume envelope + filter
-  shipped.  Remaining: modulation envelope (modEnvToPitch /
-  modEnvToFilterFc), modulation LFO (modLfoToPitch /
-  modLfoToFilterFc / modLfoToVolume), vibrato LFO
-  (vibLfoToPitch).
+- [ ] **Modulator / LFO generators — remaining targets**.  Pitch
+  targets shipped (modLfoToPitch + vibLfoToPitch).  Remaining:
+  modLfoToFilterFc, modLfoToVolume, modulation envelope
+  (modEnvToPitch / modEnvToFilterFc).  Each requires per-slot
+  state + per-sample apply in the SampleInstrument voice; mod
+  envelope also needs the AHDSR state machine (5 timecents fields:
+  delay/attack/hold/decay/release + sustain attenuation).
 
 ---
 

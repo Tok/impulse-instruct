@@ -91,6 +91,18 @@ pub struct SfzRegion {
     /// CC#1 crossfade-out upper bound.  Above this CC value the
     /// fade-out gain is 0.  Default 127 = no fade-out at any CC.
     pub xfout_hi_cc1: u8,
+    /// Modulation LFO + vibrato LFO — V1 wires only the pitch
+    /// targets (modLfoToPitch / vibLfoToPitch).  All four LFO
+    /// timing fields are seconds / Hz; depths are cents.  Defaults
+    /// (0 cents depth, 8.176 Hz, 0 s delay) leave the LFO inert
+    /// so regions without these generators are bit-identical to
+    /// pre-LFO behaviour.
+    pub mod_lfo_freq_hz: f32,
+    pub mod_lfo_delay_s: f32,
+    pub mod_lfo_to_pitch_cents: f32,
+    pub vib_lfo_freq_hz: f32,
+    pub vib_lfo_delay_s: f32,
+    pub vib_lfo_to_pitch_cents: f32,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -147,6 +159,14 @@ impl Default for SfzRegion {
             xfin_hi_cc1: 0,
             xfout_lo_cc1: 127,
             xfout_hi_cc1: 127,
+            // 8.176 Hz / 0 cents = SF2 spec defaults; 0 depth = no
+            // audible LFO modulation.
+            mod_lfo_freq_hz: 8.176,
+            mod_lfo_delay_s: 0.0,
+            mod_lfo_to_pitch_cents: 0.0,
+            vib_lfo_freq_hz: 8.176,
+            vib_lfo_delay_s: 0.0,
+            vib_lfo_to_pitch_cents: 0.0,
         }
     }
 }

@@ -556,6 +556,131 @@ mod sample_instrument_sfz_mode_tests {
         );
     }
 
+    /// modLfoToPitch / vibLfoToPitch: with non-zero pitch depth the
+    /// slot's read rate should fluctuate cycle-by-cycle as the LFO
+    /// wraps.  We compare the running max + min output amplitudes
+    /// against a no-LFO baseline; a working LFO produces a different
+    /// envelope (the rate change shifts where the playhead lands
+    /// each frame, perturbing the interpolated output).
+    #[test]
+    fn region_lfo_pitch_modulates_rate() {
+        // Constant-pitch sinusoidal source so the LFO's effect on
+        // the read rate is audible as cycle-by-cycle drift in the
+        // output sample.
+        let buf: Vec<f32> = (0..2048).map(|i| (i as f32 * 0.05).sin() * 0.5).collect();
+        let arc = Arc::new(buf);
+
+        // Helper to run the voice for N samples with a given LFO depth
+        // and return the output trace.
+        let run = |depth_cents: f32| -> Vec<f32> {
+            let mut v = SampleInstrumentVoice::new();
+            let mut r = SfzRegion {
+                lokey: 60,
+                hikey: 60,
+                pitch_keycenter: 60,
+                loop_mode: crate::state::sfz::SfzLoopMode::LoopContinuous,
+                loop_start: Some(0),
+                loop_end: Some(2047),
+                mod_lfo_freq_hz: 6.0,
+                mod_lfo_delay_s: 0.0,
+                mod_lfo_to_pitch_cents: depth_cents,
+                ..Default::default()
+            };
+            r.sample_path = std::path::PathBuf::from("/lfo.wav");
+            v.load_sfz(vec![SfzRegionRuntime {
+                region: r,
+                samples: arc.clone(),
+            }]);
+            let mut p = make_params();
+            p.sample_loop_enabled = false;
+            p.sample_volume = 1.0;
+            p.sample_attack = 0.0;
+            v.trigger(
+                60,
+                crate::audio::dsp::TuningSystem::TwelveTet,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+            );
+            let sr = 48_000.0;
+            (0..8_000).map(|_| v.process(sr, &p)).collect()
+        };
+
+        let dry = run(0.0);
+        let wet = run(400.0); // ±400 cents — heavy mod-LFO depth
+        // Sum of squared differences > 0 means the LFO actually
+        // perturbed the playback.  A bit-equal comparison would be
+        // fragile, but a meaningful divergence is easy to assert.
+        let diff: f32 = dry
+            .iter()
+            .zip(wet.iter())
+            .map(|(a, b)| (a - b).powi(2))
+            .sum();
+        assert!(
+            diff > 0.5,
+            "modLfoToPitch should perturb the rendered output (diff {diff})"
+        );
+    }
+
+    /// LFO delay generator: with a non-zero delay the LFO depth is
+    /// silent until elapsed.  The early portion of the trace should
+    /// be bit-equal to a no-LFO baseline up to the delay window.
+    #[test]
+    fn region_lfo_delay_holds_modulation_off() {
+        let buf: Vec<f32> = (0..2048).map(|i| (i as f32 * 0.05).sin() * 0.5).collect();
+        let arc = Arc::new(buf);
+
+        let run = |delay_s: f32| -> Vec<f32> {
+            let mut v = SampleInstrumentVoice::new();
+            let mut r = SfzRegion {
+                lokey: 60,
+                hikey: 60,
+                pitch_keycenter: 60,
+                loop_mode: crate::state::sfz::SfzLoopMode::LoopContinuous,
+                loop_start: Some(0),
+                loop_end: Some(2047),
+                vib_lfo_freq_hz: 6.0,
+                vib_lfo_delay_s: delay_s,
+                vib_lfo_to_pitch_cents: 600.0,
+                ..Default::default()
+            };
+            r.sample_path = std::path::PathBuf::from("/delay.wav");
+            v.load_sfz(vec![SfzRegionRuntime {
+                region: r,
+                samples: arc.clone(),
+            }]);
+            let mut p = make_params();
+            p.sample_loop_enabled = false;
+            p.sample_volume = 1.0;
+            p.sample_attack = 0.0;
+            v.trigger(
+                60,
+                crate::audio::dsp::TuningSystem::TwelveTet,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+            );
+            let sr = 48_000.0;
+            (0..2_000).map(|_| v.process(sr, &p)).collect()
+        };
+
+        // 30 ms delay → first 1440 samples (at 48 kHz) should match
+        // a comparison with very long delay (LFO never fires).
+        let delayed = run(0.030);
+        let off = run(10.0);
+        let early_diff: f32 = delayed[..1_000]
+            .iter()
+            .zip(off[..1_000].iter())
+            .map(|(a, b)| (a - b).abs())
+            .sum();
+        assert!(
+            early_diff < 1e-3,
+            "LFO delay should suppress modulation early (early diff {early_diff})"
+        );
+    }
+
     /// NoLoop region: no loop override emitted, so the slot drains
     /// to sample end and enters Release per the existing single-shot
     /// path.  Sanity check that we didn't accidentally loop everything.
