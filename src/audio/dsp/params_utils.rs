@@ -173,6 +173,31 @@ impl Default for SampleHoldParamsCopy {
     }
 }
 
+/// Per-slot FunctionGen configuration.  Single gate input + 3 knobs
+/// (attack / release / curve).  The audio thread runs an AR
+/// envelope state machine retriggered on each rising edge of the
+/// gate.
+#[derive(Clone, Copy, Debug)]
+pub struct FunctionGenParamsCopy {
+    pub enabled: bool,
+    pub attack: f32,
+    pub release: f32,
+    pub curve: f32,
+    pub cv_in_buf_idx: u8,
+}
+
+impl Default for FunctionGenParamsCopy {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            attack: 0.1,
+            release: 0.4,
+            curve: 0.5,
+            cv_in_buf_idx: u8::MAX,
+        }
+    }
+}
+
 /// Per-slot Math configuration.  Two CV-input ports (resolved by
 /// the cable compile pass into `cv_in_a_buf_idx` and
 /// `cv_in_b_buf_idx`) and an op selector + blend knob.

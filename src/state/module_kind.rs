@@ -268,11 +268,8 @@ pub enum ModuleKind {
     /// per-voice sequencer panels.  Pure UI; no DSP, no audio I/O.
     PatternHeatmap,
     /// Per-voice level meter strip — one mini-meter per active voice
-    /// in the rack.  Distinct from `StereoMeter` and `LoudnessMeter`
-    /// which show the master sum only; this strip exposes "which
-    /// voice is contributing what" at a glance.  Reads atomic
-    /// per-voice envelope levels published once per audio callback
-    /// from the engine; pure UI, no DSP touchpoints.
+    /// in the rack.  Distinct from the master-bus `StereoMeter` /
+    /// `LoudnessMeter` (sum only): exposes per-voice contribution.
     VoiceMeterStrip,
     /// Gain-reduction history scope — rolling waveform of the
     /// momentary gain reduction across the dynamics FX
@@ -335,15 +332,17 @@ pub enum ModuleKind {
     /// Mod-In ports per instance.
     Math,
     /// Trigger divider CV utility — fires the output gate every Nth
-    /// input gate (configurable ratio: /2, /3, /4, /5, /7).  Distinct
-    /// from `Comparator` (threshold gate, no division) — enables
-    /// polyrhythmic patches without changing the sequencer's pattern
-    /// length.
+    /// input gate (ratio: /2, /3, /4, /5, /7).  Polyrhythmic patches
+    /// without changing the sequencer's pattern length.
     TriggerDiv,
-    /// Logic gate CV utility — boolean operation (AND / OR / XOR)
-    /// over two gate inputs.  Combinator for euclidean / TriggerDiv
-    /// patches; pairs with TriggerDiv for layered rhythmic logic.
+    /// Logic gate CV utility — AND/OR/XOR over two gate inputs.
+    /// Combinator for euclidean / TriggerDiv patches.
     LogicGate,
+    /// Function-generator CV utility — re-triggerable AR envelope
+    /// (Maths-style).  Gate-in fires a 0..1 shaped envelope-out;
+    /// distinct from `LfoModule` (free-running) and `CvSequencer`
+    /// (step-table).
+    FunctionGen,
     LlmAgent,
     // ── LLM console (singleton, Global zone) ──────────────────────────────
     LlmConsole,
@@ -448,6 +447,7 @@ impl ModuleKind {
             Self::Math => "MATH",
             Self::TriggerDiv => "TRIG DIV",
             Self::LogicGate => "LOGIC",
+            Self::FunctionGen => "FUNC GEN",
             Self::LlmAgent => "LLM AGENT",
             Self::LlmConsole => "LLM CONSOLE",
             Self::MasterOutput => "MASTER",
@@ -593,6 +593,8 @@ impl ModuleKind {
             Self::TriggerDiv => (2, 1),
             // LogicGate — single op cycle button (AND / OR / XOR).
             Self::LogicGate => (2, 1),
+            // FunctionGen — 3 knobs (attack, release, curve), fits 2×2.
+            Self::FunctionGen => (2, 2),
             // FX modules — exhaustive so new variants cause a compile error
             Self::FxDelay => (2, 2), // 5-button row can't fit in 1 row
             // Convolution Reverb — 6 knobs in a glass-grouped 2-row
@@ -763,7 +765,8 @@ impl ModuleKind {
             | Self::SampleHold
             | Self::Math
             | Self::TriggerDiv
-            | Self::LogicGate => Zone::FxMod,
+            | Self::LogicGate
+            | Self::FunctionGen => Zone::FxMod,
         }
     }
 
@@ -957,6 +960,7 @@ impl ModuleKind {
                 | Self::Math
                 | Self::TriggerDiv
                 | Self::LogicGate
+                | Self::FunctionGen
                 | Self::LlmAgent
         )
     }

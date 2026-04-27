@@ -13,11 +13,6 @@ Pick from the top down; each row is one focused commit.
 
 ### Modulation — new utilities
 
-- [ ] **Function generator** (`FunctionGen`) — re-triggerable
-  AD/AR envelope with curve shaping (linear / log / exp).
-  Maths-style: gate-in → envelope-out.  Different from `LfoModule`
-  (free-running) and `CvSequencer` (step-table); fills the
-  "transient envelope" gap for drum sounds / plucks.
 - [ ] **Crossfader** (`Crossfader`) — single-knob A/B blend
   between two CV sources.  Mix knob = 0 → A only; 1 → B only.
   More direct than Math's Blend mode for the common A/B case.

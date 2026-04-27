@@ -31,6 +31,7 @@ mod event_stream_heatmap_tests;
 mod few_shot_tests;
 mod fm_ops_tests;
 mod formant_shifter_tests;
+mod function_gen_tests;
 mod fx_deesser_tests;
 mod fx_djfilter_tests;
 mod fx_freq_shift_tests;

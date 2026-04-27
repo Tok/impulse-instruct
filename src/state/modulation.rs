@@ -219,6 +219,10 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // pass branches on `cable.to.index` (0 = A, 1 = B), same
         // pattern as Math.
         LogicGate => &[Selector, Selector],
+        // FunctionGen — single gate input.  The 3 knobs (attack /
+        // release / curve) are not LFO-modulatable in V1; the
+        // Selector slot is for the gate input cable.
+        FunctionGen => &[Selector],
     }
 }
 
@@ -643,7 +647,8 @@ pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
         | ModuleKind::SampleHold
         | ModuleKind::Math
         | ModuleKind::TriggerDiv
-        | ModuleKind::LogicGate => PortKind::Cv,
+        | ModuleKind::LogicGate
+        | ModuleKind::FunctionGen => PortKind::Cv,
         _ => PortKind::Audio,
     }
 }

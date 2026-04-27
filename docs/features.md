@@ -4,6 +4,55 @@ A detailed log of what's built.
 
 ---
 
+### FunctionGen CV utility (`FunctionGen`)
+
+Re-triggerable AR envelope with curve shaping — Maths-style:
+gate-in fires the envelope on each rising edge, output is a
+0..1 shaped envelope.  Distinct from `LfoModule` (free-running)
+and `CvSequencer` (step-table); fills the "transient envelope"
+gap for plucks / drum sounds / synth attack tails when a gate
+signal needs an audio-rate ADSR-shaped CV without burning a
+full bass voice.
+
+**State.**  `FunctionGenSlot { enabled, attack, release,
+curve }` with `FUNCTION_GEN_SLOTS = 4`.  Knobs all 0..1:
+attack 0..1 s, release 0..3 s, curve centred at 0.5 (linear);
+<0.5 = log/concave, >0.5 = exp/convex.
+
+**Audio thread.**  `MOD_BUF_FUNCTION_GEN_BASE = 36`.  Per-slot
+state machine in DspState:
+- `function_gen_phase: [f32; 4]` — current segment phase 0..1.
+- `function_gen_state: [u8; 4]` — 0=idle, 1=attack, 2=release.
+- `function_gen_prev: [f32; 4]` — previous-input cache for
+  rising-edge detection at the 0.5 threshold.
+
+`process_block` evaluates after LogicGate: rising-edge → reset
+phase + enter attack; phase advances by `block_dt /
+segment_dur`; on completion attack→release→idle.  Curve knob
+maps to a power-of-x exponent (k=1 linear; <0.5 → k>1; >0.5 →
+k<1) applied to the phase before output, giving symmetric log /
+exp shaping on both segments.
+
+**UI.**  ON/OFF toggle + ATK / REL / CURVE knob row.  No XY
+pad.  Caption: "Gate in → AR envelope out".
+
+**Wiring.**  Standard 17-file utility ritual.  ModuleKind
+`FunctionGen` ("FUNC GEN" label, **2×2 grid** to fit 3 knobs +
+header row, FxMod zone, sort-group 35, Selector × 1 mod input,
+PortKind::Cv output).  Aliases functiongen / function_gen /
+funcgen / ar / ad / envelope / maths.  Allows multiple — chain
+separate envelopes for amp + filter, etc.
+
+**Tests.**  +6 (2 state-side: defaults, slot round-trip; +4
+module: label, alias parsing, FxMod zone, allows_multiple).
+Suite **2286 → 2292**.
+
+Files: new `src/state/function_gen.rs`, new
+`src/ui/panels/function_gen.rs`, new
+`src/tests/function_gen_tests.rs`.
+
+---
+
 ### LogicGate CV utility (`LogicGate`)
 
 Boolean combinator for gate-domain CV — AND / OR / XOR over two

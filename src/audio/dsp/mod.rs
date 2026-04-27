@@ -44,6 +44,7 @@ pub mod pendulum;
 pub mod pitch_shift;
 pub mod pluck;
 mod process_block;
+mod process_block_util;
 mod rev_tap;
 pub mod sample_instrument;
 pub mod samplers;
@@ -88,16 +89,17 @@ use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
 pub use lfo_target_opcode::lfo_target_to_u8;
 pub use mod_compile::{
-    compile_comparator_params, compile_logic_gate_params, compile_math_params, compile_mod_routes,
-    compile_quantizer_params, compile_sample_hold_params, compile_slew_params,
-    compile_trigger_div_params,
+    compile_comparator_params, compile_function_gen_params, compile_logic_gate_params,
+    compile_math_params, compile_mod_routes, compile_quantizer_params, compile_sample_hold_params,
+    compile_slew_params, compile_trigger_div_params,
 };
 use ms_master::MsMaster;
 use param_eq::ParamEq;
 pub use params::{
-    AudioParams, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE,
-    MOD_BUF_LOGIC_GATE_BASE, MOD_BUF_MATH_BASE, MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE,
-    MOD_BUF_SIZE, MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE, MOD_UTIL_SLOTS,
+    AudioParams, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CV_SEQ_BASE,
+    MOD_BUF_FUNCTION_GEN_BASE, MOD_BUF_LFO_BASE, MOD_BUF_LOGIC_GATE_BASE, MOD_BUF_MATH_BASE,
+    MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE, MOD_BUF_SIZE, MOD_BUF_SLEW_BASE,
+    MOD_BUF_TRIGGER_DIV_BASE, MOD_UTIL_SLOTS,
 };
 use pendulum::PendulumVoice;
 use pitch_shift::PitchShift;
@@ -242,6 +244,14 @@ pub struct DspState {
     trigger_div_count: [u32; crate::state::TRIGGER_DIV_SLOTS],
     /// TriggerDiv previous-input cache for rising-edge detection.
     trigger_div_prev: [f32; crate::state::TRIGGER_DIV_SLOTS],
+    /// FunctionGen per-slot envelope phase 0..1 within the active
+    /// segment.  Reset on each rising edge.
+    function_gen_phase: [f32; crate::state::FUNCTION_GEN_SLOTS],
+    /// FunctionGen per-slot envelope state — 0 = idle (output 0),
+    /// 1 = attack (rising 0→1), 2 = release (falling 1→0).
+    function_gen_state: [u8; crate::state::FUNCTION_GEN_SLOTS],
+    /// FunctionGen previous-input cache for rising-edge detection.
+    function_gen_prev: [f32; crate::state::FUNCTION_GEN_SLOTS],
     /// Last sequencer step seen by `process_block`.  Used by S&H
     /// to detect step transitions (the "clock edge").
     prev_seq_step: u32,
@@ -418,6 +428,9 @@ impl DspState {
             sample_hold_state: [0.0; crate::state::SAMPLE_HOLD_SLOTS],
             trigger_div_count: [0; crate::state::TRIGGER_DIV_SLOTS],
             trigger_div_prev: [0.0; crate::state::TRIGGER_DIV_SLOTS],
+            function_gen_phase: [0.0; crate::state::FUNCTION_GEN_SLOTS],
+            function_gen_state: [0; crate::state::FUNCTION_GEN_SLOTS],
+            function_gen_prev: [0.0; crate::state::FUNCTION_GEN_SLOTS],
             prev_seq_step: u32::MAX,
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
             free_eg_phase: 0.0,

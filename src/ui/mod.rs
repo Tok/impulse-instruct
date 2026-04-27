@@ -30,6 +30,7 @@ pub(crate) mod rack_content_fx_lfo;
 pub(crate) mod rack_content_pad;
 pub(crate) mod rack_content_param_eq;
 pub(crate) mod rack_content_pitch_shift;
+pub(crate) mod rack_content_util;
 mod rack_grid;
 pub(crate) mod rack_minimap;
 mod rack_scroll;

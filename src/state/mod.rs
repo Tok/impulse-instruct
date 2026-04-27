@@ -66,6 +66,7 @@ pub use sequencer_state::{SequencerState, Step, TB303Step};
 
 pub mod comparator;
 pub mod cv_seq;
+pub mod function_gen;
 pub mod fx;
 mod fx_defaults;
 pub mod logic_gate;
@@ -76,6 +77,7 @@ pub mod slew;
 pub mod trigger_div;
 pub use comparator::{COMPARATOR_SLOTS, ComparatorSlot};
 pub use cv_seq::{CV_SEQ_SLOTS, CV_SEQ_STEPS, CvSeqSlot};
+pub use function_gen::{FUNCTION_GEN_SLOTS, FunctionGenSlot};
 pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
 pub use logic_gate::{LOGIC_GATE_SLOTS, LogicGateSlot, LogicOp};
 pub use math_module::{MATH_SLOTS, MathOp, MathSlot};
@@ -290,6 +292,8 @@ pub struct AppState {
     #[serde(default)]
     pub logic_gate: [LogicGateSlot; LOGIC_GATE_SLOTS],
     #[serde(default)]
+    pub function_gen: [FunctionGenSlot; FUNCTION_GEN_SLOTS],
+    #[serde(default)]
     pub free_eg: FreeEg,
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
@@ -466,6 +470,7 @@ impl Default for AppState {
             math: std::array::from_fn(|_| MathSlot::default()),
             trigger_div: std::array::from_fn(|_| TriggerDivSlot::default()),
             logic_gate: std::array::from_fn(|_| LogicGateSlot::default()),
+            function_gen: std::array::from_fn(|_| FunctionGenSlot::default()),
             free_eg: Default::default(),
             noise_voice: Default::default(),
             theremin: Default::default(),

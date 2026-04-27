@@ -852,35 +852,10 @@ pub(super) fn draw_math_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_
     crate::ui::panels::draw_math(app, ui, slot);
 }
 
-pub(super) fn draw_trigger_div_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
-    let slot = {
-        let rack = app.state.read();
-        rack.rack
-            .modules
-            .iter()
-            .filter(|m| m.kind == ModuleKind::TriggerDiv)
-            .enumerate()
-            .find(|(_, m)| m.id == module_id)
-            .map(|(i, _)| i)
-            .unwrap_or(0)
-    };
-    crate::ui::panels::draw_trigger_div(app, ui, slot);
-}
-
-pub(super) fn draw_logic_gate_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
-    let slot = {
-        let rack = app.state.read();
-        rack.rack
-            .modules
-            .iter()
-            .filter(|m| m.kind == ModuleKind::LogicGate)
-            .enumerate()
-            .find(|(_, m)| m.id == module_id)
-            .map(|(i, _)| i)
-            .unwrap_or(0)
-    };
-    crate::ui::panels::draw_logic_gate(app, ui, slot);
-}
+// Newer CV-utility content dispatchers (TriggerDiv / LogicGate /
+// FunctionGen) live in `rack_content_util.rs` (sibling) since this
+// file crossed the 1000-line cap during the FunctionGen ship.
+// Re-exported via the module declaration in `ui::mod`.
 
 pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     use crate::ui::widgets;

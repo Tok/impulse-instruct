@@ -14,11 +14,11 @@
 
 use super::lfo_target_opcode::lfo_target_to_u8;
 use super::params::{
-    ComparatorParamsCopy, LogicGateParamsCopy, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE,
-    MOD_BUF_CV_SEQ_BASE, MOD_BUF_LFO_BASE, MOD_BUF_LOGIC_GATE_BASE, MOD_BUF_MATH_BASE,
-    MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE, MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE,
-    MathParamsCopy, ModRouteCopy, QuantizerParamsCopy, SampleHoldParamsCopy, SlewParamsCopy,
-    TriggerDivParamsCopy,
+    ComparatorParamsCopy, FunctionGenParamsCopy, LogicGateParamsCopy, MAX_MOD_ROUTES,
+    MOD_BUF_COMPARATOR_BASE, MOD_BUF_CV_SEQ_BASE, MOD_BUF_FUNCTION_GEN_BASE, MOD_BUF_LFO_BASE,
+    MOD_BUF_LOGIC_GATE_BASE, MOD_BUF_MATH_BASE, MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE,
+    MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE, MathParamsCopy, ModRouteCopy, QuantizerParamsCopy,
+    SampleHoldParamsCopy, SlewParamsCopy, TriggerDivParamsCopy,
 };
 use crate::state::{AppState, LfoTarget, ModuleKind, PortKind};
 
@@ -35,6 +35,7 @@ struct CvSourceMaps {
     math: Vec<u32>,
     trigger_div: Vec<u32>,
     logic_gate: Vec<u32>,
+    function_gen: Vec<u32>,
 }
 
 impl CvSourceMaps {
@@ -48,6 +49,7 @@ impl CvSourceMaps {
         let mut math = Vec::new();
         let mut trigger_div = Vec::new();
         let mut logic_gate = Vec::new();
+        let mut function_gen = Vec::new();
         for m in &s.rack.modules {
             match m.kind {
                 ModuleKind::LfoModule => lfo.push(m.id),
@@ -59,6 +61,7 @@ impl CvSourceMaps {
                 ModuleKind::Math => math.push(m.id),
                 ModuleKind::TriggerDiv => trigger_div.push(m.id),
                 ModuleKind::LogicGate => logic_gate.push(m.id),
+                ModuleKind::FunctionGen => function_gen.push(m.id),
                 _ => {}
             }
         }
@@ -72,6 +75,7 @@ impl CvSourceMaps {
             math,
             trigger_div,
             logic_gate,
+            function_gen,
         }
     }
 
@@ -132,6 +136,12 @@ impl CvSourceMaps {
                 return None;
             }
             return Some((MOD_BUF_LOGIC_GATE_BASE + idx) as u8);
+        }
+        if let Some(idx) = self.function_gen.iter().position(|id| *id == src_module_id) {
+            if idx >= crate::state::FUNCTION_GEN_SLOTS {
+                return None;
+            }
+            return Some((MOD_BUF_FUNCTION_GEN_BASE + idx) as u8);
         }
         None
     }
@@ -473,6 +483,46 @@ pub fn compile_logic_gate_params(
             0 => out[idx].cv_in_a_buf_idx = buf_idx,
             1 => out[idx].cv_in_b_buf_idx = buf_idx,
             _ => {}
+        }
+    }
+    out
+}
+
+/// Walk the rack's cables and produce the FunctionGen utility-slot
+/// snapshot.  Single CV-In port (gate) per slot; the audio-thread
+/// state machine handles edge detection + envelope shaping.
+pub fn compile_function_gen_params(
+    s: &AppState,
+) -> [FunctionGenParamsCopy; crate::state::FUNCTION_GEN_SLOTS] {
+    let mut out = [FunctionGenParamsCopy::default(); crate::state::FUNCTION_GEN_SLOTS];
+    let maps = CvSourceMaps::build(s);
+    let ids = &maps.function_gen;
+    for (i, slot) in s
+        .function_gen
+        .iter()
+        .enumerate()
+        .take(crate::state::FUNCTION_GEN_SLOTS)
+    {
+        out[i] = FunctionGenParamsCopy {
+            enabled: slot.enabled,
+            attack: slot.attack.clamp(0.0, 1.0),
+            release: slot.release.clamp(0.0, 1.0),
+            curve: slot.curve.clamp(0.0, 1.0),
+            cv_in_buf_idx: u8::MAX,
+        };
+    }
+    for cable in &s.rack.cables {
+        if cable.from.kind != PortKind::Cv || cable.to.kind != PortKind::Mod {
+            continue;
+        }
+        let Some(idx) = ids.iter().position(|id| *id == cable.to.module_id) else {
+            continue;
+        };
+        if idx >= crate::state::FUNCTION_GEN_SLOTS {
+            continue;
+        }
+        if let Some(buf_idx) = maps.resolve(s, cable.from.module_id) {
+            out[idx].cv_in_buf_idx = buf_idx;
         }
     }
     out

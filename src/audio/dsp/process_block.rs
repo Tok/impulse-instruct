@@ -222,72 +222,12 @@ impl DspState {
         }
         self.prev_seq_step = cur_step;
 
-        // ── TriggerDiv utility ───────────────────────────────────────────────
-        // Schmitt-style rising-edge detection: count climbs each time
-        // the input crosses the 0.5 threshold upward.  Output fires
-        // (1.0) when the running count is divisible by the slot's
-        // ratio, else 0.0.  Disabled = passthrough so the user can
-        // unhook the gate without rewiring.
-        for (i, td) in p_base.trigger_div.iter().enumerate() {
-            let out_idx = super::params::MOD_BUF_TRIGGER_DIV_BASE + i;
-            let raw = if td.cv_in_buf_idx == u8::MAX {
-                0.0
-            } else {
-                p.cv_buf[td.cv_in_buf_idx as usize]
-            };
-            if !td.enabled {
-                p.cv_buf[out_idx] = raw;
-                self.trigger_div_prev[i] = raw;
-                continue;
-            }
-            // Rising-edge detector with a single-threshold gate at 0.5.
-            // Hysteresis would need both an upper + lower threshold
-            // band; for V1 the simple threshold catches typical LFO
-            // gates / comparator outputs without chatter.
-            let was_high = self.trigger_div_prev[i] >= 0.5;
-            let is_high = raw >= 0.5;
-            if is_high && !was_high {
-                self.trigger_div_count[i] = self.trigger_div_count[i].wrapping_add(1);
-            }
-            self.trigger_div_prev[i] = raw;
-            let ratio = td.ratio.max(1) as u32;
-            // Fire output during the entire input gate period when
-            // count's an exact multiple of ratio.  This produces the
-            // expected gate-out shape (matches the input gate width
-            // for kept gates, fully off for skipped ones).
-            let on = is_high && self.trigger_div_count[i].is_multiple_of(ratio);
-            p.cv_buf[out_idx] = if on { 1.0 } else { 0.0 };
-        }
-
-        // ── LogicGate utility ────────────────────────────────────────────────
-        // Boolean op (AND / OR / XOR) on two gate-domain inputs;
-        // output is 1.0 / 0.0.  Disabled passes A through unchanged
-        // so unhooking the gate doesn't kill the signal.
-        for (i, lg) in p_base.logic_gate.iter().enumerate() {
-            let out_idx = super::params::MOD_BUF_LOGIC_GATE_BASE + i;
-            let a_raw = if lg.cv_in_a_buf_idx == u8::MAX {
-                0.0
-            } else {
-                p.cv_buf[lg.cv_in_a_buf_idx as usize]
-            };
-            let b_raw = if lg.cv_in_b_buf_idx == u8::MAX {
-                0.0
-            } else {
-                p.cv_buf[lg.cv_in_b_buf_idx as usize]
-            };
-            if !lg.enabled {
-                p.cv_buf[out_idx] = a_raw;
-                continue;
-            }
-            let a_high = a_raw >= 0.5;
-            let b_high = b_raw >= 0.5;
-            let on = match lg.op {
-                crate::state::LogicOp::And => a_high && b_high,
-                crate::state::LogicOp::Or => a_high || b_high,
-                crate::state::LogicOp::Xor => a_high ^ b_high,
-            };
-            p.cv_buf[out_idx] = if on { 1.0 } else { 0.0 };
-        }
+        // ── TriggerDiv / LogicGate / FunctionGen utilities ────────────────────
+        // Methods live in `process_block_util.rs` (sibling) to keep this
+        // file under the 1000-line cap.  Same `impl DspState` block.
+        self.eval_trigger_div(&p_base, &mut p);
+        self.eval_logic_gate(&p_base, &mut p);
+        self.eval_function_gen(&p_base, &mut p);
 
         // ── Math utility ──────────────────────────────────────────────────────
         // Combine two CV inputs per the slot's op selector.
