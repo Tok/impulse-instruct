@@ -4,6 +4,74 @@ A detailed log of what's built.
 
 ---
 
+### SF2 modulation surface complete — mod-LFO filter/volume targets + modulation envelope
+
+Closes the rest of the SF2 generator-driven modulation wishlist.
+Pitch targets shipped earlier; this batch adds the remaining
+mod-LFO destinations and the five-stage modulation envelope so SF2
+patches that script filter wobble, tremolo, plucked-string filter
+sweeps, etc. all play through correctly per spec.
+
+**modLfoToFilterFc + modLfoToVolume.**  The mod-LFO now drives all
+three of its targets — pitch (already shipped), filter cutoff, and
+volume.  Filter modulation rides on top of the existing per-region
+filter; cutoff knob is offset linearly via the closed-form
+`cents · ln(2)/(1200·ln(900)) ≈ 8.491e-5` constant (no `powf` per
+sample, so the cost stays flat).  Volume modulation is a symmetric
+tremolo via `10^(lfo · cb / 200)` — positive depth boosts at the
+LFO peak (FluidSynth polarity convention).
+
+**Modulation envelope (Delay → Attack → Hold → Decay → Sustain →
+Release).**  Five-stage AHDSR shared between two depth targets:
+- modEnvToPitch (gen 7) — cents at full env value, exact
+  `2^(cents/1200)` rate factor (the env can swing ±10 octaves so
+  the small-angle Taylor approximation used by the LFO is too loose).
+- modEnvToFilterFc (gen 11) — cents of cutoff swing, same
+  closed-form knob delta as the LFO filter target.
+
+Mod-env stage curves are exponential (matching the existing voice
+ADSR), with sustain expressed as the linear 0..1 level the env
+decays to (converted from SF2's 0.1 % attenuation units at parse
+time).  Five timecents fields (delay/attack/hold/decay/release) +
+sustain depth + two depth targets = ten new SF2 generators wired.
+
+**Sibling-style file split.**  Adding the env to
+`sample_instrument.rs` pushed it past the 1000-line cap, so the
+entire SF2 modulation surface — `RegionLfos`, `LfoSlotState`,
+`RegionModEnv`, `ModEnvState`, plus the four pure helpers
+(`cents_to_taylor_rate_factor`, `cents_to_exact_rate_factor`,
+`filter_cents_to_knob_delta`, `cb_to_linear_gain`) and two
+builders (`region_lfos_from`, `region_mod_env_from`) — now lives in
+a sibling `sample_instrument_modulation.rs`.  Voice slot holds
+`lfo_state: LfoSlotState` + `mod_env_state: ModEnvState`; per-
+sample LFO advance becomes a single `step()` call.
+
+**Tests.**  +24 across the surface: 8 new SF2 absorb tests for the
+new generators (gen 13 / 14 / 7 / 11 / 25–30); 5 unit tests on
+`ModEnvState` covering each stage transition; 4 builder tests on
+the activation gates + clamps; 5 voice-level integration tests
+(modLfoToVolume RMS divergence, modLfoToFilterFc sweep, modEnvToPitch
+shift, modEnvToFilterFc sweep, no-mod-env regression bit-equal).
+
+**Module file count.**  +1 new sibling source file
+(`sample_instrument_modulation.rs`); +1 new tests file
+(`sample_instrument_modulation_tests.rs`).  Voice file:
+908 → 938 lines after the lift.
+
+This entry closes the SF2 wishlist line in PLAN.md.  All four
+generator-driven modulation targets (pitch / filter / volume / env)
+are now wired; only the SF2 spec's 8.2 "default modulators"
+(MIDI-CC-driven controls like CC1 → vib depth, CC11 → expression)
+remain, and they're an orthogonal subsystem rather than a follow-up.
+
+Files: `src/audio/sf2_generators.rs`, `src/audio/sf2_loader.rs`,
+`src/state/sfz.rs`, `src/audio/dsp/sample_instrument.rs`,
+`src/audio/dsp/sample_instrument_modulation.rs` (new),
+`src/tests/sample_instrument_sfz_tests.rs`,
+`src/tests/sample_instrument_modulation_tests.rs` (new).
+
+---
+
 ### SF2 LFO pitch modulation — modLfoToPitch + vibLfoToPitch
 
 The SF2 loader and SampleInstrument audio thread now honour the

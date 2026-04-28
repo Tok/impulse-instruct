@@ -6,44 +6,18 @@ ship, not held here as history.
 
 ---
 
-## Next session — complete the FX / viz / modulation surface
-
-Concrete additions to fill genuine gaps in the current inventory.
-Pick from the top down; each row is one focused commit.
-
-### SF2 follow-up
-
-(SF2 modulator + envelope surface fully wired — pitch / filter / volume
-LFO targets and the five-stage modulation envelope all shipped.  Next
-candidates would be SF2 modulators 8.2 ("default modulators" — CC1
-mod-wheel → vib-LFO depth, CC11 expression, etc.) but those are an
-orthogonal subsystem from the generator-driven envelope work and not
-on the critical path for any current demo.)
-
----
-
-## Refactor pass (after the FX / viz / module batch)
+## Refactor pass
 
 Targeted, pre-emptive — only act when a file is within ~50 lines
 of the 1000-cap or when a duplicated helper has 3+ copies.  Skip
 the speculative reorgs.
 
-- [ ] **Top files near cap** — check after this session's adds:
-  `state/transitions.rs`, `audio/dsp/params.rs`, `llm/lanes.rs`,
-  `sequencer/mod.rs`, `ui/rack_content_fx_extras.rs`,
-  `audio/analysis.rs`, `llm/mod.rs`.  Split sibling-style only
-  when an actual edit pushes one over.  (Most recent: SF2 mod-env
-  ship pushed `audio/dsp/sample_instrument.rs` past 1000 lines;
-  resolved by lifting the modulation surface — `RegionLfos` +
-  `LfoSlotState` + `RegionModEnv` + `ModEnvState` — into a sibling
-  `sample_instrument_modulation.rs`, leaving the voice file at 984.)
-- [x] ~~**Shared `resample_mono`**~~ — folded: `sf2_loader.rs`
-  now imports `audio_load::resample_mono_linear` (`pub(crate)`,
-  slice input).  Single source, three unit tests covering the
-  pass-through + half/double-rate cases.
-- [ ] **Glass group helpers** — re-evaluate.  Previous note said
-  "the inline pattern varies too much"; with more panels in
-  place, the shared cases may have stabilised.
+- [ ] **Top files near cap** — watchlist for the next session's
+  edits: `state/transitions.rs`, `audio/dsp/params.rs`,
+  `llm/lanes.rs`, `sequencer/mod.rs`,
+  `ui/rack_content_fx_extras.rs`, `audio/analysis.rs`,
+  `llm/mod.rs`.  Split sibling-style only when an actual edit
+  pushes one over.
 
 ---
 
