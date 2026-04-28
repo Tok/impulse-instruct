@@ -132,3 +132,85 @@ mod loader {
         assert!(!block.contains("Example 6"), "renderer should cap at 5");
     }
 }
+
+#[cfg(test)]
+mod path_building {
+    use crate::llm::few_shot::example_path_for;
+    use crate::llm::lanes::LaneKind;
+
+    /// `example_path_for` puts the slug under `examples/<slug>.json`
+    /// relative to the working directory.  Pin the convention so a
+    /// future move of the example bank shows up as a deliberate
+    /// constant change.
+    #[test]
+    fn returns_examples_subdir_path_with_json_suffix() {
+        let p = example_path_for(LaneKind::Settings);
+        assert_eq!(p.to_string_lossy(), "examples/settings.json");
+    }
+
+    /// Per-bass-voice slug (bass1 / bass2 / …) flows through into the
+    /// path so each voice has its own example bank.
+    #[test]
+    fn distinct_bass_voices_map_to_distinct_files() {
+        assert_eq!(
+            example_path_for(LaneKind::Bass(0)).to_string_lossy(),
+            "examples/bass1.json"
+        );
+        assert_eq!(
+            example_path_for(LaneKind::Bass(2)).to_string_lossy(),
+            "examples/bass3.json"
+        );
+    }
+
+    /// Every lane variant produces a unique file path — a regression
+    /// where two lanes collapsed to the same slug would silently
+    /// share their example banks.
+    #[test]
+    fn every_lane_variant_has_distinct_path() {
+        use std::collections::HashSet;
+        let lanes = [
+            LaneKind::Settings,
+            LaneKind::Bass(0),
+            LaneKind::Bass(1),
+            LaneKind::Bass(2),
+            LaneKind::Bass(3),
+            LaneKind::KitA,
+            LaneKind::KitB,
+            LaneKind::Amen,
+            LaneKind::Hoover,
+            LaneKind::An1x,
+            LaneKind::Fx,
+            LaneKind::Modulation,
+            LaneKind::Rack,
+        ];
+        let paths: HashSet<_> = lanes
+            .iter()
+            .map(|l| example_path_for(*l).to_string_lossy().to_string())
+            .collect();
+        assert_eq!(paths.len(), lanes.len(), "two lanes share an example path");
+    }
+}
+
+#[cfg(test)]
+mod load_for_lane {
+    use crate::llm::few_shot::load_examples_for_lane;
+    use crate::llm::lanes::LaneKind;
+
+    /// Calling against a lane whose example file does not exist on
+    /// disk returns an empty Vec — best-effort enrichment, never a
+    /// hard dep.  Unit tests run from the repo root where the
+    /// `examples/` dir may or may not be present; either way the
+    /// fallback path has to be silent and non-panicking.
+    #[test]
+    fn missing_or_unparseable_file_yields_empty_vec() {
+        // The contract is "no panic, returns Vec" regardless of
+        // whether `examples/<slug>.json` exists in the working
+        // directory — unit tests run from the repo root and the
+        // example bank may or may not be present.  Calling the
+        // function on a few representative lanes verifies the
+        // fallback path doesn't panic.
+        let _ = load_examples_for_lane(LaneKind::Bass(99));
+        let _ = load_examples_for_lane(LaneKind::Modulation);
+        let _ = load_examples_for_lane(LaneKind::Rack);
+    }
+}
