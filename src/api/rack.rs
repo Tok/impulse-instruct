@@ -122,9 +122,29 @@ pub async fn post_rack_add(
     if kind == crate::state::ModuleKind::NeuTts {
         s.tts_modules.push(crate::state::TtsModuleState::new(id));
     }
+    // Auto-pick a random amen sample when the AmenSampler module is added
+    // with no sample loaded.  Without this, freshly-added amen modules look
+    // fine in the UI but are silent — the voice triggers on schedule but
+    // its source buffer is empty until the user manually clicks LOAD or
+    // RAND in the panel.  The amen panel's path-watcher picks up the
+    // assignment on its next frame and runs the full decode + audio-thread
+    // push (same path /api/amen takes).
+    let auto_amen_path = if kind == crate::state::ModuleKind::AmenSampler && s.amen.path.is_empty()
+    {
+        crate::ui::panels::amen::pick_random_sample()
+    } else {
+        None
+    };
+    if let Some(ref p) = auto_amen_path {
+        s.amen.path = p.clone();
+        s.amen.slice_positions.clear();
+    }
     // Auto-scroll to the new module so it's visible.
     s.scroll_target = Some(req.kind.clone());
     drop(s);
+    if let Some(p) = auto_amen_path {
+        api_log(&api, format!("[API] amen: auto-loaded {}", p));
+    }
     api_log(&api, format!("[API] rack: added {:?} (id={})", kind, id));
     Ok(Json(serde_json::json!({ "ok": true, "id": id })))
 }

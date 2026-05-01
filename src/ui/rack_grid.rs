@@ -55,6 +55,14 @@ pub(super) fn sequencer_grid_rows(state: &crate::state::AppState, col_w: f32) ->
     let has_bass = has(ModuleKind::AcidBass);
     let has_hoover = has(ModuleKind::HooverLead);
     let has_an1x = has(ModuleKind::An1xVoice);
+    // Pluck / Wavetable / SampleInstrument each render their own sequencer
+    // lane in `panels::sequencer` (and `sequencer_sample_lane`), but the
+    // height computation used to ignore them.  When any of these voices
+    // were patched into master the panel grew past the sequencer card's
+    // grid budget and the bottom row was clipped by the zone backdrop.
+    let has_pluck = has(ModuleKind::PluckString);
+    let has_wavetable = has(ModuleKind::WavetableVoice);
+    let has_sample = has(ModuleKind::SampleInstrument);
     // Drum voices the panel will actually render.  Voices whose module
     // is patched but whose pattern has no active steps still appear
     // (either expanded or as a chip in the collapsed strip), so both
@@ -90,6 +98,13 @@ pub(super) fn sequencer_grid_rows(state: &crate::state::AppState, col_w: f32) ->
     };
     let hoover_h = if has_hoover { sub_rows * step_row } else { 0.0 };
     let an1x_h = if has_an1x { sub_rows * step_row } else { 0.0 };
+    let pluck_h = if has_pluck { sub_rows * step_row } else { 0.0 };
+    let wavetable_h = if has_wavetable {
+        sub_rows * step_row
+    } else {
+        0.0
+    };
+    let sample_h = if has_sample { sub_rows * step_row } else { 0.0 };
     // draw_drum_rows emits `add_space(2) + separator + add_space(2)` once
     // when any drum voice is present, then the collapsed chip strip
     // (one wrapped row, ~18 px including padding) if any voices are
@@ -104,7 +119,15 @@ pub(super) fn sequencer_grid_rows(state: &crate::state::AppState, col_w: f32) ->
     // + labels + toggles + trailing pad.  Budget 42 px covers it
     // with a few px of margin so the cell isn't shaved close.
     let preecho_h = 42.0;
-    let total_h = header_h + bass_h + hoover_h + an1x_h + drums_h + preecho_h;
+    let total_h = header_h
+        + bass_h
+        + hoover_h
+        + an1x_h
+        + pluck_h
+        + wavetable_h
+        + sample_h
+        + drums_h
+        + preecho_h;
     // Convert pixel height to grid rows: each grid row occupies col_w + RACK_GAP
     // (minus one trailing gap on the last row).
     let step = col_w + RACK_GAP;

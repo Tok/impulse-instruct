@@ -40,7 +40,9 @@ the speculative reorgs.
   bass LFO.
 - [ ] Parameter ramp — gradual cutoff sweep across bars.
 - [ ] Event stream — Huth-coloured note history scrolling live.
-- [ ] D&B re-record — amen + reese + drone pad + MC.
+- [ ] D&B re-record — amen + reese + Salamander Grand piano stabs + MC
+  (script: `demo/scenarios/style-dnb.sh`, streamlined kit: amen, bass,
+  sample, reverb, delay).
 
 ---
 

@@ -72,6 +72,29 @@ impl eframe::App for ImpulseApp {
             self.push_audio_params();
         }
 
+        // ── Sample-loader heartbeat ──────────────────────────────────────────
+        // The amen and sample-instrument loaders used to live inside
+        // `draw_amen` / `draw_sample_instrument`, which means the WAV
+        // decode + audio-thread push only fired on frames where the
+        // card was actually painted.  An API caller that adds an amen
+        // module and then immediately scrolls to a different module
+        // could leave the amen card scrolled off-screen before its
+        // panel ever ran — the path was set in state but the buffer
+        // never reached the audio thread, so the voice triggered on
+        // schedule but produced silence.  Polling here, every frame,
+        // is panel-render-independent and catches API-driven sample
+        // changes the same frame they land in state.
+        {
+            let amen_path = self.state.read().amen.path.clone();
+            if !amen_path.is_empty() && self.amen_ui.wave_cache.0 != amen_path {
+                panels::amen::load_and_cache(self, &amen_path);
+            }
+            let sample_path = self.state.read().sample_instrument.sample_path.clone();
+            if !sample_path.is_empty() && self.last_sample_instrument_path != sample_path {
+                panels::sample_instrument::load_sample_instrument_path(self, &sample_path);
+            }
+        }
+
         // ── Auto-save: write session.json if the state changed ──────────────
         // (moved here to diagnose hang — see if save blocks)
         if let Some((fire_at, pending_agent)) = self.jam_next_fire {

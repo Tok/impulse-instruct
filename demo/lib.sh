@@ -160,6 +160,30 @@ api_set_style() {
         -d "{\"id\": \"$1\"}" >/dev/null 2>&1 || true
 }
 
+api_sample() {
+    # Load a recording (.wav or .sfz) into the SampleInstrument voice.
+    # Usage: api_sample "samples/instruments/SalamanderGrandPiano/Salamander Grand Piano V3.sfz"
+    #        api_sample --random
+    if [ "$1" = "--random" ]; then
+        curl -sf -X POST "$API/api/sample" \
+            -H "Content-Type: application/json" \
+            -d '{"random": true}' >/dev/null 2>&1 || true
+    else
+        # jq handles spaces / quotes / unicode in the path safely.
+        local body
+        if command -v jq >/dev/null 2>&1; then
+            body=$(jq -nc --arg p "$1" '{path:$p}')
+        else
+            local esc
+            esc=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            body=$(printf '{"path":"%s"}' "$esc")
+        fi
+        curl -sf -X POST "$API/api/sample" \
+            -H "Content-Type: application/json" \
+            -d "$body" >/dev/null 2>&1 || true
+    fi
+}
+
 api_rack_add() {
     # Add a module to the rack. Returns JSON with "id" field.
     # Usage: id=$(api_rack_add "808")
@@ -1051,6 +1075,13 @@ add_instrument() {
     # Add an instrument module.  Usage: add_instrument bass
     # Returns the module ID (capture with: id=$(add_instrument bass))
     api_rack_add "$1"
+}
+
+load_sample() {
+    # Load a recording into the SampleInstrument voice.
+    # Usage: load_sample "samples/instruments/.../Foo.sfz"
+    #        load_sample --random
+    api_sample "$1"
 }
 
 add_effect() {

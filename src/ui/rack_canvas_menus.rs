@@ -196,6 +196,18 @@ pub(super) fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
                             crate::state::LlmAgentState::from_singleton(id, &app.state.read().llm);
                         app.state.write().llm_agents.push(agent);
                     }
+                    // Mirror /api/rack/add: auto-pick a random amen sample
+                    // when the AmenSampler is added with no path.  Otherwise
+                    // freshly-added amen modules are silent until the user
+                    // hits LOAD/RAND in the panel.
+                    if *kind == ModuleKind::AmenSampler
+                        && app.state.read().amen.path.is_empty()
+                        && let Some(p) = crate::ui::panels::amen::pick_random_sample()
+                    {
+                        let mut s = app.state.write();
+                        s.amen.path = p;
+                        s.amen.slice_positions.clear();
+                    }
                     close = true;
                 }
             }

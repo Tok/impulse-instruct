@@ -54,8 +54,11 @@ pub fn pick_random_sample() -> Option<String> {
 
 /// Load a WAV from disk, push its samples to the audio thread, cache
 /// header metadata into AmenState.meta, and build a waveform thumbnail
-/// for the panel display.
-fn load_and_cache(app: &mut ImpulseApp, path: &str) {
+/// for the panel display.  `pub(crate)` so the central per-frame poller
+/// in `app_update::update` can call it — without that the load only
+/// fires when `draw_amen` runs, which means an API-added amen module
+/// is silent until the user happens to scroll its card into view.
+pub(crate) fn load_and_cache(app: &mut ImpulseApp, path: &str) {
     if let Some(data) = load_wav_to_44100(path) {
         // Rebuild the waveform thumbnail before handing the Arc over —
         // cheaper than reading the file again from the UI thread.

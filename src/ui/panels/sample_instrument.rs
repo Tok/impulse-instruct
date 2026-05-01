@@ -360,139 +360,145 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Row 3: filter — cutoff / resonance / mix + LP/BP/HP mode toggle.
     // Always shown so the user can dial in a per-voice colour even
     // when no SFZ region carries cutoff/resonance opcodes.
-    ui.horizontal(|ui| {
-        widgets::glass_group_fill(ui, gw * 2.0 + crate::ui::panels::GLASS_GAP, gw, |ui| {
-            ui.set_min_height(group_h);
-            widgets::group_header(ui, "FILTER");
-            widgets::centered_row(ui, |ui| {
-                {
-                    let mut v = app.state.read().sample_instrument.filter_cutoff;
-                    if widgets::param_control(ui, "CUT", &mut v, ParamMode::Free, ctrl).0 {
-                        app.state.write().sample_instrument.filter_cutoff = v.clamp(0.0, 1.0);
-                        app.push_audio_params();
-                    }
-                }
-                {
-                    let mut v = app.state.read().sample_instrument.filter_resonance;
-                    if widgets::param_control(ui, "RES", &mut v, ParamMode::Free, ctrl).0 {
-                        app.state.write().sample_instrument.filter_resonance = v.clamp(0.0, 1.0);
-                        app.push_audio_params();
-                    }
-                }
-                {
-                    let mut v = app.state.read().sample_instrument.filter_mix;
-                    if widgets::param_control(ui, "MIX", &mut v, ParamMode::Free, ctrl).0 {
-                        app.state.write().sample_instrument.filter_mix = v.clamp(0.0, 1.0);
-                        app.push_audio_params();
-                    }
-                }
-                let mode = app.state.read().sample_instrument.filter_mode;
-                let label = match mode {
-                    1 => "BP",
-                    2 => "HP",
-                    _ => "LP",
-                };
-                if ui
-                    .add_sized(
-                        [28.0, 18.0],
-                        egui::Button::new(
-                            egui::RichText::new(label)
-                                .monospace()
-                                .size(8.0)
-                                .color(theme::CHALK),
-                        ),
-                    )
-                    .clicked()
-                {
-                    let next = (mode + 1) % 3;
-                    app.state.write().sample_instrument.filter_mode = next;
+    //
+    // Height is ~60 % of the standard two-row group height: the row
+    // only carries one row of widgets (CUT/RES/MIX + mode/FRMT/MELLO/
+    // TIME), so the full `group_h` left a wasteful gap underneath
+    // *and* squeezed the MIC BLEND knob — when it was sharing this
+    // row it lapped past the right edge of the panel.  MIC BLEND now
+    // gets its own line below.
+    let filter_h = (group_h * 0.6).max(72.0);
+    let filter_w = gw * 2.0 + crate::ui::panels::GLASS_GAP;
+    widgets::glass_group_fill(ui, filter_w, filter_w, |ui| {
+        ui.set_min_height(filter_h);
+        widgets::group_header(ui, "FILTER");
+        widgets::centered_row(ui, |ui| {
+            {
+                let mut v = app.state.read().sample_instrument.filter_cutoff;
+                if widgets::param_control(ui, "CUT", &mut v, ParamMode::Free, ctrl).0 {
+                    app.state.write().sample_instrument.filter_cutoff = v.clamp(0.0, 1.0);
                     app.push_audio_params();
                 }
-                // Formant-preserve opt-in (V2 Stage 8 — flag wired,
-                // DSP lands in a follow-up).  Renders as `FRMT` /
-                // `frmt` so the user can pre-set it to flip on once
-                // the implementation ships without touching their
-                // session.
-                let fp_on = app.state.read().sample_instrument.formant_preserve;
-                let fp_label = if fp_on { "FRMT" } else { "frmt" };
-                let fp_col = if fp_on { theme::CHALK } else { theme::IRON };
-                if ui
-                    .add_sized(
-                        [32.0, 18.0],
-                        egui::Button::new(
-                            egui::RichText::new(fp_label)
-                                .monospace()
-                                .size(8.0)
-                                .color(fp_col),
-                        ),
-                    )
-                    .clicked()
-                {
-                    app.state.write().sample_instrument.formant_preserve = !fp_on;
+            }
+            {
+                let mut v = app.state.read().sample_instrument.filter_resonance;
+                if widgets::param_control(ui, "RES", &mut v, ParamMode::Free, ctrl).0 {
+                    app.state.write().sample_instrument.filter_resonance = v.clamp(0.0, 1.0);
                     app.push_audio_params();
                 }
-                // Mellotron-mode toggle.  When on, the slot's
-                // playback gains tape-loop character (per-note
-                // pitch flutter + spin-up + tanh sat).  Cheap
-                // path stays the V1.1 default — flutter modulates
-                // the read rate directly without going through
-                // the spectral processor.
-                let mello_on = app.state.read().sample_instrument.mellotron_mode;
-                let mello_label = if mello_on { "MELLO" } else { "mello" };
-                let mello_col = if mello_on { theme::CHALK } else { theme::IRON };
-                if ui
-                    .add_sized(
-                        [38.0, 18.0],
-                        egui::Button::new(
-                            egui::RichText::new(mello_label)
-                                .monospace()
-                                .size(8.0)
-                                .color(mello_col),
-                        ),
-                    )
-                    .on_hover_text(
-                        "Mellotron mode: tape-loop character — per-note pitch flutter, \
-                         spin-up transient on attack, gentle tanh saturation.",
-                    )
-                    .clicked()
-                {
-                    app.state.write().sample_instrument.mellotron_mode = !mello_on;
+            }
+            {
+                let mut v = app.state.read().sample_instrument.filter_mix;
+                if widgets::param_control(ui, "MIX", &mut v, ParamMode::Free, ctrl).0 {
+                    app.state.write().sample_instrument.filter_mix = v.clamp(0.0, 1.0);
                     app.push_audio_params();
                 }
-                // Continuous time-stretch knob — bipolar so the
-                // resting position (1.0×) sits at knob centre and
-                // dragging right makes playback faster, left
-                // slower.  Maps logarithmically: each octave of
-                // bipolar travel doubles / halves the multiplier
-                // (bipolar ±1 → 4.0× / 0.25×; bipolar 0 → 1.0×).
-                // Auto-engages the spectral processor when off-rest;
-                // the cheap path stays the V1.1 default at the
-                // detent.  Hover shows the live multiplier.
-                let ts = app.state.read().sample_instrument.time_stretch;
-                let mut bipolar = time_stretch_to_bipolar(ts);
-                let (changed, _) =
-                    widgets::param_control_bipolar(ui, "TIME", &mut bipolar, ParamMode::Free, ctrl);
-                if changed {
-                    let next = bipolar_to_time_stretch(bipolar);
-                    app.state.write().sample_instrument.time_stretch = next;
-                    app.push_audio_params();
-                }
-            });
-        });
-        // Multi-mic blend knob (V2 SFZ).  Drives a synthetic CC#1
-        // value that multi-mic packs use for `xfin_*cc1` /
-        // `xfout_*cc1` crossfades.  Always visible — regions
-        // without crossfade opcodes pass through at unity, so
-        // moving the knob has no effect on non-multi-mic SFZs.
-        ui.horizontal(|ui| {
-            let mut mb = app.state.read().sample_instrument.mic_blend;
+            }
+            let mode = app.state.read().sample_instrument.filter_mode;
+            let label = match mode {
+                1 => "BP",
+                2 => "HP",
+                _ => "LP",
+            };
+            if ui
+                .add_sized(
+                    [28.0, 18.0],
+                    egui::Button::new(
+                        egui::RichText::new(label)
+                            .monospace()
+                            .size(8.0)
+                            .color(theme::CHALK),
+                    ),
+                )
+                .clicked()
+            {
+                let next = (mode + 1) % 3;
+                app.state.write().sample_instrument.filter_mode = next;
+                app.push_audio_params();
+            }
+            // Formant-preserve opt-in (V2 Stage 8 — flag wired,
+            // DSP lands in a follow-up).  Renders as `FRMT` /
+            // `frmt` so the user can pre-set it to flip on once
+            // the implementation ships without touching their
+            // session.
+            let fp_on = app.state.read().sample_instrument.formant_preserve;
+            let fp_label = if fp_on { "FRMT" } else { "frmt" };
+            let fp_col = if fp_on { theme::CHALK } else { theme::IRON };
+            if ui
+                .add_sized(
+                    [32.0, 18.0],
+                    egui::Button::new(
+                        egui::RichText::new(fp_label)
+                            .monospace()
+                            .size(8.0)
+                            .color(fp_col),
+                    ),
+                )
+                .clicked()
+            {
+                app.state.write().sample_instrument.formant_preserve = !fp_on;
+                app.push_audio_params();
+            }
+            // Mellotron-mode toggle.  When on, the slot's
+            // playback gains tape-loop character (per-note
+            // pitch flutter + spin-up + tanh sat).  Cheap
+            // path stays the V1.1 default — flutter modulates
+            // the read rate directly without going through
+            // the spectral processor.
+            let mello_on = app.state.read().sample_instrument.mellotron_mode;
+            let mello_label = if mello_on { "MELLO" } else { "mello" };
+            let mello_col = if mello_on { theme::CHALK } else { theme::IRON };
+            if ui
+                .add_sized(
+                    [38.0, 18.0],
+                    egui::Button::new(
+                        egui::RichText::new(mello_label)
+                            .monospace()
+                            .size(8.0)
+                            .color(mello_col),
+                    ),
+                )
+                .on_hover_text(
+                    "Mellotron mode: tape-loop character — per-note pitch flutter, \
+                     spin-up transient on attack, gentle tanh saturation.",
+                )
+                .clicked()
+            {
+                app.state.write().sample_instrument.mellotron_mode = !mello_on;
+                app.push_audio_params();
+            }
+            // Continuous time-stretch knob — bipolar so the
+            // resting position (1.0×) sits at knob centre and
+            // dragging right makes playback faster, left
+            // slower.  Maps logarithmically: each octave of
+            // bipolar travel doubles / halves the multiplier
+            // (bipolar ±1 → 4.0× / 0.25×; bipolar 0 → 1.0×).
+            // Auto-engages the spectral processor when off-rest;
+            // the cheap path stays the V1.1 default at the
+            // detent.  Hover shows the live multiplier.
+            let ts = app.state.read().sample_instrument.time_stretch;
+            let mut bipolar = time_stretch_to_bipolar(ts);
             let (changed, _) =
-                widgets::param_control(ui, "MIC BLEND", &mut mb, ParamMode::Free, ctrl);
+                widgets::param_control_bipolar(ui, "TIME", &mut bipolar, ParamMode::Free, ctrl);
             if changed {
-                app.state.write().sample_instrument.mic_blend = mb.clamp(0.0, 1.0);
+                let next = bipolar_to_time_stretch(bipolar);
+                app.state.write().sample_instrument.time_stretch = next;
                 app.push_audio_params();
             }
         });
+    });
+    // Multi-mic blend knob (V2 SFZ) — its own row below the FILTER
+    // group.  Drives a synthetic CC#1 value that multi-mic packs use
+    // for `xfin_*cc1` / `xfout_*cc1` crossfades.  Always visible —
+    // regions without crossfade opcodes pass through at unity, so
+    // moving the knob has no effect on non-multi-mic SFZs.
+    ui.horizontal(|ui| {
+        let mut mb = app.state.read().sample_instrument.mic_blend;
+        let (changed, _) = widgets::param_control(ui, "MIC BLEND", &mut mb, ParamMode::Free, ctrl);
+        if changed {
+            app.state.write().sample_instrument.mic_blend = mb.clamp(0.0, 1.0);
+            app.push_audio_params();
+        }
     });
 
     ui.add_space(2.0);
@@ -551,9 +557,13 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 /// `.wav` by extension; on `.sfz`, parses + loads every referenced WAV
 /// off the audio thread and sends the runtime region list.  On `.wav`,
 /// preserves the V1.1 single-sample path (load + auto-detect-root +
-/// `LoadSampleInstrument` command).  Centralised so the LOAD button
-/// and the API-poll path can share it.
-fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
+/// `LoadSampleInstrument` command).  Centralised so the LOAD button,
+/// the panel's API-poll path, and the central per-frame poller in
+/// `app_update::update` can share it — the latter ensures API-driven
+/// loads reach the audio thread even when the SampleInstrument card
+/// is scrolled out of the rack viewport (and therefore the panel
+/// draw function never runs).
+pub(crate) fn load_sample_instrument_path(app: &mut ImpulseApp, path: &str) {
     let ext = std::path::Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
