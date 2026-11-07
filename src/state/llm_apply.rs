@@ -250,7 +250,12 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             {
                 for (step, note) in pattern.iter_mut().zip(arr) {
                     if let Some(note) = note.as_u64() {
-                        step.note = note.min(127) as u8;
+                        let note = note.min(127) as u8;
+                        step.note = if s.sequencer.scale_snap {
+                            super::snap_to_scale(note, s.sequencer.root_note, s.sequencer.scale)
+                        } else {
+                            note
+                        };
                     }
                 }
             }

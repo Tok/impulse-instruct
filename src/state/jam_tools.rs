@@ -124,9 +124,31 @@ pub fn schedule_baseline_ramps(
 
     if let Some(obj) = baseline.as_object() {
         for (section, values) in obj {
+            // Sampler topology and tempo metadata are discrete configuration,
+            // not supported ramp targets; apply them atomically.
+            if section == "amen" {
+                remainder.insert(section.clone(), values.clone());
+                continue;
+            }
             if let Some(inner) = values.as_object() {
                 let mut section_remainder = serde_json::Map::new();
                 for (key, val) in inner {
+                    // Envelope setup must be usable on the first note, not
+                    // eight jam cycles later (unknown ramp reads start at 0).
+                    if section == "bass"
+                        && matches!(
+                            key.as_str(),
+                            "amp_attack"
+                                | "amp_sustain"
+                                | "amp_release"
+                                | "filter_attack"
+                                | "filter_sustain"
+                                | "filter_release"
+                        )
+                    {
+                        section_remainder.insert(key.clone(), val.clone());
+                        continue;
+                    }
                     if let Some(target) = val.as_f64() {
                         let path = format!("{section}.{key}");
                         let current = current_param_value(&s, &path);
@@ -531,6 +553,13 @@ pub const LANE_FADE_STEPS: u64 = 16;
 /// `locked_params` and silently skips if the user has pinned the volume.
 pub fn schedule_lane_fade_in(state: AppState, lane: crate::llm::lanes::LaneKind) -> AppState {
     use crate::llm::lanes::LaneKind;
+    // Jungle bass and break need their full level on entry. A one-bar dip
+    // to 15% hides the groove and can compound during successive edits.
+    if state.llm.active_style.as_deref() == Some("jungle")
+        && matches!(lane, LaneKind::Bass(_) | LaneKind::Amen)
+    {
+        return state;
+    }
     let (target, path_lock_key, path) = match lane {
         LaneKind::Bass(0) => {
             let v = state.bass_voices[0].synth.volume;

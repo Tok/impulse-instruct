@@ -734,6 +734,11 @@ impl AudioParams {
             // bus-level gain.  Multiple Tts modules share a single
             // ring buffer (they all push into `tts_tx`), so this is a
             // bus-wide multiplier rather than per-instance.
+            tts_music_duck: s
+                .tts_modules
+                .first()
+                .map(|m| m.music_duck.clamp(0.0, 1.0))
+                .unwrap_or(0.35),
             tts_voice_volume: s
                 .tts_modules
                 .first()

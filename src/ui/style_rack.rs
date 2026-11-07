@@ -72,6 +72,23 @@ pub fn apply(app: &mut ImpulseApp, names: &[String]) {
         return;
     }
 
+    // Style-created samplers need a source just like manually added ones.
+    // Scan outside the state lock, preserving any existing sample selection.
+    let needs_break =
+        spec.contains_key(&ModuleKind::AmenSampler) && app.state.read().amen.path.is_empty();
+    let sample = if needs_break {
+        super::panels::amen::pick_random_sample()
+    } else {
+        None
+    };
+    if let Some(path) = sample {
+        let mut s = app.state.write();
+        if s.amen.path.is_empty() {
+            s.amen.path = path;
+            s.amen.slice_positions.clear();
+        }
+    }
+
     log::info!(
         "style_rack: applying {} entries (parsed → {} kinds)",
         names.len(),

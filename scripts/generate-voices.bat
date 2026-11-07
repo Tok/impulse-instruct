@@ -31,9 +31,12 @@ if exist "voices\mc.wav" if "%FORCE%"=="0" (
     echo   mc: exists
     goto :dj
 )
-espeak-ng -v en+m3 -p 65 -s 170 -w voices\mc.wav "Selector! Big up the junglist massive! We have the bass, we have the breaks, we have the riddim. Pull up and rewind! This one goes out to all the ravers in the building tonight."
-echo Selector! Big up the junglist massive! We have the bass, we have the breaks, we have the riddim. Pull up and rewind! This one goes out to all the ravers in the building tonight.> voices\mc.txt
-echo   mc: generated
+if "%FORCE%"=="1" (
+    .tts-venv\Scripts\python.exe scripts\design-mc-voice.py --replace
+) else (
+    .tts-venv\Scripts\python.exe scripts\design-mc-voice.py
+)
+if errorlevel 1 exit /b 1
 
 :dj
 if exist "voices\dj.wav" if "%FORCE%"=="0" (

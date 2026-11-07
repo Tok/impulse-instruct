@@ -6,6 +6,8 @@
 pub mod few_shot;
 pub mod instructions;
 pub mod json_repair;
+pub mod jungle;
+pub mod jungle_mc;
 pub mod lane_composition;
 pub mod lane_eval;
 pub mod lane_scheduler;
@@ -135,6 +137,8 @@ pub fn run_llm_loop(
         agent_id: None,
     });
 
+    let mut last_mc_call: Option<Instant> = None;
+    let mut mc_call_index = 0usize;
     while let Ok(input) = input_rx.recv() {
         match &input {
             LlmInput::SwitchModel(new_path) => {
@@ -500,6 +504,24 @@ pub fn run_llm_loop(
                 write_lane_back,
             );
             let _ = new_state; // per-lane write-back already committed everything
+            if lanes_ran > 0 {
+                let call = jungle_mc::next_call(
+                    &state.read(),
+                    agent_id,
+                    last_mc_call.map(|at| at.elapsed().as_secs_f32()),
+                    mc_call_index,
+                );
+                if let Some((line, voice)) = call {
+                    last_mc_call = Some(Instant::now());
+                    mc_call_index = mc_call_index.wrapping_add(1);
+                    speak_tts(&line, &voice, &tts_tx);
+                    let _ = output_tx.try_send(LlmOutput {
+                        text: format!("[MC] {line}"),
+                        agent_id,
+                        ..LlmOutput::default()
+                    });
+                }
+            }
             // Clear inferring + progress flags now that the pipeline is done.
             // Belt-and-braces: PipelineDone clears `pipeline_progress`, but if
             // the pipeline ever returns early without emitting it the bars
@@ -919,4 +941,6 @@ pub fn run_llm_loop(
 }
 
 pub mod tts;
+pub mod tts_effects;
+pub mod tts_service;
 pub use tts::speak_tts;

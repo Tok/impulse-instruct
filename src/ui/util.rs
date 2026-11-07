@@ -183,3 +183,18 @@ pub(crate) fn background_inference_ready(
 ) -> bool {
     !show_wizard && startup_done && !llm_initializing
 }
+
+/// Read an explicit trailing BPM label from a break filename; unknown names
+/// leave the user's source tempo alone (no guessed beat detection).
+pub(crate) fn sample_bpm_hint(path: &str) -> Option<f32> {
+    let stem = std::path::Path::new(path)
+        .file_stem()?
+        .to_str()?
+        .to_ascii_lowercase();
+    let label = stem.trim_end_matches("bpm").trim();
+    let token = label
+        .rsplit(|c: char| c == '_' || c == '-' || c.is_whitespace())
+        .next()?;
+    let bpm: f32 = token.parse().ok()?;
+    (bpm.is_finite() && (40.0..=300.0).contains(&bpm)).then_some(bpm)
+}

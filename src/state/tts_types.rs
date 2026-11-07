@@ -58,6 +58,16 @@ pub struct TtsModuleState {
     /// Modulatable via the `TtsVolume` LFO target.
     #[serde(default = "default_tts_volume")]
     pub volume: f32,
+    /// Offline mic processing, applied before speech enters the audio bus.
+    #[serde(default)]
+    pub pitch_st: f32,
+    #[serde(default)]
+    pub mic_drive: f32,
+    #[serde(default)]
+    pub room_mix: f32,
+    /// Backing-track gain while speaking (1 = no ducking).
+    #[serde(default = "default_music_duck")]
+    pub music_duck: f32,
 }
 
 fn default_voice_ref() -> String {
@@ -72,6 +82,10 @@ fn default_top_k() -> u16 {
 fn default_top_p() -> f32 {
     0.9
 }
+fn default_music_duck() -> f32 {
+    0.35
+}
+
 fn default_tts_volume() -> f32 {
     1.0
 }
@@ -86,6 +100,10 @@ impl TtsModuleState {
             top_p: default_top_p(),
             pitch_snap: false,
             volume: default_tts_volume(),
+            pitch_st: 0.0,
+            mic_drive: 0.0,
+            room_mix: 0.0,
+            music_duck: default_music_duck(),
         }
     }
 }

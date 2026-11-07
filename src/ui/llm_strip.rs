@@ -162,6 +162,7 @@ impl ImpulseApp {
                     s.fx = next.fx;
                     s.hoover = next.hoover;
                     s.an1x = next.an1x;
+                    s.amen = next.amen;
                     s.noise_voice = next.noise_voice;
                     s.lfo = next.lfo;
                     // Rack, llm_agents, llm queues, ui_prefs, etc. left
@@ -182,6 +183,10 @@ impl ImpulseApp {
                 );
             }
         }
+        let snapshot = self.state.read().clone();
+        *self.state.write() = crate::llm::jungle_mc::configure(snapshot);
+        self.push_fx_plan();
+
         // Propagate style to all sub-agents that don't have style_locked
         let style_id = self.state.read().llm.active_style.clone();
         if let Some(sid) = style_id {

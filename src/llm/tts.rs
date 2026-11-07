@@ -24,7 +24,7 @@ pub fn sanitize_tts_text(text: &str) -> String {
 /// audio ring buffer.  FX (reverb, bitcrush, etc.) are applied downstream by
 /// the DSP via the Tts rack voice route.
 ///
-/// No-ops silently if the TTS server is unreachable.
+/// Starts the installed TTS server on demand; logs startup/synthesis failures.
 pub fn speak_tts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
     let clean = sanitize_tts_text(text);
     if clean.is_empty() {
@@ -45,9 +45,18 @@ pub fn speak_tts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
     // Spawn a blocking thread so we don't block the LLM inference loop.
     let sink = tts_tx.clone();
     let pitch_snap = tts.pitch_snap;
+    let mic = tts.clone();
     let root_note = 0u8; // caller can extend later
     let scale = crate::state::Scale::default();
     std::thread::spawn(move || {
+        static SPEECH: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let Ok(_guard) = SPEECH.try_lock() else {
+            log::debug!("TTS: skipped overlapping speech request");
+            return;
+        };
+        if !super::tts_service::ensure_server() {
+            return;
+        }
         let agent: ureq::Agent = ureq::Agent::config_builder()
             .timeout_connect(Some(std::time::Duration::from_secs(2)))
             .timeout_global(Some(std::time::Duration::from_secs(30)))
@@ -97,6 +106,11 @@ pub fn speak_tts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
                 let shift = snapped_midi as f32 - detected_midi as f32;
                 samples = resample_pitch_shift(&samples, shift);
             }
+            if mic.pitch_st.abs() > 0.01 {
+                samples = resample_pitch_shift(&samples, mic.pitch_st.clamp(-12.0, 12.0));
+            }
+            samples =
+                super::tts_effects::process_mic(&samples, target_sr, mic.mic_drive, mic.room_mix);
             let sample_count = samples.len();
             let mut tx = sink.tx.lock();
             let mut pushed = 0usize;
@@ -236,7 +250,7 @@ fn detect_pitch_hz(samples: &[f32], sample_rate: f32) -> Option<f32> {
 }
 
 /// Resample `samples` to shift pitch by `semitones` using linear interpolation.
-fn resample_pitch_shift(samples: &[f32], semitones: f32) -> Vec<f32> {
+pub(crate) fn resample_pitch_shift(samples: &[f32], semitones: f32) -> Vec<f32> {
     let ratio = 2.0_f32.powf(semitones / 12.0);
     let new_len = (samples.len() as f32 / ratio) as usize;
     let mut out = Vec::with_capacity(new_len);

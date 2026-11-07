@@ -357,10 +357,10 @@ impl eframe::App for ImpulseApp {
                     None => "Create a starter pattern.".to_string(),
                 };
                 let prompt = format!(
-                    "{head} Bass line should use 3-5 different notes but leave gaps — not \
-                     every step needs a note. Use accent and slide on some steps. Add a \
-                     kick pattern and hi-hats. Set the filter to something interesting. \
-                     Set pan positions for stereo width and add subtle chorus."
+                    "{head} Follow the style's instrument roles, rhythm density and harmonic \
+                     direction. Establish a short repeatable motif in the current key. \
+                     Generate the full playing loop for the active voices, preserving \
+                     intentional silence and leaving space between supporting parts."
                 );
                 self.send_llm_infer(prompt, true, None);
                 self.log_text

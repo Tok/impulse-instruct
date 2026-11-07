@@ -144,3 +144,7 @@ mod zoom_helpers_tests;
 mod lane_composition_tests;
 
 mod startup_inference_tests;
+
+mod jungle_tests;
+
+mod jungle_audio_tests;

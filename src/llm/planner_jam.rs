@@ -23,6 +23,17 @@ use crate::state::AppState;
 /// Dead retry entries (lane's module left the rack since the score fired)
 /// are discarded, not returned — the rack is authoritative over the queue.
 pub fn jam_plan(state: &AppState, rng: &mut Xorshift32) -> LanePlan {
+    if state.llm.active_style.as_deref() == Some("jungle")
+        && !state.amen.path.is_empty()
+        && !state.llm.lane_scores.contains_key("amen")
+        && lane_is_live_pub(state, LaneKind::Amen)
+    {
+        return LanePlan {
+            lanes: vec![LaneKind::Amen],
+            rationale: "Jungle intro: establish the break before bass".into(),
+            from_retry: false,
+        };
+    }
     if let Some((lane, drained)) = pop_live_retry(state) {
         log::info!(
             "retry_queue: popped {} for retry (drained {} stale entries, {} remaining)",
@@ -65,6 +76,7 @@ pub fn jam_plan(state: &AppState, rng: &mut Xorshift32) -> LanePlan {
 fn pop_live_retry(state: &AppState) -> Option<(LaneKind, usize)> {
     for (drained, label) in state.llm.retry_queue.iter().enumerate() {
         if let Some(lane) = lane_from_label(label)
+            && !(lane == LaneKind::Settings && state.llm.active_style.as_deref() == Some("jungle"))
             && lane_is_live_pub(state, lane)
         {
             return Some((lane, drained));
@@ -109,6 +121,9 @@ pub fn live_lane_candidates(state: &AppState) -> Vec<LaneKind> {
         LaneKind::Fx,
         LaneKind::Modulation,
     ];
-    lanes.retain(|&l| lane_is_live_pub(state, l));
+    lanes.retain(|&l| {
+        lane_is_live_pub(state, l)
+            && !(l == LaneKind::Settings && state.llm.active_style.as_deref() == Some("jungle"))
+    });
     lanes
 }

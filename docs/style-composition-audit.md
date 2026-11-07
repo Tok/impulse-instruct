@@ -60,3 +60,27 @@ The sequential writer currently has dedicated melodic lanes for bass, Hoover and
 ## Verification
 
 The library suite passes: 2,416 tests passed, two ignored. New regression coverage includes polymetric schema bounds, full note-array lengths, lead application, locked/scoped updates, intentional silence, dense index-list decoding, per-voice key context, harmonic scoring and all 29 composition briefs. Library Clippy passes with warnings denied. All-target Clippy is blocked by existing lint failures in unrelated test code (77 diagnostics); those were not changed as part of this work.
+
+## Jungle follow-up
+
+The first prompt-only pass did not establish reliable Jungle output. The next pass replaces acid/house lane tasks for Jungle, removes the startup demand for 3–5 bass pitches, honours the style's single-bass rack declaration, and makes the sub's low resonance and centred pitch explicit. Jungle bass changes now have a much lower scheduler weight; automatic settings changes and settings retries are excluded so a jam cannot casually reset tempo or key.
+
+When scale snapping is enabled, Jungle generation uses a shared tonic/fifth/octave palette with separated registers and at most six bass attacks per 32 steps. Scale snapping can be disabled for deliberate chromatic writing. The apply layer now honours scale_snap updates, lead notes and independent bass-voice keys. These constraints prevent out-of-palette pitches; they do not prove that every phrase is musically good.
+
+Amen generation requires typed per-step slice indices and preserves the user-controlled slice count and source BPM. Style-created samplers now select an available local break if none is configured. Loading BPM-labelled files updates the source tempo unless that parameter is locked; unknown filenames retain the configured tempo. Sampler baseline settings apply immediately instead of disappearing into unsupported ramps.
+
+Musical direction: a recognisable sampled break, small turnaround edits and a restrained sub, consistent with [Ableton's Jungle production walkthrough](https://www.ableton.com/en/blog/how-to-create-a-jungle-inspired-track-on-ableton-move/). No claim of a listening-tested authentic result is made.
+
+Validation includes deterministic regression tests and an opt-in real-model smoke test (`jungle_live_lane_smoke`, ignored by default, requires LLAMA_SERVER_URL). The first live Gemma E4B run emitted 32 bass attacks despite claiming a four-hit motif; after adding schema density limits, a subsequent run emitted four attacks with in-palette notes. This is a structural check, not an audio comparison or a statistical model benchmark.
+
+The final run also used metadata from the local two-bar `cw_amen14_175.wav` fixture. Jungle now rejects duplicate/unsorted rhythm index lists (including disguised gate masks) and retries once with corrective feedback before failing without applying the malformed lane. The final live smoke test passed. Library verification: 2,428 passed, three ignored; library Clippy passed with warnings denied. Generated audio has not been auditioned.
+
+## Bass coverage and audibility correction
+
+The previous live smoke test was insufficient: it accepted six consecutive attacks at steps 0–5 because it checked density, not phrase coverage. Primary Jungle bass now selects among complete rhythm motifs spanning every quarter of the playing loop, scaled for shorter banks and repeated for longer banks. Explicit silence remains available. Runtime validation also rejects a clustered nonempty primary bass phrase. The final Gemma E4B run produced `[0,10,16,26]` across the 32-step loop; all pitches were MIDI 45.
+
+The old patch increased decay but left amp release at 0.05 (100 ms time constant). With the actual default half-step gate at 165 BPM, gate-off happens after about 45 ms. The revised patch explicitly sets lowpass mode, 3 ms attack, full sustain and amp release 0.32 (640 ms time constant), with bass volume 0.8. Envelope baseline settings apply immediately rather than waiting for jam-cycle ramps. Automatic lane fades no longer dip Jungle bass to 15% volume for a bar on every rewrite.
+
+Offline rendering through the real Bass303 voice at 48 kHz, using sequencer-equivalent gates and the same distributed rhythm, measured RMS 0.0414 → 0.0775 (+5.4 dB), with peak 0.2744. Quarter RMS values were 0.0790, 0.0766, 0.0779 and 0.0765. These are isolated voice measurements, not a full-mix listening test. Reproducible A/B WAVs can be written with `JUNGLE_RENDER_DIR=target/jungle-audio-check cargo test --lib jungle_audio_tests -- --nocapture`.
+
+Final checks for this correction: 2,432 library tests passed, three ignored; library Clippy and the live Jungle smoke test passed.

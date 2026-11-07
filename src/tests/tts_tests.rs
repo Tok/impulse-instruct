@@ -284,3 +284,157 @@ fn tts_server_roundtrip_pushes_samples() {
         "only {got} samples arrived from the TTS server"
     );
 }
+
+#[test]
+fn jungle_setup_reuses_tts_and_enables_one_mc() {
+    let mut state = AppState::default();
+    state.llm.active_style = Some("jungle".into());
+    let state = crate::llm::jungle_mc::configure(state);
+    let count = state.tts_modules.len();
+    let cables = state.rack.cables.len();
+    let state = crate::llm::jungle_mc::configure(state);
+    assert_eq!(state.tts_modules.len(), count);
+    assert_eq!(state.rack.cables.len(), cables);
+    assert_eq!(state.llm_agents[0].conversation_mode, ConversationMode::Mc);
+    assert_eq!(state.tts_modules[0].voice_ref, "mc");
+}
+
+#[test]
+fn jungle_mc_respects_transport_cooldown_mutes_and_overrides() {
+    use crate::llm::jungle_mc::{configure, next_call};
+    let mut state = AppState::default();
+    state.llm.active_style = Some("jungle".into());
+    let mut state = configure(state);
+    state.sequencer.running = true;
+    let aid = Some(state.llm_agents[0].id);
+    let first = next_call(&state, aid, None, 0).unwrap();
+    assert_eq!(first.0, effective_mc_lines(&state, "jungle")[0]);
+    assert!(next_call(&state, aid, Some(44.0), 1).is_none());
+    assert_ne!(first.0, next_call(&state, aid, Some(45.0), 1).unwrap().0);
+    state.sequencer.running = false;
+    assert!(next_call(&state, aid, None, 0).is_none());
+    state.sequencer.running = true;
+    state.llm_agents[0].conversation_mode = ConversationMode::Off;
+    assert!(next_call(&state, aid, None, 0).is_none());
+    state.llm_agents[0].conversation_mode = ConversationMode::Mc;
+    state
+        .rack
+        .modules
+        .iter_mut()
+        .find(|m| m.id == first.1.id)
+        .unwrap()
+        .enabled = false;
+    assert!(next_call(&state, aid, None, 0).is_none());
+    state
+        .rack
+        .modules
+        .iter_mut()
+        .find(|m| m.id == first.1.id)
+        .unwrap()
+        .enabled = true;
+    state.style_overrides.insert(
+        "jungle".into(),
+        StyleOverride {
+            mc_lines: Some(vec![]),
+            themes: None,
+        },
+    );
+    assert!(next_call(&state, aid, None, 0).is_none());
+    state.style_overrides.get_mut("jungle").unwrap().mc_lines = Some(vec!["Selector!".into()]);
+    assert_eq!(next_call(&state, aid, None, 77).unwrap().0, "Selector!");
+    state.rack.cables.retain(|c| c.to.module_id != first.1.id);
+    assert!(next_call(&state, aid, None, 0).is_none());
+}
+
+#[test]
+#[ignore = "starts local Qwen3-TTS and synthesizes speech; requires installed TTS models"]
+fn jungle_mc_live_synthesis_reaches_audio_sink() {
+    let (producer, mut consumer) = rtrb::RingBuffer::<f32>::new(48_000 * 20);
+    let sink = crate::audio::TtsSink {
+        tx: std::sync::Arc::new(parking_lot::Mutex::new(producer)),
+        target_sr: 48_000,
+    };
+    let mut voice = TtsModuleState::new(1);
+    voice.voice_ref = "mc".into();
+    crate::llm::speak_tts("Junglist massive! Selector!", &voice, &sink);
+    let start = std::time::Instant::now();
+    while consumer.slots() == 0 && start.elapsed().as_secs() < 125 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let _producer_guard = sink.tx.lock();
+    let mut samples = Vec::new();
+    while let Ok(sample) = consumer.pop() {
+        samples.push(sample);
+    }
+    assert!(samples.len() > 4800, "no speech reached the audio sink");
+    assert!(samples.iter().all(|s| s.is_finite()));
+    let rms = (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt();
+    assert!(rms > 0.001, "synthesized speech is silent");
+    println!("MC speech: {} samples, RMS={rms:.4}", samples.len());
+}
+
+#[test]
+fn mc_mic_effects_add_grit_and_a_tail_without_master_clipping() {
+    let sr = 48_000;
+    let input: Vec<f32> = (0..24_000)
+        .map(|i| (i as f32 * std::f32::consts::TAU * 220.0 / sr as f32).sin() * 0.2)
+        .collect();
+    let bypass = crate::llm::tts_effects::process_mic(&input, sr, 0.0, 0.0);
+    assert_eq!(bypass, input);
+    let driven = crate::llm::tts_effects::process_mic(&input, sr, 0.85, 0.22);
+    assert!(driven.len() > input.len());
+    assert!(driven.iter().all(|s| s.is_finite() && s.abs() <= 0.9));
+    assert!(driven[input.len()..].iter().any(|s| s.abs() > 0.005));
+    // Clipping the mic should add a third harmonic, rather than merely
+    // turning up the original clean sine wave.
+    let harmonic = |samples: &[f32]| {
+        let mut real = 0.0;
+        let mut imaginary = 0.0;
+        for (i, sample) in samples[4800..19200].iter().enumerate() {
+            let phase = i as f32 * std::f32::consts::TAU * 660.0 / sr as f32;
+            real += sample * phase.cos();
+            imaginary += sample * phase.sin();
+        }
+        (real * real + imaginary * imaginary).sqrt() / 14400.0
+    };
+    assert!(harmonic(&driven) > harmonic(&input) + 0.005);
+    if let Ok(path) = std::env::var("MC_PREVIEW_INPUT") {
+        let mut reader = hound::WavReader::open(path).unwrap();
+        let sr = reader.spec().sample_rate;
+        let input: Vec<f32> = reader
+            .samples::<i16>()
+            .map(|s| s.unwrap() as f32 / 32768.0)
+            .collect();
+        let lower = crate::llm::tts::resample_pitch_shift(&input, -2.0);
+        let output = crate::llm::tts_effects::process_mic(&lower, sr, 0.85, 0.22);
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: sr,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer =
+            hound::WavWriter::create("target/jungle-audio-check/mc-driven.wav", spec).unwrap();
+        for sample in output {
+            writer
+                .write_sample((sample * 0.8 * 32767.0) as i16)
+                .unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+}
+
+#[test]
+fn old_tts_sessions_keep_clean_defaults_and_jungle_preserves_the_backing() {
+    let old: TtsModuleState = serde_json::from_value(serde_json::json!({"id":1})).unwrap();
+    assert_eq!(
+        (old.pitch_st, old.mic_drive, old.room_mix, old.music_duck),
+        (0.0, 0.0, 0.0, 0.35)
+    );
+    let mut state = AppState::default();
+    state.llm.active_style = Some("jungle".into());
+    let state = crate::llm::jungle_mc::configure(state);
+    let params = crate::audio::dsp::AudioParams::from_app_state(&state);
+    assert_eq!(params.tts_music_duck, 0.8);
+    assert_eq!(state.tts_modules[0].pitch_st, -2.0);
+}

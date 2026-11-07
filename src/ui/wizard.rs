@@ -509,21 +509,15 @@ impl ImpulseApp {
                         *s = crate::state::apply_llm_update(owned, baseline, &[]);
                     }
                     s.llm.active_style = Some(style_id.clone());
+                    s.sequencer.pattern_style = Some(style_id.clone());
+                    let owned = std::mem::take(&mut *s);
+                    *s = crate::llm::jungle::prepare_intro(owned);
                 }
                 // Reshape the rack via the existing style pipeline.
                 let names: Vec<String> = style.rack_modules.clone();
                 crate::ui::style_rack::apply(self, &names);
-                // If the style includes bass, enable the second voice
-                // (parity with the generic-preset path below).
-                if names.iter().any(|n| n == "bass" || n == "bass2") {
-                    let mut s = self.state.write();
-                    if s.sequencer.bass_voice_enabled.len() > 1 {
-                        s.sequencer.bass_voice_enabled[1] = true;
-                    }
-                    if let Some(v) = s.bass_voices.get_mut(1) {
-                        v.enabled = true;
-                    }
-                }
+                // style_rack::apply already enables the declared bassN count.
+                // A single-sub style must not gain an extra bass voice here.
             }
         } else if let Some(rack_preset) = crate::state::RACK_PRESETS.get(self.wizard_rack_preset) {
             let new_rack = crate::state::RackState::from_preset(rack_preset);
@@ -593,6 +587,9 @@ impl ImpulseApp {
                 crate::state::spawn_agent(snapshot, pa.persona, &scope, pa.role, model_path);
             *self.state.write() = new_state;
         }
+
+        let snapshot = self.state.read().clone();
+        *self.state.write() = crate::llm::jungle_mc::configure(snapshot);
 
         // Re-run grid placement so newly spawned agents get valid positions
         self.state.write().rack.arrange_grid();

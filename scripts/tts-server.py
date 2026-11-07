@@ -36,8 +36,9 @@ import json
 import os
 import sys
 import time
+import threading
 import warnings
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -51,6 +52,7 @@ TOKENS_PER_SECOND = 12
 
 _model = None
 _prompt_cache: dict = {}
+_synthesis_lock = threading.Lock()
 
 
 def _load_model(model_id: str | None):
@@ -159,6 +161,13 @@ def _resolve_voice(body: dict) -> tuple[str, str]:
 class TTSHandler(BaseHTTPRequestHandler):
     model_id: str | None = None
 
+    def handle(self):
+        try:
+            super().handle()
+        except (BrokenPipeError, ConnectionResetError):
+            # A timed-out/cancelled client is not a synthesis failure.
+            pass
+
     def log_message(self, fmt, *args):
         print(f"[tts] {args[0]}", flush=True)
 
@@ -186,15 +195,16 @@ class TTSHandler(BaseHTTPRequestHandler):
         ref_audio, ref_text = _resolve_voice(body)
         seed = body.get("seed")
         try:
-            wav, gen_ms = synthesize(
-                text=text, ref_audio=ref_audio, ref_text=ref_text,
-                temperature=float(body.get("temperature", 0.8)),
-                top_k=int(body.get("top_k", 30)),
-                top_p=float(body.get("top_p", 0.9)),
-                seed=int(seed) if seed is not None else None,
-                language=str(body.get("language", "Auto")),
-                model_id=self.model_id,
-            )
+            with _synthesis_lock:
+                wav, gen_ms = synthesize(
+                    text=text, ref_audio=ref_audio, ref_text=ref_text,
+                    temperature=float(body.get("temperature", 0.8)),
+                    top_k=int(body.get("top_k", 30)),
+                    top_p=float(body.get("top_p", 0.9)),
+                    seed=int(seed) if seed is not None else None,
+                    language=str(body.get("language", "Auto")),
+                    model_id=self.model_id,
+                )
         except FileNotFoundError as e:
             self._json({"ok": False, "error": str(e)}, 404)
             return
@@ -225,7 +235,7 @@ class TTSHandler(BaseHTTPRequestHandler):
 def run_server(port: int, model_id: str | None):
     _load_model(model_id)  # load before listening so /health means "ready"
     TTSHandler.model_id = model_id
-    server = HTTPServer(("127.0.0.1", port), TTSHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), TTSHandler)
     print(f"Qwen3-TTS server listening on http://127.0.0.1:{port}", flush=True)
     try:
         server.serve_forever()

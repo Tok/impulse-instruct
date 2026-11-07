@@ -409,7 +409,7 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
         harmony_block = harmony_block,
         bass_context = bass_context,
         examples_block = examples_block,
-        task = lane.task_description(),
+        task = crate::llm::jungle::task(state, lane).unwrap_or_else(|| lane.task_description()),
     )
 }
 

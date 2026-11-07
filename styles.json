@@ -410,32 +410,49 @@
   {
     "id": "jungle",
     "name": "Jungle",
-    "keywords": ["jungle","early dnb","early drum and bass","oldskool dnb","raggajungle","amen"],
+    "keywords": [
+      "jungle",
+      "early dnb",
+      "early drum and bass",
+      "oldskool dnb",
+      "raggajungle",
+      "amen"
+    ],
     "bpm_range": "160–175",
-    "brief": "Jungle 160–175 BPM. Breakbeat-driven — NO 4-on-floor. Syncopated ghost snares, off-grid kicks, dense rolling hats. Amen break energy. Deep sparse sub-bass C0–C1. Short reverb for clarity. Complexity is in the rhythm, not the melody. Composition: Keep sub pitches sparse and stable on tonic/fifth; break variation supplies the complexity. Repeat the sub motif through the full loop with room between attacks.",
-    "description": "Jungle — 160 to 175 BPM. Breakbeat-driven, chaotic, and raw. Drums do NOT sit on a four-on-the-floor grid — complex syncopated patterns, ghost snares, off-grid kicks, dense rolling hi-hat work. Think Amen break energy: snare displaced and unpredictable, kick hitting offbeats, fills everywhere. Sub bass is deep and sparse, mostly C0 to C1, just anchoring the bottom end while the breaks do everything else. Short reverb for clarity. The whole energy is in the rhythmic complexity — loose, dangerous, physical. Composition: Keep sub pitches sparse and stable on tonic/fifth; break variation supplies the complexity. Repeat the sub motif through the full loop with room between attacks.",
+    "brief": "Jungle 160–175 BPM: a recognisable chopped sampled break leads, with snare backbeat anchors, quieter ghost notes and brief turnaround edits. Sparse centred sine-sub weight, NOT an acid riff or competing Reese lead. Composition: Repeat a tonic/fifth bass motif (4–6 attacks spread across all four quarters of the 32-step two-bar loop). Leave the 808 mostly silent or use sparse kick reinforcement. Preserve the key and break groove between edits.",
+    "description": "Jungle — 160–175 BPM. Keep the sampled drummer’s rhythmic identity: a rolling break with stable backbeat anchors, syncopated kicks, ghost snares and a short chopped turnaround. Do not scatter every hit randomly or layer a full house beat over the break. At the default four steps per beat, 32 steps are two bars; backbeats fall at 4,12,20,28. A quiet slowly filtered pink-noise bed adds background density; preserve its low level and keep it behind the sub and break. Occasional short MC calls add sound-system character, leaving long instrumental gaps. The break is foreground; the 808 reinforces only selected hits. Use a centred, low-resonance sub motif built from tonic and an occasional fifth, repeated with a small ending answer. The bass synth’s sine sub sounds an octave below its MIDI note: A2/MIDI 45 gives an A1/55 Hz sub; do not drive it with near-inaudible MIDI 9 or 21. Other pitched voices remain sparse, higher and harmonically tied to the same anchor. Use little global reverb, restrained dub-delay throws and no compulsory chorus. Composition: Preserve motifs and the established tempo/key during jams; complexity belongs mainly to the breaks, not constant bass rewrites.",
     "seed_patterns": {
-      "kick": [1,0,0,0,1,0,1,0,1,0,0,0,1,0,0,0],
-      "snare": [0,0,1,0,1,0,0,1,0,0,1,0,0,0,1,0],
-      "hihat": [1,1,0,1,0,1,1,0,1,1,0,1,0,1,1,0],
-      "bass_steps": [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0],
-      "bass_notes": [33,33,33,33,33,33,33,33,33,33,33,33,39,33,33,33]
+      "kick": [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+      "snare": [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+      "hihat": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+      "bass_steps": [1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],
+      "bass_notes": [45,45,45,45,45,45,45,45,45,45,45,45,45,45,45,45]
     },
     "suggested_root": 9,
     "suggested_scale": "minor",
     "baseline_params": {
       "bass": {
-        "cutoff": 0.4,
-        "resonance": 0.55,
-        "env_mod": 0.5,
-        "decay": 0.28,
-        "waveform": "Saw",
-        "volume": 0.85,
-        "sub_osc_level": 0.5
+        "cutoff": 0.22,
+        "resonance": 0.12,
+        "env_mod": 0.12,
+        "decay": 0.65,
+        "waveform": "Square",
+        "volume": 0.8,
+        "sub_osc_level": 0.8,
+        "distortion": 0.0,
+        "pan": 0.0,
+        "filter_mode": "Lowpass",
+        "amp_attack": 0.003,
+        "amp_sustain": 1.0,
+        "amp_release": 0.32,
+        "filter_attack": 0.0,
+        "filter_sustain": 0.0,
+        "filter_release": 0.25
       },
       "sequencer": {
         "bpm": 165.0,
-        "swing": 0.1
+        "swing": 0.0,
+        "scale_snap": true
       },
       "hoover": {
         "enabled": false
@@ -444,16 +461,64 @@
         "enabled": false
       },
       "fx": {
-        "reverb_mix": 0.12,
+        "reverb_mix": 0.07,
         "reverb_size": 0.35,
-        "delay_mix": 0.1
+        "delay_mix": 0.05,
+        "chorus_mix": 0.0,
+        "master_pitch_st": 0.0
+      },
+      "noise": {
+        "enabled": true,
+        "volume": 0.10,
+        "color": 0.5,
+        "cutoff": 0.22,
+        "attack": 0.3,
+        "release": 0.3,
+        "filter_lfo_rate": 0.015,
+        "filter_lfo_depth": 0.08,
+        "sh_depth": 0.0
+      },
+      "amen": {
+        "slice_count": 16,
+        "loop_mode": false,
+        "gate": 1.0,
+        "stutter": 0,
+        "bpm_stretch": true,
+        "volume": 0.55
       }
     },
-    "mc_lines": ["Junglist massive! Big up!","Rewind selecta! Pull up!","Boh! Boh! Original nuttah!","Wheel and come again!","Big up all the jungle crew."],
-    "themes": ["jungle","massive","selector","ragga","bass","amen"],
-    "rack_modules": ["bass","amen","808","reverb","delay","tts"],
-    "lane_dynamism": {"bass":0.85,"kit_a":0.45,"kit_b":0.45,"amen":0.95,"fx":0.55},
-    "jam_prompt_template": "chop the amen differently, tighten the reese, add a snare fill"
+    "mc_lines": [
+      "Junglist massive! Big up!",
+      "Rewind selecta! Pull up!",
+      "Boh! Boh! Original nuttah!",
+      "Wheel and come again!",
+      "Big up all the jungle crew."
+    ],
+    "themes": [
+      "jungle",
+      "massive",
+      "selector",
+      "ragga",
+      "bass",
+      "amen"
+    ],
+    "rack_modules": [
+      "bass",
+      "amen",
+      "808",
+      "reverb",
+      "delay",
+      "tts",
+      "noise"
+    ],
+    "lane_dynamism": {
+      "bass": 0.15,
+      "kit_a": 0.2,
+      "kit_b": 0.15,
+      "amen": 0.95,
+      "fx": 0.2
+    },
+    "jam_prompt_template": "Preserve the Jungle tempo, key and sub-bass motif. Develop one small break turnaround while keeping its backbeat recognisable; leave space and avoid adding a competing melody."
   },
   {
     "id": "drum_and_bass",

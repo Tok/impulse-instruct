@@ -42,6 +42,30 @@ pub fn pattern_span(state: &AppState, key: &str) -> usize {
 /// Requiring the full span prevents old/default pitches leaking into a new phrase.
 pub fn composition_schema(state: &AppState, lane: LaneKind) -> Value {
     let mut schema = lane_schema(lane);
+    if lane == LaneKind::Settings {
+        schema["properties"]["sequencer"]["properties"]["scale_snap"] = json!({"type":"boolean"});
+    }
+    if lane == LaneKind::Amen {
+        schema["properties"]["amen"] = json!({
+            "type": "object", "additionalProperties": false,
+            "properties": {
+                "slice_count": {"type": "integer", "enum": [state.amen.slice_count.clamp(1,16)]},
+                "pitch": {"type": "number", "minimum": -24, "maximum": 24},
+                "volume": {"type": "number", "minimum": 0, "maximum": 1},
+                "gate": {"type": "number", "minimum": 0.05, "maximum": 1},
+                "stutter": {"type": "integer", "minimum": 0, "maximum": 4},
+                "loop_mode": {"type": "boolean"},
+                "reverse": {"type": "boolean"},
+                "bpm_stretch": {"type": "boolean"},
+            }
+        });
+        schema["properties"]["sequencer"]["properties"]["amen_slices"] = json!({
+            "type": "array", "items": {"type": "integer", "minimum": 0, "maximum": state.amen.slice_count.clamp(1,16)},
+            "minItems": pattern_span(state, "amen_steps"),
+            "maxItems": pattern_span(state, "amen_steps")
+        });
+        schema["properties"]["sequencer"]["additionalProperties"] = json!(false);
+    }
     if let Some(props) = schema["properties"]["sequencer"]["properties"].as_object_mut() {
         for (key, field) in props {
             if field["type"] != "array" {
@@ -51,21 +75,49 @@ pub fn composition_schema(state: &AppState, lane: LaneKind) -> Value {
             if key.ends_with("_notes") {
                 field["minItems"] = json!(span);
                 field["maxItems"] = json!(span);
+                if state.sequencer.scale_snap {
+                    let (root, scale) = lane_key(state, lane);
+                    let notes = if state.llm.active_style.as_deref() == Some("jungle") {
+                        super::jungle::pitch_palette(state, lane)
+                    } else {
+                        crate::state::scale_notes(root, scale)
+                    };
+                    field["items"]["enum"] = json!(notes);
+                }
             } else if key.ends_with("_steps") {
                 field["items"] = json!({"type": "integer", "minimum": 0});
                 field["items"]["maximum"] = json!(span - 1);
                 // Silence and one-hit drones are valid musical choices.
                 field["minItems"] = json!(0);
                 field["maxItems"] = json!(span);
+                field["uniqueItems"] = json!(true);
+                if state.llm.active_style.as_deref() == Some("jungle") {
+                    let per_32 = match lane {
+                        LaneKind::Bass(_) => 6,
+                        LaneKind::KitA | LaneKind::KitB if key.contains("hihat") => 8,
+                        LaneKind::KitA | LaneKind::KitB => 6,
+                        LaneKind::Hoover | LaneKind::An1x => 4,
+                        _ => 32,
+                    };
+                    field["maxItems"] = json!((span * per_32).div_ceil(32));
+                }
             }
         }
+    }
+    if state.llm.active_style.as_deref() == Some("jungle") && lane == LaneKind::Bass(0) {
+        let mut rhythms = super::jungle::bass_rhythm_options(pattern_span(state, "bass_steps"));
+        rhythms.push(Vec::new()); // Explicit mute requests remain representable.
+        schema["properties"]["sequencer"]["properties"]["bass_steps"] = json!({
+            "type": "array", "items": {"type":"integer"}, "enum": rhythms,
+            "description": "Complete bass phrases covering the loop; [] only for intentional silence."
+        });
     }
     // These lanes previously allowed an empty object to count as success.
     // Require their pattern payload, while synth tweaks remain optional.
     let required = match lane {
         LaneKind::Hoover => vec!["hoover_steps", "hoover_notes"],
         LaneKind::An1x => vec!["an1x_steps", "an1x_notes"],
-        LaneKind::Amen => vec!["amen_steps"],
+        LaneKind::Amen => vec!["amen_steps", "amen_slices"],
         LaneKind::KitB => vec![
             "kick_b_steps",
             "snare_b_steps",
@@ -91,6 +143,29 @@ pub fn composition_context(state: &AppState, lane: LaneKind) -> String {
         "GRID: {} steps per beat, {} beats per bar. Scale example rhythms to this grid.\n",
         state.sequencer.step_division, state.sequencer.time_sig_num
     ));
+    if lane == LaneKind::Amen {
+        let span = pattern_span(state, "amen_steps");
+        if let Some(meta) = &state.amen.meta {
+            let beats = meta.samples as f32 / crate::audio::SAMPLE_RATE * state.amen.source_bpm
+                / 60.0
+                * (state.amen.end_offset - state.amen.start_offset).clamp(0.0, 1.0);
+            out.push_str(&format!("SOURCE REGION: approximately {beats:.2} source beats; preserve this phrase before adding a turnaround.\n"));
+        }
+        let slices: Vec<_> = state
+            .sequencer
+            .drum_patterns
+            .get(&DrumVoice::Amen)
+            .into_iter()
+            .flatten()
+            .take(span)
+            .map(|step| step.slice)
+            .collect();
+        out.push_str(&format!(
+            "SAMPLER: path_configured={} slice_count={} source_bpm={} gate={} bpm_stretch={}; manual_markers={}; current step-indexed slices={slices:?}. If no sample is configured, these events need a loaded break to produce sampled drums.\n",
+            !state.amen.path.is_empty(), state.amen.slice_count, state.amen.source_bpm,
+            state.amen.gate, state.amen.bpm_stretch, state.amen.slice_positions.len()
+        ));
+    }
     for key in lane.sequencer_subkeys() {
         if key.ends_with("_steps") || key.ends_with("_notes") {
             let span = pattern_span(state, &key);
@@ -98,7 +173,7 @@ pub fn composition_context(state: &AppState, lane: LaneKind) -> String {
             if key.ends_with("_notes") {
                 out.push_str(&format!("exactly {span} MIDI pitches, one per step including rests; notes[i] belongs to step i, NOT the ith active hit.\n"));
             } else {
-                out.push_str(&format!("indices 0..{}.\n", span - 1));
+                out.push_str(&format!("strictly increasing UNIQUE active indices 0..{}; never an inline 0/1 gate array.\n", span - 1));
             }
         }
     }

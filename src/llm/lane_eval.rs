@@ -54,6 +54,25 @@ fn evaluate_bass(state: &AppState, idx: usize) -> f32 {
         .collect();
     let n = active.len();
 
+    if state.llm.active_style.as_deref() == Some("jungle") {
+        if n == 0 {
+            return if idx == 0 { 0.0 } else { 1.0 };
+        }
+        let palette = crate::llm::jungle::pitch_palette(state, LaneKind::Bass(idx));
+        let stable = active
+            .iter()
+            .filter(|step| palette.contains(&step.note))
+            .count() as f32
+            / n as f32;
+        let hits_per_32 = n as f32 * 32.0 / voice_steps as f32;
+        let sparse = if (2.0..=6.0).contains(&hits_per_32) {
+            1.0
+        } else {
+            0.3
+        };
+        return stable * 0.75 + sparse * 0.25;
+    }
+
     let mut score = 0.0_f32;
     let mut weight = 0.0_f32;
 

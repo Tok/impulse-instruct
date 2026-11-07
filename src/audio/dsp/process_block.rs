@@ -768,7 +768,7 @@ impl DspState {
             let tts_sig = tts_fx * p.tts_voice_volume;
             // Smooth duck envelope: attenuate synth when TTS active
             let tts_active = tts_raw != 0.0 || self.tts_consumer.slots() > 0;
-            let duck_target = if tts_active { 0.35_f32 } else { 1.0 };
+            let duck_target = if tts_active { p.tts_music_duck } else { 1.0 };
             let coeff = if self.tts_duck > duck_target {
                 self.duck_attack
             } else {
