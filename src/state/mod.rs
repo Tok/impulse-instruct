@@ -409,6 +409,12 @@ pub struct AppState {
     /// true = show back (cables), false = show front (knobs), None = no change.
     #[serde(skip)]
     pub rack_flip_requested: Option<bool>,
+    /// When Some, the UI closes the startup wizard (Rack Setup), then
+    /// clears.  `Some(true)` also records `wizard_done` in session.json,
+    /// exactly like picking a preset in the window (API preset);
+    /// `Some(false)` only hides it for this run (API play).
+    #[serde(skip)]
+    pub wizard_dismiss_requested: Option<bool>,
     /// Monotonic step counter — incremented by the audio thread each time
     /// `current_step` advances. Used for bar-based ramp timing.
     #[serde(skip)]
@@ -511,6 +517,7 @@ impl Default for AppState {
             style_overrides: HashMap::new(),
             scroll_target: None,
             rack_flip_requested: None,
+            wizard_dismiss_requested: None,
             global_step_count: 0,
             patch_morph: Default::default(),
             collapse_requested: None,

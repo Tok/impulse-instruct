@@ -603,7 +603,7 @@ impl ImpulseApp {
     }
 
     /// Persist wizard_done so it doesn't show again.
-    fn mark_wizard_done(&self) {
+    pub(super) fn mark_wizard_done(&self) {
         let state = self.state.read().clone();
         crate::state::save_session_ext(&state, self.show_cables, self.rack_flipped, Some(true));
     }

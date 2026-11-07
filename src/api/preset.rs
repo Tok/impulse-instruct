@@ -29,6 +29,9 @@ pub async fn post_preset(
     let mut agent_names = Vec::new();
     {
         let mut s = api.app_state.write();
+        // Choosing a preset via the API is the same decision as picking
+        // one in Rack Setup: close the wizard and remember it.
+        s.wizard_dismiss_requested = Some(true);
 
         // Remove all existing agents
         let old_ids: Vec<u32> = s.llm_agents.iter().map(|a| a.id).collect();

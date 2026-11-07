@@ -248,6 +248,17 @@ impl eframe::App for ImpulseApp {
         {
             self.toggle_rack_flip();
         }
+        // Take the flag in its own statement: `mark_wizard_done` reads the
+        // state lock, so the write guard must be gone first.
+        let wizard_dismiss = self.state.write().wizard_dismiss_requested.take();
+        if let Some(persist) = wizard_dismiss
+            && self.show_wizard
+        {
+            self.show_wizard = false;
+            if persist {
+                self.mark_wizard_done();
+            }
+        }
         if ctx.input_mut(|i| {
             i.consume_key(egui::Modifiers::SHIFT, egui::Key::Slash) // Shift+/ = ?
                 || i.consume_key(egui::Modifiers::NONE, egui::Key::F1)

@@ -265,8 +265,14 @@ async fn post_unlock(
     })
 }
 
-async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
-    api.app_state.write().sequencer.running = true;
+pub(crate) async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
+    {
+        let mut s = api.app_state.write();
+        s.sequencer.running = true;
+        // Don't leave Rack Setup covering a rack that's now playing.  Hide
+        // only — a preset request (if any) keeps its stronger Some(true).
+        s.wizard_dismiss_requested.get_or_insert(false);
+    }
     api.params_dirty
         .store(true, std::sync::atomic::Ordering::Relaxed);
     api_log(&api, "[API] sequencer: play");
