@@ -6,6 +6,8 @@ rem Use this for: Qwen3, Qwen3-14B, Gemma 4, and any standard GGUF model.
 rem
 rem Output: .llama-official-build\bin\llama-server.exe
 rem
+rem Usage: build-llama-server.bat [--rebuild]
+rem
 rem Requires: git cmake Visual Studio Build Tools (or MSVC) cuda-toolkit
 rem ──────────────────────────────────────────────────────────────────────────────
 cd /d "%~dp0.."
@@ -14,8 +16,18 @@ set SRC_DIR=.llama-src-official
 set BUILD_DIR=.llama-official-build
 set TARGET=%BUILD_DIR%\bin\llama-server.exe
 
+rem --rebuild forces a clean rebuild (e.g. after a CUDA toolkit upgrade;
+rem CMakeCache.txt pins the toolkit path it was first configured with).
+if /i "%~1"=="--rebuild" (
+    if exist "%BUILD_DIR%" (
+        echo Removing stale build dir %BUILD_DIR% ...
+        rmdir /s /q "%BUILD_DIR%"
+    )
+)
+
 if exist "%TARGET%" (
     echo [OK] official llama-server already built: %TARGET%
+    echo      ^(pass --rebuild to force a clean rebuild^)
     exit /b 0
 )
 
