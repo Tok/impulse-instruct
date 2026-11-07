@@ -309,8 +309,8 @@ fn jungle_mc_respects_transport_cooldown_mutes_and_overrides() {
     let aid = Some(state.llm_agents[0].id);
     let first = next_call(&state, aid, None, 0).unwrap();
     assert_eq!(first.0, effective_mc_lines(&state, "jungle")[0]);
-    assert!(next_call(&state, aid, Some(44.0), 1).is_none());
-    assert_ne!(first.0, next_call(&state, aid, Some(45.0), 1).unwrap().0);
+    assert!(next_call(&state, aid, Some(89.0), 1).is_none());
+    assert_ne!(first.0, next_call(&state, aid, Some(90.0), 1).unwrap().0);
     state.sequencer.running = false;
     assert!(next_call(&state, aid, None, 0).is_none());
     state.sequencer.running = true;
@@ -435,8 +435,30 @@ fn old_tts_sessions_keep_clean_defaults_and_jungle_preserves_the_backing() {
     state.llm.active_style = Some("jungle".into());
     let state = crate::llm::jungle_mc::configure(state);
     let params = crate::audio::dsp::AudioParams::from_app_state(&state);
-    assert_eq!(params.tts_music_duck, 0.8);
+    assert_eq!(params.tts_music_duck, 1.0);
     assert_eq!(state.tts_modules[0].pitch_st, -2.0);
-    assert_eq!(state.tts_modules[0].volume, 0.42);
+    assert_eq!(state.tts_modules[0].volume, 0.25);
     assert_eq!(state.tts_modules[0].mic_drive, 1.0);
+}
+
+#[test]
+fn speech_bus_ignores_orphaned_settings_and_disabled_modules() {
+    let mut state = AppState::default();
+    state.llm.active_style = Some("jungle".into());
+    let mut state = crate::llm::jungle_mc::configure(state);
+    let mut orphan = TtsModuleState::new(u32::MAX);
+    orphan.volume = 1.5;
+    orphan.music_duck = 0.1;
+    state.tts_modules.insert(0, orphan);
+    let params = crate::audio::dsp::AudioParams::from_app_state(&state);
+    assert_eq!(params.tts_voice_volume, 0.25);
+    assert_eq!(params.tts_music_duck, 1.0);
+    for module in &mut state.rack.modules {
+        if module.kind == ModuleKind::Tts {
+            module.enabled = false;
+        }
+    }
+    let muted = crate::audio::dsp::AudioParams::from_app_state(&state);
+    assert_eq!(muted.tts_voice_volume, 0.0);
+    assert_eq!(muted.tts_music_duck, 1.0);
 }

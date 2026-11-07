@@ -32,9 +32,9 @@ pub fn configure(mut state: AppState) -> AppState {
     }
     tts.pitch_st = -2.0;
     tts.mic_drive = 1.0;
-    tts.room_mix = 0.22;
-    tts.music_duck = 0.8;
-    tts.volume = 0.42;
+    tts.room_mix = 0.12;
+    tts.music_duck = 1.0;
+    tts.volume = 0.25;
     state.rack.connect_control(agent_id, tts_id);
     state.rack.wire_default_cables();
     state
@@ -50,7 +50,7 @@ pub fn next_call(
 ) -> Option<(String, TtsModuleState)> {
     if !state.sequencer.running
         || state.llm.active_style.as_deref() != Some("jungle")
-        || seconds_since_last.is_some_and(|seconds| seconds < 45.0)
+        || seconds_since_last.is_some_and(|seconds| seconds < 90.0)
     {
         return None;
     }
