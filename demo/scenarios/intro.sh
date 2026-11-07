@@ -8,7 +8,7 @@
 #   - LFO modulation
 #   - Multi-agent band (BASS / DRUMS / FX specialists)
 #
-# NOTE: MC / NeuTTS is intentionally NOT part of this scenario — it doesn't
+# NOTE: MC / Qwen3-TTS is intentionally NOT part of this scenario — it doesn't
 # fit an acid demo. It'll ship in the D&B / jungle scenario instead.
 
 scene_count 13

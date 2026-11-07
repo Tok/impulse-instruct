@@ -7,7 +7,7 @@
 // keep working after the back-panel render moved to its own file.
 pub use super::module_card_back::module_card_back;
 
-use egui::{Color32, Frame, Margin, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
+use egui::{Color32, CornerRadius, Frame, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::theme;
 use crate::state::{ModuleKind, PortDir, PortKind, PortRef};
@@ -37,32 +37,100 @@ fn title_fill(kind: ModuleKind) -> Color32 {
     let v: u8 = match kind {
         ModuleKind::StepSequencer => 22,
         ModuleKind::MasterOutput => 20,
-        ModuleKind::AcidBass | ModuleKind::HooverLead => 26,
+        ModuleKind::AcidBass
+        | ModuleKind::HooverLead
+        | ModuleKind::PluckString
+        | ModuleKind::WavetableVoice
+        | ModuleKind::SampleInstrument => 26,
         ModuleKind::DrumKit808
         | ModuleKind::DrumKit909
         | ModuleKind::AmenSampler
         | ModuleKind::NoiseVoice
+        | ModuleKind::Theremin
+        | ModuleKind::Pendulum
+        | ModuleKind::FmOpsVoice
+        | ModuleKind::AdditiveVoice
+        | ModuleKind::ModalVoice
+        | ModuleKind::ChiptuneVoice
+        | ModuleKind::VocalVoice
         | ModuleKind::GranularTexture
         | ModuleKind::GabberKick => 24,
         ModuleKind::An1xVoice => 28,
-        ModuleKind::NeuTts => 26,
+        ModuleKind::Tts => 26,
         ModuleKind::FxReverb
         | ModuleKind::FxDelay
         | ModuleKind::FxChorus
         | ModuleKind::FxPhaser
+        | ModuleKind::FxFlanger
+        | ModuleKind::FxLimiter
+        | ModuleKind::FxFilter
+        | ModuleKind::FxComb
+        | ModuleKind::FxTilt
+        | ModuleKind::FxTransient
+        | ModuleKind::FxExciter
+        | ModuleKind::FxMultitap
+        | ModuleKind::FxRevDelay
+        | ModuleKind::FxTapeStop
+        | ModuleKind::FxStutter
+        | ModuleKind::FxFreeze
         | ModuleKind::FxRingMod
         | ModuleKind::FxWaveshaper
         | ModuleKind::FxBitcrush
         | ModuleKind::FxEq
         | ModuleKind::FxCompressor
+        | ModuleKind::FxGate
+        | ModuleKind::FxVocoder
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
         | ModuleKind::FxAutotune
         | ModuleKind::FxPan
+        | ModuleKind::FxWiden
+        | ModuleKind::FxConvReverb
+        | ModuleKind::FxParamEq
+        | ModuleKind::FxPitchShift
+        | ModuleKind::FxFreqShift
+        | ModuleKind::FxVinyl
+        | ModuleKind::FxDjFilter
+        | ModuleKind::FxTremolo
+        | ModuleKind::FxVibrato
+        | ModuleKind::FxIsoEq
+        | ModuleKind::FxDeEsser
+        | ModuleKind::FxResBank
+        | ModuleKind::FxTapeEcho
+        | ModuleKind::FxMultibandComp
+        | ModuleKind::FxGrainDelay
+        | ModuleKind::FxSpectralGate
+        | ModuleKind::FxPlate
+        | ModuleKind::FxTranceGate
+        | ModuleKind::FxWaveFolder
         | ModuleKind::SpectrumAnalyzer
         | ModuleKind::StereoMeter
-        | ModuleKind::ActivityTimeline => 20,
+        | ModuleKind::ActivityTimeline
+        | ModuleKind::BarOscilloscope
+        | ModuleKind::StereoVectorscope
+        | ModuleKind::LfoScope
+        | ModuleKind::CvSeqScope
+        | ModuleKind::PitchTracker
+        | ModuleKind::ChordDisplay
+        | ModuleKind::Spectrogram
+        | ModuleKind::LoudnessMeter
+        | ModuleKind::PhaseWheel
+        | ModuleKind::EventStream
+        | ModuleKind::PatternHeatmap
+        | ModuleKind::OnsetGrid
+        | ModuleKind::VoiceMeterStrip
+        | ModuleKind::GrHistory => 20,
         ModuleKind::LfoModule => 18,
+        ModuleKind::CvSequencer => 18,
+        ModuleKind::Slew => 18,
+        ModuleKind::Quantizer => 18,
+        ModuleKind::Comparator => 18,
+        ModuleKind::SampleHold => 18,
+        ModuleKind::Math => 18,
+        ModuleKind::TriggerDiv => 18,
+        ModuleKind::LogicGate => 18,
+        ModuleKind::FunctionGen => 18,
+        ModuleKind::Crossfader => 18,
         ModuleKind::LlmAgent => 30,
         ModuleKind::LlmConsole => 28,
     };
@@ -74,7 +142,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
 pub(super) fn focused_title_bg(ctx: &egui::Context, kind: ModuleKind) -> Color32 {
     let base = title_fill(kind);
     let focus_info: Option<(ModuleKind, f32)> = ctx
-        .data(|d| d.get_temp(egui::Id::new("focused_module")))
+        .data(|d| d.get_temp(egui::Id::unique("focused_module")))
         .flatten();
     match focus_info {
         Some((fk, elapsed)) if fk == kind => {
@@ -98,7 +166,7 @@ pub(super) fn draw_focus_shine(
     ctx: &egui::Context,
 ) {
     let focus_info: Option<(ModuleKind, f32)> = ctx
-        .data(|d| d.get_temp(egui::Id::new("focused_module")))
+        .data(|d| d.get_temp(egui::Id::unique("focused_module")))
         .flatten();
     if let Some((fk, elapsed)) = focus_info
         && fk == kind
@@ -126,7 +194,7 @@ pub(super) fn draw_focus_shine(
             if alpha == 0 {
                 continue;
             }
-            let col = Color32::from_white_alpha(alpha);
+            let col = crate::ui::theme::white_alpha(alpha);
             // Right half
             let r = Rect::from_x_y_ranges(
                 (cx + dist)..=(cx + next_dist).min(title_rect.right()),
@@ -134,7 +202,7 @@ pub(super) fn draw_focus_shine(
             )
             .intersect(title_rect);
             if r.width() > 0.0 {
-                painter.rect_filled(r, Rounding::ZERO, col);
+                painter.rect_filled(r, CornerRadius::ZERO, col);
             }
             // Left half (mirror)
             let l = Rect::from_x_y_ranges(
@@ -143,7 +211,7 @@ pub(super) fn draw_focus_shine(
             )
             .intersect(title_rect);
             if l.width() > 0.0 {
-                painter.rect_filled(l, Rounding::ZERO, col);
+                painter.rect_filled(l, CornerRadius::ZERO, col);
             }
         }
 
@@ -158,8 +226,9 @@ pub(super) fn draw_focus_shine(
             );
             painter.rect_stroke(
                 card_rect,
-                Rounding::same(8.0),
-                Stroke::new(1.0, Color32::from_white_alpha(border_alpha)),
+                CornerRadius::same(8),
+                Stroke::new(1.0, crate::ui::theme::white_alpha(border_alpha)),
+                egui::StrokeKind::Middle,
             );
         }
     }
@@ -268,14 +337,14 @@ pub fn module_card_sized<R>(
     content: impl FnOnce(&mut egui::Ui) -> R,
 ) -> (CardResponse, Option<R>) {
     // Per-module collapse: stored in egui persistent data keyed by module id
-    let collapse_id = egui::Id::new("collapsed").with(module_id);
+    let collapse_id = egui::Id::unique("collapsed").with(module_id);
     let collapsed = ui
         .ctx()
         .data(|d| d.get_temp::<bool>(collapse_id))
         .unwrap_or(false);
     // Publish scale so content draw functions can read it without signature changes.
     ui.ctx()
-        .data_mut(|d| d.insert_temp(egui::Id::new("module_scale"), scale));
+        .data_mut(|d| d.insert_temp(egui::Id::unique("module_scale"), scale));
 
     let fill = Color32::from_gray(14);
     let title_bg = focused_title_bg(ui.ctx(), kind);
@@ -287,10 +356,10 @@ pub fn module_card_sized<R>(
         ui.set_min_width(w);
     }
 
-    let frame = Frame::none()
+    let frame = Frame::NONE
         .fill(fill)
         .inner_margin(Margin::ZERO)
-        .rounding(Rounding::same(CARD_ROUNDING))
+        .corner_radius(CornerRadius::from(CARD_ROUNDING))
         .stroke(Stroke::new(1.0, Color32::from_gray(38)));
 
     let mut toggle_clicked = false;
@@ -321,11 +390,11 @@ pub fn module_card_sized<R>(
             // Title bar fill — rounding matches the outer frame so the fill
             // doesn't leak past the rounded corners.  The frame stroke (1px) is
             // painted on top by egui after all content, so it covers the edges.
-            let title_rounding = Rounding {
-                nw: CARD_ROUNDING,
-                ne: CARD_ROUNDING,
-                sw: 0.0,
-                se: 0.0,
+            let title_rounding = CornerRadius {
+                nw: CARD_ROUNDING as u8,
+                ne: CARD_ROUNDING as u8,
+                sw: 0,
+                se: 0,
             };
             painter.rect_filled(title_rect, title_rounding, title_bg);
             // 1px shadow at bottom (flat — meets content area)
@@ -365,8 +434,11 @@ pub fn module_card_sized<R>(
                 let led_center = Pos2::new(title_rect.left() + 9.0, title_rect.center().y);
                 let led_r = 2.6_f32;
                 let led_hit = Rect::from_center_size(led_center, Vec2::splat(10.0));
-                let led_resp =
-                    ui.interact(led_hit, ui.id().with("led").with(module_id), Sense::click());
+                let led_resp = ui.interact(
+                    led_hit,
+                    ui.scope_id().with("led").with(module_id),
+                    Sense::click(),
+                );
                 if led_resp.clicked() {
                     toggle_clicked = true;
                 }
@@ -386,7 +458,7 @@ pub fn module_card_sized<R>(
                         egui::pos2(cr.min.x - halo_pad, cr.min.y - halo_pad),
                         egui::pos2(cr.max.x + halo_pad, cr.max.y + halo_pad),
                     )
-                    .intersect(ui.ctx().available_rect());
+                    .intersect(crate::ui::util::central_rect(ui.ctx()));
                     let extended = painter.clone().with_clip_rect(bounded);
                     theme::led(&extended, led_center, led_r, Color32::from_gray(220), 1.0);
                 } else {
@@ -422,7 +494,7 @@ pub fn module_card_sized<R>(
             );
             let drag_resp = ui.interact(
                 drag_rect,
-                ui.id().with("title_drag").with(module_id),
+                ui.scope_id().with("title_drag").with(module_id),
                 Sense::click_and_drag(),
             );
             let is_fixed = matches!(
@@ -463,7 +535,7 @@ pub fn module_card_sized<R>(
                 );
                 let chev_resp = ui.interact(
                     chev_rect,
-                    ui.id().with("xy_pad_chev").with(module_id),
+                    ui.scope_id().with("xy_pad_chev").with(module_id),
                     Sense::click(),
                 );
                 if chev_resp.clicked() {
@@ -499,8 +571,11 @@ pub fn module_card_sized<R>(
                 ModuleKind::StepSequencer | ModuleKind::MasterOutput | ModuleKind::LlmConsole
             );
             if !is_core {
-                let rm_resp =
-                    ui.interact(rm_rect, ui.id().with("rm").with(module_id), Sense::click());
+                let rm_resp = ui.interact(
+                    rm_rect,
+                    ui.scope_id().with("rm").with(module_id),
+                    Sense::click(),
+                );
                 if rm_resp.clicked() {
                     remove_clicked = true;
                 }
@@ -526,10 +601,10 @@ pub fn module_card_sized<R>(
                 let margin_y = 8.0 * scale * 2.0;
                 let content_budget = min_height.map(|mh| (mh - TITLE_BAR_H - margin_y).max(20.0));
 
-                let content_frame = Frame::none()
+                let content_frame = Frame::NONE
                     .fill(fill)
-                    .rounding(Rounding::same(CARD_ROUNDING))
-                    .inner_margin(Margin::symmetric(6.0 * scale, 8.0 * scale));
+                    .corner_radius(CornerRadius::from(CARD_ROUNDING))
+                    .inner_margin(Margin::from(Vec2::new(6.0 * scale, 8.0 * scale)));
                 let inner_resp = content_frame.show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(2.0 * scale, 2.0 * scale);
                     ui.set_max_width(card_w - 12.0);
@@ -607,7 +682,7 @@ pub fn zone_rail(
     let painter = ui.painter_at(rail_rect);
 
     // Rail background — distinct per zone
-    painter.rect_filled(rail_rect, Rounding::ZERO, Color32::from_gray(bg_gray));
+    painter.rect_filled(rail_rect, CornerRadius::ZERO, Color32::from_gray(bg_gray));
     // Top highlight / bottom shadow
     painter.line_segment(
         [rail_rect.left_top(), rail_rect.right_top()],
@@ -640,7 +715,7 @@ pub fn zone_rail(
     );
     let arrow_resp = ui.interact(
         arrow_rect,
-        ui.id().with("collapse").with(label),
+        ui.scope_id().with("collapse").with(label),
         Sense::click(),
     );
     if arrow_resp.hovered() {
@@ -679,7 +754,11 @@ pub fn zone_rail(
             Pos2::new(rail_rect.right() - 16.0, screw_y),
             Vec2::new(20.0, 13.0),
         );
-        let all_resp = ui.interact(all_rect, ui.id().with("all").with(label), Sense::click());
+        let all_resp = ui.interact(
+            all_rect,
+            ui.scope_id().with("all").with(label),
+            Sense::click(),
+        );
         let all_col = if all_resp.hovered() {
             Color32::from_gray(140)
         } else {
@@ -703,14 +782,23 @@ pub fn zone_rail(
             Pos2::new(rail_rect.right() - 56.0, screw_y),
             Vec2::new(44.0, 13.0),
         );
-        let btn_resp = ui.interact(btn_rect, ui.id().with("add").with(label), Sense::click());
+        let btn_resp = ui.interact(
+            btn_rect,
+            ui.scope_id().with("add").with(label),
+            Sense::click(),
+        );
         let btn_col = if btn_resp.hovered() {
             Color32::from_gray(120)
         } else {
             Color32::from_gray(55)
         };
-        painter.rect_filled(btn_rect, Rounding::same(2.0), Color32::from_gray(24));
-        painter.rect_stroke(btn_rect, Rounding::same(2.0), Stroke::new(0.5, btn_col));
+        painter.rect_filled(btn_rect, CornerRadius::same(2), Color32::from_gray(24));
+        painter.rect_stroke(
+            btn_rect,
+            CornerRadius::same(2),
+            Stroke::new(0.5, btn_col),
+            egui::StrokeKind::Middle,
+        );
         painter.text(
             btn_rect.center(),
             egui::Align2::CENTER_CENTER,
@@ -738,7 +826,7 @@ pub fn zone_rail(
         );
         let btn_resp = ui.interact(
             btn_rect,
-            ui.id().with("pad_all").with(label),
+            ui.scope_id().with("pad_all").with(label),
             Sense::click(),
         );
         let btn_col = if btn_resp.hovered() {
@@ -746,8 +834,13 @@ pub fn zone_rail(
         } else {
             Color32::from_gray(65)
         };
-        painter.rect_filled(btn_rect, Rounding::same(2.0), Color32::from_gray(24));
-        painter.rect_stroke(btn_rect, Rounding::same(2.0), Stroke::new(0.5, btn_col));
+        painter.rect_filled(btn_rect, CornerRadius::same(2), Color32::from_gray(24));
+        painter.rect_stroke(
+            btn_rect,
+            CornerRadius::same(2),
+            Stroke::new(0.5, btn_col),
+            egui::StrokeKind::Middle,
+        );
         let glyph = if any_expanded { "XY ▾" } else { "XY ▸" };
         painter.text(
             btn_rect.center(),

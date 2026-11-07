@@ -155,7 +155,7 @@ impl ImpulseApp {
                                 )
                                 .fill(fill)
                                 .stroke(stroke)
-                                .rounding(egui::Rounding::same(3.0))
+                                .corner_radius(egui::CornerRadius::same(3))
                                 .min_size(egui::vec2(80.0, 24.0)),
                             )
                             .on_hover_text(rp.description)
@@ -196,7 +196,7 @@ impl ImpulseApp {
                             .unwrap_or_else(|| "— none —".into()),
                         None => "— none —".into(),
                     };
-                    egui::ComboBox::from_id_source("wizard_style_picker")
+                    egui::ComboBox::from_id_salt("wizard_style_picker")
                         .selected_text(
                             egui::RichText::new(current_label)
                                 .monospace()
@@ -286,7 +286,7 @@ impl ImpulseApp {
                         } else {
                             egui::Stroke::new(1.0, egui::Color32::from_gray(24))
                         })
-                        .rounding(egui::Rounding::same(3.0))
+                        .corner_radius(egui::CornerRadius::same(3))
                         .min_size(egui::vec2(460.0, 28.0)),
                     );
                     if resp.clicked() {
@@ -377,7 +377,7 @@ impl ImpulseApp {
                         .fill(fill)
                         .stroke(stroke)
                         .min_size(egui::vec2(460.0, 32.0))
-                        .rounding(egui::Rounding::same(3.0)),
+                        .corner_radius(egui::CornerRadius::same(3)),
                     );
                     if resp.clicked() && selectable {
                         apply_choice = Some(i);
@@ -603,7 +603,7 @@ impl ImpulseApp {
     }
 
     /// Persist wizard_done so it doesn't show again.
-    fn mark_wizard_done(&self) {
+    pub(super) fn mark_wizard_done(&self) {
         let state = self.state.read().clone();
         crate::state::save_session_ext(&state, self.show_cables, self.rack_flipped, Some(true));
     }

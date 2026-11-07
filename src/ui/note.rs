@@ -211,7 +211,7 @@ pub(crate) fn ansi_colorize_notes(text: &str) -> std::borrow::Cow<'_, str> {
                 && let Ok(hz) = num_str.parse::<f64>()
                 && hz >= 20.0
             {
-                let st = (69.0 + 12.0 * (hz / 440.0_f64).log2()).round() as i64;
+                let st = crate::audio::dsp::hz_to_midi(hz as f32).round() as i64;
                 paint!(pos, k + 2, st.rem_euclid(12) as u8);
                 continue;
             }

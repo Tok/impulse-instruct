@@ -6,9 +6,37 @@ mod sequencer_tests {
     #[test]
     fn samples_per_step_at_120bpm_44100hz() {
         // 120 BPM → 2 beats/s → 8 16th-notes/s → 5512.5 samples/step
-        let sps = samples_per_step(120.0, 44100.0);
+        let sps = samples_per_step(120.0, 44100.0, 4);
         let expected = 44100.0 * 60.0 / (120.0 * 4.0);
         assert!((sps - expected).abs() < 0.01, "got {}", sps);
+    }
+
+    #[test]
+    fn samples_per_step_scales_with_step_division() {
+        // 32nd-note grid (div=8) halves the samples-per-step vs 16ths (div=4).
+        // 8th-note grid (div=2) doubles it.  Base: 16ths at 120bpm/44.1k.
+        let base = samples_per_step(120.0, 44100.0, 4);
+        let fast = samples_per_step(120.0, 44100.0, 8);
+        let slow = samples_per_step(120.0, 44100.0, 2);
+        assert!(
+            (fast - base * 0.5).abs() < 0.01,
+            "32nd: got {fast}, want {}",
+            base * 0.5
+        );
+        assert!(
+            (slow - base * 2.0).abs() < 0.01,
+            "8th: got {slow}, want {}",
+            base * 2.0
+        );
+    }
+
+    #[test]
+    fn samples_per_step_clamps_zero_division_to_one() {
+        // Defensive: step_division=0 must not divide-by-zero; the clock
+        // treats it as 1 step per beat (a whole-quarter grid).
+        let sps = samples_per_step(120.0, 44100.0, 0);
+        let expected = 44100.0 * 60.0 / (120.0 * 1.0);
+        assert!((sps - expected).abs() < 0.01, "got {sps}");
     }
 
     #[test]
@@ -24,16 +52,20 @@ mod sequencer_tests {
     }
 
     #[test]
-    fn advance_clock_wraps_at_max_steps() {
-        // current_step is a global tick counter that wraps at MAX_STEPS (64).
-        // Per-voice lengths are applied as modulo at trigger time.
+    fn advance_clock_does_not_wrap_at_max_steps() {
+        // Polymeter: the global tick counter no longer wraps at
+        // MAX_STEPS so voices whose length doesn't divide MAX_STEPS
+        // (e.g. a 5-step bass against a 16-step drum kit) keep
+        // phasing cleanly across the boundary instead of skipping
+        // a step on every wrap.  Voice indexing applies its own
+        // modulo, so this is purely a fix for the global counter.
         let seq = SequencerState {
             running: true,
             bpm: 120.0,
             ..SequencerState::default()
         };
 
-        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let sps = samples_per_step(120.0, 44100.0, 4) as usize;
         let clock = ClockState {
             current_step: MAX_STEPS - 1,
             ..ClockState::default()
@@ -41,8 +73,8 @@ mod sequencer_tests {
 
         let (new_clock, _) = advance_clock(clock, &seq, sps + 1, 44100.0);
         assert_eq!(
-            new_clock.current_step, 0,
-            "should wrap from MAX_STEPS-1 to 0"
+            new_clock.current_step, MAX_STEPS,
+            "step should advance past MAX_STEPS without wrapping",
         );
     }
 
@@ -62,9 +94,10 @@ mod sequencer_tests {
             probability: 1.0,
             ratchet: 1,
             slice: 0,
+            cond: 0,
         };
 
-        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let sps = samples_per_step(120.0, 44100.0, 4) as usize;
         let clock = ClockState::default();
 
         let (_, events) = advance_clock(clock, &seq, sps + 1, 44100.0);
@@ -103,6 +136,7 @@ mod sequencer_tests {
                 probability: 1.0,
                 ratchet: 1,
                 slice: 0,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -125,7 +159,7 @@ mod sequencer_tests {
         // Step one block at a time and tag each kick trigger with the
         // current_step the clock landed on (advance_clock fires triggers
         // when entering a new step).
-        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let sps = samples_per_step(120.0, 44100.0, 4) as usize;
         let mut clock = ClockState::default();
         let mut velocities: std::collections::HashMap<usize, f32> = Default::default();
         for _ in 0..20 {
@@ -201,6 +235,7 @@ mod sequencer_tests {
                 slide: 0.0,
                 pan: 0.0,
                 gate: 0.5,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -219,7 +254,7 @@ mod sequencer_tests {
                 note_approach: crate::sequencer::NoteApproach::Off,
             },
         );
-        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let sps = samples_per_step(120.0, 44100.0, 4) as usize;
         let mut clock = ClockState::default();
         let mut accents: std::collections::HashMap<usize, f32> = Default::default();
         let mut slides: std::collections::HashMap<usize, f32> = Default::default();
@@ -316,6 +351,7 @@ mod sequencer_tests {
                 slide: 0.0,
                 pan: 0.0,
                 gate: 0.5,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -334,7 +370,7 @@ mod sequencer_tests {
                 note_approach: crate::sequencer::NoteApproach::Off,
             },
         );
-        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let sps = samples_per_step(120.0, 44100.0, 4) as usize;
         let mut clock = ClockState::default();
         let mut accents: std::collections::HashMap<usize, f32> = Default::default();
         let mut slides: std::collections::HashMap<usize, f32> = Default::default();
@@ -401,6 +437,7 @@ mod sequencer_tests {
                 slide: 0.0,
                 pan: 0.0,
                 gate: 0.5,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -419,7 +456,7 @@ mod sequencer_tests {
                 note_approach: crate::sequencer::NoteApproach::Off,
             },
         );
-        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let sps = samples_per_step(120.0, 44100.0, 4) as usize;
         let mut clock = ClockState::default();
         let mut accents: std::collections::HashMap<usize, f32> = Default::default();
         let mut slides: std::collections::HashMap<usize, f32> = Default::default();
@@ -482,6 +519,7 @@ mod sequencer_tests {
                 slide: 0.0,
                 pan: 0.0,
                 gate: 0.5,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -500,7 +538,7 @@ mod sequencer_tests {
                 note_approach: NoteApproach::Chromatic,
             },
         );
-        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let sps = samples_per_step(120.0, 44100.0, 4) as usize;
         let mut clock = ClockState::default();
         let mut notes: std::collections::HashMap<usize, u8> = Default::default();
         for _ in 0..20 {
@@ -555,6 +593,7 @@ mod sequencer_tests {
                 slide: 0.0,
                 pan: 0.0,
                 gate: 0.5,
+                cond: 0,
             };
         }
         seq.preecho.insert(
@@ -573,7 +612,7 @@ mod sequencer_tests {
                 note_approach: NoteApproach::Scale,
             },
         );
-        let sps = samples_per_step(120.0, 44100.0) as usize;
+        let sps = samples_per_step(120.0, 44100.0, 4) as usize;
         let mut clock = ClockState::default();
         let mut notes: std::collections::HashMap<usize, u8> = Default::default();
         for _ in 0..20 {
@@ -613,9 +652,10 @@ mod sequencer_tests {
             probability: 1.0,
             ratchet: 2,
             slice: 0,
+            cond: 0,
         };
 
-        let sps = samples_per_step(120.0, 44100.0);
+        let sps = samples_per_step(120.0, 44100.0, 4);
         // First block fires step 0 (ratchet=2 → first hit + schedule 1 sub-hit)
         let clock = ClockState::default();
         let (clock2, events1) = advance_clock(clock, &seq, sps as usize + 1, 44100.0);

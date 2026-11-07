@@ -34,6 +34,16 @@ pub fn load_model_setting() -> Option<String> {
 
 /// Subset of AppState that is auto-saved to `session.json`.
 /// Survives restarts without cluttering project files.
+///
+/// `ui_prefs` is the canonical container for persistent UI preferences
+/// — new installs write the full `UiPrefs` blob here so every
+/// user-togglable preference (Huth per-component, header viz toggles,
+/// phosphor, stream layers, …) survives restarts.  The individual
+/// `ui_scale` / `log_level_idx` / `wasd_as_arrows` / etc. `Option`
+/// fields below are kept for **back-compat only**: old sessions
+/// written before `ui_prefs` existed still round-trip via those
+/// individual fields.  When `ui_prefs` is `Some`, it wins entirely
+/// and the legacy fields are ignored on load.
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 pub struct SessionData {
     pub rack: Option<crate::state::RackState>,
@@ -45,7 +55,13 @@ pub struct SessionData {
     pub show_cables: Option<bool>,
     #[serde(default)]
     pub rack_flipped: Option<bool>,
-    // UI prefs subset
+    /// Full UI preferences blob — the canonical persistent pref state.
+    /// Takes precedence over the individual legacy fields below when
+    /// loading.  Added 2026-04-21 so per-component Huth toggles and
+    /// the header viz selectors actually persist across restarts.
+    #[serde(default)]
+    pub ui_prefs: Option<crate::state::UiPrefs>,
+    // ── Legacy individual UI-pref fields (back-compat only) ─────────────
     pub ui_scale: Option<f32>,
     pub log_level_idx: Option<usize>,
     #[serde(default)]
@@ -90,6 +106,12 @@ pub fn save_session_ext(
         show_cables: Some(show_cables),
         rack_flipped: Some(rack_flipped),
         llm_agents: Some(state.llm_agents.clone()),
+        // Canonical: persist the whole UiPrefs blob.  Every user-
+        // togglable preference survives restarts through this field.
+        ui_prefs: Some(state.ui_prefs.clone()),
+        // Legacy mirrors: still written so older binaries reading this
+        // session file keep the prefs they understand.  New binaries
+        // prefer `ui_prefs` above and ignore these on load.
         ui_scale: Some(state.ui_prefs.ui_scale),
         log_level_idx: Some(state.ui_prefs.log_level_idx),
         autosave_interval: Some(state.ui_prefs.autosave_interval),
@@ -174,25 +196,37 @@ pub fn apply_session(state: &mut AppState, data: SessionData) {
     {
         state.llm.model_path = v;
     }
-    if let Some(v) = data.ui_scale {
-        state.ui_prefs.ui_scale = v.clamp(0.5, 3.0);
-    }
-    if let Some(v) = data.log_level_idx {
-        state.ui_prefs.log_level_idx = v;
-    }
-    if let Some(v) = data.autosave_interval {
-        state.ui_prefs.autosave_interval = v;
+    // Prefer the full UiPrefs blob (written by recent versions) — it
+    // carries every persistent preference including the per-component
+    // Huth toggles, header viz selectors, phosphor settings, and
+    // stream layers.  Fall back to the individual legacy Option fields
+    // only when the blob is absent (session.json from a pre-blob
+    // build).  `ui_scale` is clamped to sane bounds either way so a
+    // corrupted pref can't render the app microscopic / unusable.
+    if let Some(mut prefs) = data.ui_prefs {
+        prefs.ui_scale = prefs.ui_scale.clamp(0.5, 3.0);
+        state.ui_prefs = prefs;
+    } else {
+        if let Some(v) = data.ui_scale {
+            state.ui_prefs.ui_scale = v.clamp(0.5, 3.0);
+        }
+        if let Some(v) = data.log_level_idx {
+            state.ui_prefs.log_level_idx = v;
+        }
+        if let Some(v) = data.autosave_interval {
+            state.ui_prefs.autosave_interval = v;
+        }
+        if let Some(v) = data.wasd_as_arrows {
+            state.ui_prefs.wasd_as_arrows = v;
+        }
+        if let Some(v) = data.autosync_rack_on_start {
+            state.ui_prefs.autosync_rack_on_start = v;
+        }
     }
     if let Some(agents) = data.llm_agents
         && !agents.is_empty()
     {
         state.llm_agents = agents;
-    }
-    if let Some(v) = data.wasd_as_arrows {
-        state.ui_prefs.wasd_as_arrows = v;
-    }
-    if let Some(v) = data.autosync_rack_on_start {
-        state.ui_prefs.autosync_rack_on_start = v;
     }
     if let Some(v) = data.enable_thinking {
         state.llm.enable_thinking = v;

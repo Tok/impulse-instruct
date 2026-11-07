@@ -184,7 +184,7 @@ pub(super) fn apply_bass_update(
     }
 
     // ── Per-voice LFO (101-style) ────────────────────────────────────────
-    // "lfo_target": "off" | "pitch" | "pwm" | "cutoff" | "amp"
+    // "lfo_target": "off" | "pitch" | "pwm" | "cutoff" | "amp" | "pan"
     let bp = format!("{}.lfo_target", prefix);
     if !locked.contains(&bp)
         && let Some(t) = b.get("lfo_target").and_then(|v| v.as_str())
@@ -195,6 +195,7 @@ pub(super) fn apply_bass_update(
             "pwm" | "pulse_width" | "pulse" => BassLfoTarget::PulseWidth,
             "cutoff" | "filter" | "filter_cutoff" => BassLfoTarget::FilterCutoff,
             "amp" | "amplitude" | "tremolo" => BassLfoTarget::Amplitude,
+            "pan" | "stereo" => BassLfoTarget::Pan,
             _ => BassLfoTarget::Off,
         };
     }
@@ -207,6 +208,9 @@ pub(super) fn apply_bass_update(
     let bp = format!("{}.lfo_delay", prefix);
     let v = s.bass_voices[voice_idx].synth.lfo_delay;
     s.bass_voices[voice_idx].synth.lfo_delay = unlocked_f32(v, b, "lfo_delay", &bp, locked);
+    let bp = format!("{}.lfo_phase", prefix);
+    let v = s.bass_voices[voice_idx].synth.lfo_phase;
+    s.bass_voices[voice_idx].synth.lfo_phase = unlocked_f32(v, b, "lfo_phase", &bp, locked);
     // "lfo_waveform": "sine" | "triangle" | "saw" | "inv_saw" | "square"
     let bp = format!("{}.lfo_waveform", prefix);
     if !locked.contains(&bp)
@@ -308,6 +312,267 @@ pub(super) fn apply_hoover_update(
         for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
             if let Some(n) = val.as_u64() {
                 s.sequencer.hoover_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}
+
+/// Apply Karplus-Strong pluck-voice fields from an LLM JSON update
+/// object.  Mirrors `apply_hoover_update`: voice params plus the
+/// sequencer's pluck_steps/pluck_notes arrays.
+pub(super) fn apply_pluck_update(
+    s: &mut AppState,
+    pl: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("pluck.enabled")
+        && let Some(v) = pl.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.pluck.enabled = v;
+    }
+    s.pluck.damping = unlocked_f32(s.pluck.damping, pl, "damping", "pluck.damping", locked);
+    s.pluck.brightness = unlocked_f32(
+        s.pluck.brightness,
+        pl,
+        "brightness",
+        "pluck.brightness",
+        locked,
+    );
+    s.pluck.volume = unlocked_f32(s.pluck.volume, pl, "volume", "pluck.volume", locked);
+    if !locked.contains("pluck.pan")
+        && let Some(v) = pl.get("pan").and_then(|v| v.as_f64())
+    {
+        s.pluck.pan = (v as f32).clamp(-1.0, 1.0);
+    }
+    if !locked.contains("pluck.pitch_offset_semi")
+        && let Some(v) = pl.get("pitch_offset_semi").and_then(|v| v.as_f64())
+    {
+        s.pluck.pitch_offset_semi = (v as f32).clamp(-24.0, 24.0);
+    }
+    if !locked.contains("sequencer.pluck_steps")
+        && let Some(arr) = pl.get("pluck_steps").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(a) = val.as_bool() {
+                s.sequencer.pluck_pattern[i].active = a;
+            }
+        }
+    }
+    if !locked.contains("sequencer.pluck_notes")
+        && let Some(arr) = pl.get("pluck_notes").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.pluck_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}
+
+/// Apply Wavetable voice fields from an LLM JSON update object.
+/// Mirrors `apply_pluck_update`: voice params + sequencer pattern.
+pub(super) fn apply_wavetable_update(
+    s: &mut AppState,
+    w: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("wavetable.enabled")
+        && let Some(v) = w.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.wavetable.enabled = v;
+    }
+    s.wavetable.position = unlocked_f32(
+        s.wavetable.position,
+        w,
+        "position",
+        "wavetable.position",
+        locked,
+    );
+    s.wavetable.phase_offset = unlocked_f32(
+        s.wavetable.phase_offset,
+        w,
+        "phase_offset",
+        "wavetable.phase_offset",
+        locked,
+    );
+    s.wavetable.volume = unlocked_f32(s.wavetable.volume, w, "volume", "wavetable.volume", locked);
+    if !locked.contains("wavetable.pan")
+        && let Some(v) = w.get("pan").and_then(|v| v.as_f64())
+    {
+        s.wavetable.pan = (v as f32).clamp(-1.0, 1.0);
+    }
+    if !locked.contains("wavetable.pitch_offset_semi")
+        && let Some(v) = w.get("pitch_offset_semi").and_then(|v| v.as_f64())
+    {
+        s.wavetable.pitch_offset_semi = (v as f32).clamp(-24.0, 24.0);
+    }
+    if !locked.contains("sequencer.wavetable_steps")
+        && let Some(arr) = w.get("wavetable_steps").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(a) = val.as_bool() {
+                s.sequencer.wavetable_pattern[i].active = a;
+            }
+        }
+    }
+    if !locked.contains("sequencer.wavetable_notes")
+        && let Some(arr) = w.get("wavetable_notes").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.wavetable_pattern[i].note = n.clamp(0, 127) as u8;
+            }
+        }
+    }
+}
+
+/// Apply SampleInstrument fields from an LLM JSON update object.
+/// Mirrors `apply_wavetable_update` — voice params + sequencer pattern.
+pub(super) fn apply_sample_instrument_update(
+    s: &mut AppState,
+    w: &serde_json::Map<String, serde_json::Value>,
+    locked: &HashSet<String>,
+) {
+    if !locked.contains("sample.enabled")
+        && let Some(v) = w.get("enabled").and_then(|v| v.as_bool())
+    {
+        s.sample_instrument.enabled = v;
+    }
+    if !locked.contains("sample.root_note")
+        && let Some(v) = w.get("root_note").and_then(|v| v.as_u64())
+    {
+        s.sample_instrument.root_note = v.clamp(0, 127) as u8;
+    }
+    s.sample_instrument.volume = unlocked_f32(
+        s.sample_instrument.volume,
+        w,
+        "volume",
+        "sample.volume",
+        locked,
+    );
+    if !locked.contains("sample.pan")
+        && let Some(v) = w.get("pan").and_then(|v| v.as_f64())
+    {
+        s.sample_instrument.pan = (v as f32).clamp(-1.0, 1.0);
+    }
+    if !locked.contains("sample.pitch_offset_cents")
+        && let Some(v) = w.get("pitch_offset_cents").and_then(|v| v.as_f64())
+    {
+        s.sample_instrument.pitch_offset_cents = (v as f32).clamp(-100.0, 100.0);
+    }
+    s.sample_instrument.attack = unlocked_f32(
+        s.sample_instrument.attack,
+        w,
+        "attack",
+        "sample.attack",
+        locked,
+    );
+    s.sample_instrument.decay = unlocked_f32(
+        s.sample_instrument.decay,
+        w,
+        "decay",
+        "sample.decay",
+        locked,
+    );
+    s.sample_instrument.sustain = unlocked_f32(
+        s.sample_instrument.sustain,
+        w,
+        "sustain",
+        "sample.sustain",
+        locked,
+    );
+    s.sample_instrument.release = unlocked_f32(
+        s.sample_instrument.release,
+        w,
+        "release",
+        "sample.release",
+        locked,
+    );
+    s.sample_instrument.loop_start = unlocked_f32(
+        s.sample_instrument.loop_start,
+        w,
+        "loop_start",
+        "sample.loop_start",
+        locked,
+    );
+    s.sample_instrument.loop_end = unlocked_f32(
+        s.sample_instrument.loop_end,
+        w,
+        "loop_end",
+        "sample.loop_end",
+        locked,
+    );
+    if !locked.contains("sample.loop_enabled")
+        && let Some(v) = w.get("loop_enabled").and_then(|v| v.as_bool())
+    {
+        s.sample_instrument.loop_enabled = v;
+    }
+    s.sample_instrument.filter_cutoff = unlocked_f32(
+        s.sample_instrument.filter_cutoff,
+        w,
+        "filter_cutoff",
+        "sample.filter_cutoff",
+        locked,
+    );
+    s.sample_instrument.filter_resonance = unlocked_f32(
+        s.sample_instrument.filter_resonance,
+        w,
+        "filter_resonance",
+        "sample.filter_resonance",
+        locked,
+    );
+    s.sample_instrument.filter_mix = unlocked_f32(
+        s.sample_instrument.filter_mix,
+        w,
+        "filter_mix",
+        "sample.filter_mix",
+        locked,
+    );
+    if !locked.contains("sample.filter_mode")
+        && let Some(v) = w.get("filter_mode").and_then(|v| v.as_u64())
+    {
+        s.sample_instrument.filter_mode = (v as u8).min(2);
+    }
+    if !locked.contains("sample.formant_preserve")
+        && let Some(v) = w.get("formant_preserve").and_then(|v| v.as_bool())
+    {
+        s.sample_instrument.formant_preserve = v;
+    }
+    if !locked.contains("sample.time_stretch")
+        && let Some(v) = w.get("time_stretch").and_then(|v| v.as_f64())
+    {
+        s.sample_instrument.time_stretch = (v as f32).clamp(0.25, 4.0);
+    }
+    if !locked.contains("sample.mellotron_mode")
+        && let Some(v) = w.get("mellotron_mode").and_then(|v| v.as_bool())
+    {
+        s.sample_instrument.mellotron_mode = v;
+    }
+    if !locked.contains("sample.mellotron_flutter")
+        && let Some(v) = w.get("mellotron_flutter").and_then(|v| v.as_f64())
+    {
+        s.sample_instrument.mellotron_flutter = (v as f32).clamp(0.0, 1.0);
+    }
+    if !locked.contains("sample.mic_blend")
+        && let Some(v) = w.get("mic_blend").and_then(|v| v.as_f64())
+    {
+        s.sample_instrument.mic_blend = (v as f32).clamp(0.0, 1.0);
+    }
+    if !locked.contains("sequencer.sample_steps")
+        && let Some(arr) = w.get("sample_steps").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(a) = val.as_bool() {
+                s.sequencer.sample_pattern[i].active = a;
+            }
+        }
+    }
+    if !locked.contains("sequencer.sample_notes")
+        && let Some(arr) = w.get("sample_notes").and_then(|v| v.as_array())
+    {
+        for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
+            if let Some(n) = val.as_u64() {
+                s.sequencer.sample_pattern[i].note = n.clamp(0, 127) as u8;
             }
         }
     }
@@ -490,263 +755,4 @@ pub(super) fn apply_an1x_update(
             }
         }
     }
-}
-
-/// Apply FX fields from an LLM JSON update object.
-pub(super) fn apply_fx_update(
-    s: &mut AppState,
-    fx: &serde_json::Map<String, serde_json::Value>,
-    locked: &HashSet<String>,
-) {
-    macro_rules! u {
-        ($field:expr, $key:literal, $path:literal) => {
-            $field = unlocked_f32($field, fx, $key, $path, locked);
-        };
-    }
-    u!(s.fx.reverb_size, "reverb_size", "fx.reverb_size");
-    u!(s.fx.reverb_damp, "reverb_damp", "fx.reverb_damp");
-    u!(s.fx.reverb_mix, "reverb_mix", "fx.reverb_mix");
-    u!(
-        s.fx.reverb_gate_time,
-        "reverb_gate_time",
-        "fx.reverb_gate_time"
-    );
-    if !locked.contains("fx.reverb_freeze")
-        && let Some(v) = fx.get("reverb_freeze").and_then(|v| v.as_bool())
-    {
-        s.fx.reverb_freeze = v;
-    }
-    // master_pitch_st: -12..+12 stored raw; unlocked_f32 clamp is applied via min/max
-    if let Some(v) = fx.get("master_pitch_st").and_then(|v| v.as_f64()) {
-        let path = "fx.master_pitch_st";
-        if !locked.contains(path) {
-            s.fx.master_pitch_st = (v as f32).clamp(-12.0, 12.0);
-        }
-    }
-    u!(s.fx.delay_time, "delay_time", "fx.delay_time");
-    u!(s.fx.delay_feedback, "delay_feedback", "fx.delay_feedback");
-    u!(s.fx.delay_mix, "delay_mix", "fx.delay_mix");
-    u!(
-        s.fx.delay_wow_flutter,
-        "delay_wow_flutter",
-        "fx.delay_wow_flutter"
-    );
-    u!(
-        s.fx.delay_saturation,
-        "delay_saturation",
-        "fx.delay_saturation"
-    );
-    if !locked.contains("fx.delay_freeze")
-        && let Some(v) = fx.get("delay_freeze").and_then(|v| v.as_bool())
-    {
-        s.fx.delay_freeze = v;
-    }
-    u!(s.fx.delay_hpf, "delay_hpf", "fx.delay_hpf");
-    u!(s.fx.delay_lpf, "delay_lpf", "fx.delay_lpf");
-    u!(
-        s.fx.distortion_drive,
-        "distortion_drive",
-        "fx.distortion_drive"
-    );
-    u!(s.fx.distortion_mix, "distortion_mix", "fx.distortion_mix");
-    u!(s.fx.bitcrush_bits, "bitcrush_bits", "fx.bitcrush_bits");
-    u!(s.fx.bitcrush_rate, "bitcrush_rate", "fx.bitcrush_rate");
-    u!(s.fx.bitcrush_mix, "bitcrush_mix", "fx.bitcrush_mix");
-    u!(s.fx.chorus_rate, "chorus_rate", "fx.chorus_rate");
-    u!(s.fx.chorus_depth, "chorus_depth", "fx.chorus_depth");
-    u!(s.fx.chorus_mix, "chorus_mix", "fx.chorus_mix");
-    u!(s.fx.phaser_rate, "phaser_rate", "fx.phaser_rate");
-    u!(s.fx.phaser_depth, "phaser_depth", "fx.phaser_depth");
-    u!(s.fx.phaser_mix, "phaser_mix", "fx.phaser_mix");
-    u!(
-        s.fx.waveshaper_drive,
-        "waveshaper_drive",
-        "fx.waveshaper_drive"
-    );
-    u!(s.fx.waveshaper_mix, "waveshaper_mix", "fx.waveshaper_mix");
-    u!(s.fx.ring_mod_freq, "ring_mod_freq", "fx.ring_mod_freq");
-    u!(s.fx.ring_mod_mix, "ring_mod_mix", "fx.ring_mod_mix");
-    u!(s.fx.eq_low_gain, "eq_low_gain", "fx.eq_low_gain");
-    u!(s.fx.eq_mid_gain, "eq_mid_gain", "fx.eq_mid_gain");
-    u!(s.fx.eq_hi_gain, "eq_hi_gain", "fx.eq_hi_gain");
-    u!(
-        s.fx.compressor_threshold,
-        "compressor_threshold",
-        "fx.compressor_threshold"
-    );
-    u!(
-        s.fx.compressor_ratio,
-        "compressor_ratio",
-        "fx.compressor_ratio"
-    );
-    u!(s.fx.compressor_mix, "compressor_mix", "fx.compressor_mix");
-    u!(
-        s.fx.compressor_multiband,
-        "compressor_multiband",
-        "fx.compressor_multiband"
-    );
-    if !locked.contains("fx.compressor_reverse")
-        && let Some(v) = fx.get("compressor_reverse").and_then(|v| v.as_bool())
-    {
-        s.fx.compressor_reverse = v;
-    }
-    u!(s.fx.stereo_width, "stereo_width", "fx.stereo_width");
-    if !locked.contains("fx.tuning")
-        && let Some(v) = fx.get("tuning").and_then(|v| v.as_u64())
-    {
-        s.fx.tuning = (v as u8).min(3);
-    }
-    u!(s.fx.tape_drive, "tape_drive", "fx.tape_drive");
-    u!(s.fx.tape_mix, "tape_mix", "fx.tape_mix");
-    u!(s.fx.tape_flutter, "tape_flutter", "fx.tape_flutter");
-    u!(
-        s.fx.autotune_amount,
-        "autotune_amount",
-        "fx.autotune_amount"
-    );
-    u!(s.fx.autotune_mix, "autotune_mix", "fx.autotune_mix");
-    u!(s.fx.fx_pan_pos, "fx_pan_pos", "fx.fx_pan_pos");
-    u!(s.fx.fx_pan_width, "fx_pan_width", "fx.fx_pan_width");
-    u!(s.fx.fx_pan_rate, "fx_pan_rate", "fx.fx_pan_rate");
-    u!(s.fx.master_volume, "master_volume", "fx.master_volume");
-    u!(
-        s.fx.xmod_bass_to_an1x_pitch,
-        "xmod_bass_to_an1x_pitch",
-        "fx.xmod_bass_to_an1x_pitch"
-    );
-    u!(
-        s.fx.xmod_noise_to_filter,
-        "xmod_noise_to_filter",
-        "fx.xmod_noise_to_filter"
-    );
-    u!(
-        s.fx.sidechain_amount,
-        "sidechain_amount",
-        "fx.sidechain_amount"
-    );
-    u!(
-        s.fx.sidechain_attack,
-        "sidechain_attack",
-        "fx.sidechain_attack"
-    );
-    u!(
-        s.fx.sidechain_release,
-        "sidechain_release",
-        "fx.sidechain_release"
-    );
-
-    // ── XY pad first-class paths ─────────────────────────────────────────
-    // Each entry is `(xy_key, field_a, field_b, min, max)` — writing
-    // `fx.<xy_key>: [x, y]` sets `field_a` to x and `field_b` to y,
-    // respecting per-field locks *and* the `fx.<xy_key>` lock path.
-    // Maps the canonical Pair-0 of each FX pad; Pair 1 / Pair 2 stay
-    // reachable via the individual knob paths.
-    type XyMap = (&'static str, &'static str, &'static str, f32, f32);
-    const XY_PAIRS: &[XyMap] = &[
-        ("reverb_xy", "reverb_size", "reverb_damp", 0.0, 1.0),
-        ("delay_xy", "delay_time", "delay_feedback", 0.0, 1.0),
-        ("chorus_xy", "chorus_rate", "chorus_depth", 0.0, 1.0),
-        ("phaser_xy", "phaser_rate", "phaser_depth", 0.0, 1.0),
-        ("ring_mod_xy", "ring_mod_freq", "ring_mod_mix", 0.0, 1.0),
-        (
-            "waveshaper_xy",
-            "waveshaper_drive",
-            "waveshaper_mix",
-            0.0,
-            1.0,
-        ),
-        ("bitcrush_xy", "bitcrush_bits", "bitcrush_rate", 0.0, 1.0),
-        ("eq_xy", "eq_low_gain", "eq_mid_gain", -1.0, 1.0),
-        (
-            "compressor_xy",
-            "compressor_threshold",
-            "compressor_ratio",
-            0.0,
-            1.0,
-        ),
-        ("tape_xy", "tape_drive", "tape_flutter", 0.0, 1.0),
-        (
-            "distortion_xy",
-            "distortion_drive",
-            "distortion_mix",
-            0.0,
-            1.0,
-        ),
-        ("autotune_xy", "autotune_amount", "autotune_mix", 0.0, 1.0),
-        ("fx_pan_xy", "fx_pan_pos", "fx_pan_width", 0.0, 1.0),
-    ];
-    for (xy_key, field_a, field_b, min, max) in XY_PAIRS {
-        let Some(arr) = fx.get(*xy_key).and_then(|v| v.as_array()) else {
-            continue;
-        };
-        if arr.len() != 2 {
-            continue;
-        }
-        let (Some(x), Some(y)) = (arr[0].as_f64(), arr[1].as_f64()) else {
-            continue;
-        };
-        let xy_path = format!("fx.{}", xy_key);
-        if locked.contains(&xy_path) {
-            continue;
-        }
-        let path_a = format!("fx.{}", field_a);
-        let path_b = format!("fx.{}", field_b);
-        let x = (x as f32).clamp(*min, *max);
-        let y = (y as f32).clamp(*min, *max);
-        if !locked.contains(&path_a)
-            && let Some(dst) = fx_field_mut(&mut s.fx, field_a)
-        {
-            *dst = x;
-        }
-        if !locked.contains(&path_b)
-            && let Some(dst) = fx_field_mut(&mut s.fx, field_b)
-        {
-            *dst = y;
-        }
-    }
-}
-
-/// Resolve an `FxState` field name to a mutable reference to that field.
-/// Returns `None` for fields that aren't scalar `f32` knobs (booleans,
-/// enum-ish `u8` selectors).  Kept in one place so the XY-pad apply loop
-/// doesn't need to duplicate the big match.
-fn fx_field_mut<'a>(fx: &'a mut super::FxState, key: &str) -> Option<&'a mut f32> {
-    Some(match key {
-        "reverb_size" => &mut fx.reverb_size,
-        "reverb_damp" => &mut fx.reverb_damp,
-        "reverb_mix" => &mut fx.reverb_mix,
-        "delay_time" => &mut fx.delay_time,
-        "delay_feedback" => &mut fx.delay_feedback,
-        "delay_mix" => &mut fx.delay_mix,
-        "chorus_rate" => &mut fx.chorus_rate,
-        "chorus_depth" => &mut fx.chorus_depth,
-        "chorus_mix" => &mut fx.chorus_mix,
-        "phaser_rate" => &mut fx.phaser_rate,
-        "phaser_depth" => &mut fx.phaser_depth,
-        "phaser_mix" => &mut fx.phaser_mix,
-        "ring_mod_freq" => &mut fx.ring_mod_freq,
-        "ring_mod_mix" => &mut fx.ring_mod_mix,
-        "waveshaper_drive" => &mut fx.waveshaper_drive,
-        "waveshaper_mix" => &mut fx.waveshaper_mix,
-        "bitcrush_bits" => &mut fx.bitcrush_bits,
-        "bitcrush_rate" => &mut fx.bitcrush_rate,
-        "bitcrush_mix" => &mut fx.bitcrush_mix,
-        "eq_low_gain" => &mut fx.eq_low_gain,
-        "eq_mid_gain" => &mut fx.eq_mid_gain,
-        "eq_hi_gain" => &mut fx.eq_hi_gain,
-        "compressor_threshold" => &mut fx.compressor_threshold,
-        "compressor_ratio" => &mut fx.compressor_ratio,
-        "compressor_mix" => &mut fx.compressor_mix,
-        "tape_drive" => &mut fx.tape_drive,
-        "tape_mix" => &mut fx.tape_mix,
-        "tape_flutter" => &mut fx.tape_flutter,
-        "distortion_drive" => &mut fx.distortion_drive,
-        "distortion_mix" => &mut fx.distortion_mix,
-        "autotune_amount" => &mut fx.autotune_amount,
-        "autotune_mix" => &mut fx.autotune_mix,
-        "fx_pan_pos" => &mut fx.fx_pan_pos,
-        "fx_pan_width" => &mut fx.fx_pan_width,
-        "fx_pan_rate" => &mut fx.fx_pan_rate,
-        _ => return None,
-    })
 }

@@ -8,8 +8,7 @@ rem   download-models.bat                  Gemma 4 E4B [default, ~4.6 GB, runs o
 rem   download-models.bat gemma-26b        Gemma 4 26B-A4B UD-IQ4_XS [~13.4 GB, MoE, needs 16 GB]
 rem   download-models.bat gemma-26b-q3     Gemma 4 26B-A4B UD-Q3_K_M [~12.5 GB, MoE]
 rem   download-models.bat gemma-26b-iq2    Gemma 4 26B-A4B UD-IQ2_XXS [~9.9 GB, smallest 26B]
-rem   download-models.bat neutts           NeuTTS Air Q8 [~803 MB, default TTS voice cloning]
-rem   download-models.bat neutts-q4        NeuTTS Air Q4 [~527 MB, smaller quant]
+rem   download-models.bat tts              Qwen3-TTS voice cloning [venv + ~4.3 GB weights]
 rem   download-models.bat deepseek-r1-7b   DeepSeek-R1-Distill-Qwen-7B [~5 GB, CoT]
 rem   download-models.bat deepseek-r1-14b  DeepSeek-R1-Distill-Qwen-14B [~9 GB, CoT]
 rem   download-models.bat qwen3            Qwen3-8B Q4_K_M [~5 GB, optional]
@@ -19,11 +18,12 @@ rem NOTE: Most models require a free HuggingFace account.
 rem   Sign up at https://huggingface.co/join
 rem   Then log in: hf auth login  (or: huggingface-cli login)
 rem
-rem TTS DEPENDENCIES: NeuTTS Air runs through a small Python helper, so it
-rem needs Python 3.10+ and eSpeak-NG installed on Windows.  Without these,
-rem the MC/TTS rack module silently no-ops.
+rem TTS DEPENDENCIES: Qwen3-TTS runs through a small Python server
+rem [scripts\tts-server.py], so it needs Python 3.10+.  `download-models.bat tts`
+rem creates .tts-venv, installs qwen-tts [pulls PyTorch] and pre-fetches the
+rem weights.  Without it, the MC/TTS rack module silently no-ops.
 rem   Python 3.10+:  https://www.python.org/downloads/windows/
-rem   eSpeak-NG:     https://github.com/espeak-ng/espeak-ng/releases
+rem Set TTS_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base for a lighter model.
 rem
 rem OTHER QUANTS / VARIANTS: the aliases above cover the curated set we test
 rem against.  Many more quants and fine-tunes exist on HuggingFace — drop any
@@ -32,7 +32,7 @@ rem with if you have VRAM headroom or want to compare quality vs. size:
 rem   Gemma 4 26B-A4B (all quants):  https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF
 rem   Gemma 4 31B (all quants):      https://huggingface.co/unsloth/gemma-4-31B-it-GGUF
 rem   Gemma 4 E4B / E2B:             https://huggingface.co/unsloth?search_models=gemma-4
-rem   NeuTTS Air (Q4 / Q8):          https://huggingface.co/neuphonic
+rem   Qwen3-TTS [1.7B / 0.6B Base]:  https://huggingface.co/Qwen?search_models=Qwen3-TTS
 rem
 rem PREFER MANUAL DOWNLOAD? Non-technical Windows users can just browse
 rem the HuggingFace URL printed below and drop the .gguf into the models\
@@ -75,20 +75,10 @@ if /i "%MODEL%"=="gemma-26b-iq2" (
     set "MODEL_DESC=Gemma 4 26B-A4B UD-IQ2_XXS [unsloth, ~9.9 GB] -- smallest 26B quant"
     goto download
 )
-if /i "%MODEL%"=="neutts" (
-    set HF_REPO=neuphonic/neutts-air-q8-gguf
-    set MODEL_FILE=neutts-air-q8.gguf
-    set HF_FILE=neutts-air-Q8_0.gguf
-    set "MODEL_DESC=NeuTTS Air Q8 [~803 MB] -- default TTS/MC voice cloning"
-    goto download
-)
-if /i "%MODEL%"=="neutts-q4" (
-    set HF_REPO=neuphonic/neutts-air-q4-gguf
-    set MODEL_FILE=neutts-air-q4.gguf
-    set HF_FILE=neutts-air-Q4_0.gguf
-    set "MODEL_DESC=NeuTTS Air Q4 [~527 MB] -- smaller TTS/MC quant"
-    goto download
-)
+rem NeuTTS targets were replaced by Qwen3-TTS [2026-11]; keep them as aliases.
+if /i "%MODEL%"=="tts" goto setup_tts
+if /i "%MODEL%"=="neutts" goto setup_tts
+if /i "%MODEL%"=="neutts-q4" goto setup_tts
 if /i "%MODEL%"=="qwen3" (
     set HF_REPO=bartowski/Qwen_Qwen3-8B-GGUF
     set MODEL_FILE=Qwen_Qwen3-8B-Q4_K_M.gguf
@@ -115,7 +105,7 @@ if /i "%MODEL%"=="deepseek-r1-14b" (
 )
 
 echo Unknown model: '%MODEL%'
-echo Available: gemma4 [default], gemma-26b, gemma-26b-q3, gemma-26b-iq2, neutts [Q8], neutts-q4, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b
+echo Available: gemma4 [default], gemma-26b, gemma-26b-q3, gemma-26b-iq2, tts, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b
 exit /b 1
 
 :download
@@ -227,7 +217,7 @@ if exist "%OUTPUT_PATH%" (
     echo     https://archive.org/details/amen-breaks-compilation
     echo     -^> extract .wav files into  samples\amen\
     echo.
-    echo   Voice references [for the NeuTTS MC / TTS module]
+    echo   Voice references [for the Qwen3-TTS MC / TTS module]
     echo     https://archive.org/details/librivoxaudio     [clean, recommended]
     echo     https://commonvoice.mozilla.org/               [CC0 short clips]
     echo     -^> drop a 3-15s mono WAV into  voices\
@@ -240,3 +230,31 @@ if exist "%OUTPUT_PATH%" (
     exit /b 1
 )
 endlocal
+exit /b 0
+
+rem ── Qwen3-TTS setup [venv + weights; no GGUF] ────────────────────────────────
+:setup_tts
+set TTS_VENV=.tts-venv
+if "%TTS_MODEL%"=="" set TTS_MODEL=Qwen/Qwen3-TTS-12Hz-1.7B-Base
+set PY=
+where py >nul 2>&1 && set PY=py -3
+if not defined PY where python >nul 2>&1 && set PY=python
+if not defined PY (
+    echo Python 3.10+ not found. Install it from https://www.python.org/downloads/windows/
+    exit /b 1
+)
+if not exist "%TTS_VENV%\Scripts\python.exe" (
+    echo Creating Python venv %TTS_VENV% ...
+    %PY% -m venv "%TTS_VENV%" || exit /b 1
+)
+echo Installing qwen-tts [pulls PyTorch - a few GB on first install]...
+"%TTS_VENV%\Scripts\python.exe" -m pip install --quiet --upgrade pip
+"%TTS_VENV%\Scripts\python.exe" -m pip install --quiet qwen-tts soundfile numpy || exit /b 1
+echo Fetching %TTS_MODEL% into the Hugging Face cache [ungated, Apache-2.0]...
+"%TTS_VENV%\Scripts\python.exe" -c "import sys; from huggingface_hub import snapshot_download; snapshot_download(sys.argv[1])" %TTS_MODEL% || exit /b 1
+"%TTS_VENV%\Scripts\python.exe" -c "import qwen_tts" >nul 2>&1 || (
+    echo WARNING: qwen_tts import failed. TTS may not work.
+    exit /b 1
+)
+echo [OK] Qwen3-TTS ready [%TTS_MODEL%]
+exit /b 0

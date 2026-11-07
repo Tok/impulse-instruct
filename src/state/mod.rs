@@ -18,8 +18,42 @@ pub use synth_types::{FilterMode, Waveform};
 pub mod hoover;
 pub use hoover::HooverState;
 
+pub mod pluck;
+pub use pluck::PluckState;
+
+pub mod wavetable;
+pub use wavetable::WavetableState;
+
+pub mod sample_instrument;
+pub use sample_instrument::SampleInstrumentState;
+pub mod sfz;
+pub use sfz::{SfzFilType, SfzLoopMode, SfzRegion, parse_sfz};
+
 pub mod noise;
 pub use noise::NoiseVoiceState;
+
+pub mod theremin;
+pub use theremin::ThereminState;
+
+pub mod pendulum;
+pub use pendulum::PendulumState;
+
+pub mod fm_ops;
+pub use fm_ops::{FM_ALGORITHM_COUNT, FmOp, FmOpsState};
+
+pub mod additive;
+pub use additive::{ADDITIVE_HARMONICS, AdditiveState};
+
+pub mod modal;
+pub use modal::{MODAL_MODES, MODAL_RATIO_PRESETS, ModalState};
+
+pub mod chiptune;
+pub use chiptune::{
+    CHIPTUNE_FILTER_MODES, CHIPTUNE_OSCS, CHIPTUNE_WAVEFORMS, ChiptuneState, SidOsc,
+};
+
+pub mod vocal;
+pub use vocal::{VOCAL_VOWEL_PRESETS, VocalState};
 
 pub mod granular;
 pub use granular::GranularState;
@@ -30,8 +64,44 @@ pub use an1x::{An1xLfoTarget, An1xState, An1xWave};
 pub mod sequencer_state;
 pub use sequencer_state::{SequencerState, Step, TB303Step};
 
+pub mod comparator;
+pub mod crossfader;
+pub mod cv_seq;
+pub mod function_gen;
 pub mod fx;
-pub use fx::FxState;
+mod fx_defaults;
+pub mod logic_gate;
+pub mod math_module;
+pub mod quantizer;
+pub mod sample_hold;
+pub mod slew;
+pub mod trigger_div;
+pub use comparator::{COMPARATOR_SLOTS, ComparatorSlot};
+pub use crossfader::{CROSSFADER_SLOTS, CrossfaderSlot};
+pub use cv_seq::{CV_SEQ_SLOTS, CV_SEQ_STEPS, CvSeqSlot};
+pub use function_gen::{FUNCTION_GEN_SLOTS, FunctionGenSlot};
+pub use fx::{FxState, ParamEqBand, ParamEqBandKind, default_param_eq_bands};
+pub use logic_gate::{LOGIC_GATE_SLOTS, LogicGateSlot, LogicOp};
+pub use math_module::{MATH_SLOTS, MathOp, MathSlot};
+pub use quantizer::{QUANTIZER_SLOTS, QuantizerSlot};
+pub use sample_hold::{SAMPLE_HOLD_SLOTS, SampleHoldSlot};
+pub use slew::{SLEW_SLOTS, SlewSlot};
+pub use trigger_div::{TRIGGER_DIV_RATIOS, TRIGGER_DIV_SLOTS, TriggerDivSlot};
+
+pub mod chain_advance;
+pub use chain_advance::{LoopBoundaryAction, build_advance_target, classify_loop_boundary};
+
+pub mod morph;
+pub use morph::{ChainMorph, bit_reverse_rank, morph_tick, step_swapped};
+
+pub mod patch_morph;
+pub use patch_morph::PatchMorphState;
+
+pub mod persona_preset;
+pub use persona_preset::{
+    PersonaPreset, list_presets, list_presets_in, load_preset_from_path, personas_dir, save_preset,
+    save_preset_to_dir, slugify,
+};
 
 pub mod song;
 pub use song::ChainSlotOverride;
@@ -41,6 +111,18 @@ pub use style_overrides::{StyleOverride, effective_mc_lines, effective_themes};
 
 pub const MAX_STEPS: usize = 64;
 pub const MAX_BASS_VOICES: usize = 4;
+/// Hard cap on `pattern_bank` / `chain` length.  MIDI imports of longer
+/// pieces (Bach Italian Concerto III at a 32nd-note grid needs ~48
+/// banks) write banks beyond the 8 rendered by the UI bank-selector
+/// strip — the chain traverses them invisibly until the bank-selector
+/// gets pagination (see PLAN.md `Sequencer → Paginated bank selector`).
+pub const MAX_BANKS: usize = 64;
+/// Number of bank slots pre-allocated by `default_pattern_bank` — matches
+/// the visible A–H card strip.  Anything higher grows on demand when
+/// `bank_write` / `bank_swap` / chain ops touch a higher slot.  Kept
+/// separate from `MAX_BANKS` so fresh state only carries the 8 default
+/// patterns in memory, not 64.
+pub const DEFAULT_BANKS: usize = 8;
 
 /// Valid sequencer BPM bounds — used by sliders, drag-values, clamp()s, and the
 /// amen source-BPM field.  Narrower than General MIDI's 0–500 on purpose:
@@ -115,17 +197,20 @@ pub fn set_param_mode(state: AppState, path: &str, mode: ParamMode) -> AppState 
 }
 
 pub mod ui_prefs;
-pub use ui_prefs::{AutosaveInterval, HuthStyle, UiPrefs};
+pub use ui_prefs::{AutosaveInterval, UiPrefs};
 
 pub(crate) mod fx_plan;
 pub mod fx_types;
 pub mod modulation;
 pub mod module_kind;
 pub mod rack;
+mod rack_arrange;
 mod rack_presets;
+pub mod rack_random;
 pub mod rack_scope;
+mod rack_wiring;
 pub use fx_plan::compile_fx_plan;
-pub use fx_types::{FX_STEP_COUNT, FeedbackRoute, FxPlan, FxStep, VoiceSend};
+pub use fx_types::{FX_STEP_COUNT, FeedbackRoute, FxPlan, FxStep, SidechainSource, VoiceSend};
 pub use modulation::{
     ModInput, lfo_target_short_label, mod_input_label, mod_inputs, parse_lfo_target,
 };
@@ -141,6 +226,11 @@ pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_contr
 pub use amen::{AmenMeta, AmenState};
 use bass::default_bass_voices;
 pub use bass::{BassLfoTarget, BassState, BassVoiceState};
+
+pub mod automation_overlay;
+pub use automation_overlay::{
+    bass_lfo_curve_for_view, free_phase_per_step, rate_knob_to_hz, synced_phase_per_step,
+};
 pub use gabber::GabberKickParams;
 mod amen;
 mod bass;
@@ -148,7 +238,11 @@ mod gabber;
 
 // ─── Top-level ───────────────────────────────────────────────────────────────
 fn default_pattern_bank() -> Vec<SequencerState> {
-    vec![SequencerState::default(); 8]
+    vec![SequencerState::default(); DEFAULT_BANKS]
+}
+
+fn default_chain_loop() -> bool {
+    true
 }
 
 /// Spectrum analyser display parameters.
@@ -184,13 +278,53 @@ pub struct AppState {
     #[serde(default)]
     pub lfo: [LfoSlot; 4],
     #[serde(default)]
+    pub cv_seq: [CvSeqSlot; CV_SEQ_SLOTS],
+    #[serde(default)]
+    pub slew: [SlewSlot; SLEW_SLOTS],
+    #[serde(default)]
+    pub quantizer: [QuantizerSlot; QUANTIZER_SLOTS],
+    #[serde(default)]
+    pub comparator: [ComparatorSlot; COMPARATOR_SLOTS],
+    #[serde(default)]
+    pub sample_hold: [SampleHoldSlot; SAMPLE_HOLD_SLOTS],
+    #[serde(default)]
+    pub math: [MathSlot; MATH_SLOTS],
+    #[serde(default)]
+    pub trigger_div: [TriggerDivSlot; TRIGGER_DIV_SLOTS],
+    #[serde(default)]
+    pub logic_gate: [LogicGateSlot; LOGIC_GATE_SLOTS],
+    #[serde(default)]
+    pub function_gen: [FunctionGenSlot; FUNCTION_GEN_SLOTS],
+    #[serde(default)]
+    pub crossfader: [CrossfaderSlot; CROSSFADER_SLOTS],
+    #[serde(default)]
     pub free_eg: FreeEg,
     #[serde(default)]
     pub noise_voice: NoiseVoiceState,
     #[serde(default)]
+    pub theremin: ThereminState,
+    #[serde(default)]
+    pub pendulum: PendulumState,
+    #[serde(default)]
+    pub fm_ops: FmOpsState,
+    #[serde(default)]
+    pub additive: AdditiveState,
+    #[serde(default)]
+    pub modal: ModalState,
+    #[serde(default)]
+    pub chiptune: ChiptuneState,
+    #[serde(default)]
+    pub vocal: VocalState,
+    #[serde(default)]
     pub granular: GranularState,
     #[serde(default)]
     pub hoover: HooverState,
+    #[serde(default)]
+    pub pluck: PluckState,
+    #[serde(default)]
+    pub wavetable: WavetableState,
+    #[serde(default)]
+    pub sample_instrument: SampleInstrumentState,
     #[serde(default)]
     pub an1x: An1xState,
     #[serde(default)]
@@ -228,6 +362,23 @@ pub struct AppState {
     /// teleport forward.
     #[serde(default)]
     pub chain_repeat_count: u8,
+    /// When true (the legacy default), the audio thread wraps `chain_pos`
+    /// back to 0 after the last slot's last repeat — the song loops
+    /// forever.  When false, playback stops instead (sets
+    /// `sequencer.running = false`), leaving `chain_pos` on the final
+    /// slot.  One-shot imports (MIDI scores with a definite end) set
+    /// this to false so the piece plays exactly once.
+    #[serde(default = "default_chain_loop")]
+    pub chain_loop: bool,
+    /// Pattern morph in flight — set when the audio thread advances
+    /// into a chain slot whose `ChainSlotOverride.morph_bars > 0`.
+    /// While this is `Some`, each loop boundary applies one morph
+    /// tick (replacing a growing fraction of step indices with the
+    /// target pattern's same-index step) instead of jumping directly
+    /// to the new pattern.  Cleared automatically when the morph
+    /// completes.  Skipped from serialization — purely transient.
+    #[serde(skip)]
+    pub chain_morph: Option<ChainMorph>,
     /// When true, piano/MIDI note-ons while running write into the bass pattern.
     #[serde(default)]
     pub live_record: bool,
@@ -258,10 +409,24 @@ pub struct AppState {
     /// true = show back (cables), false = show front (knobs), None = no change.
     #[serde(skip)]
     pub rack_flip_requested: Option<bool>,
+    /// When Some, the UI closes the startup wizard (Rack Setup), then
+    /// clears.  `Some(true)` also records `wizard_done` in session.json,
+    /// exactly like picking a preset in the window (API preset);
+    /// `Some(false)` only hides it for this run (API play).
+    #[serde(skip)]
+    pub wizard_dismiss_requested: Option<bool>,
     /// Monotonic step counter — incremented by the audio thread each time
     /// `current_step` advances. Used for bar-based ramp timing.
     #[serde(skip)]
     pub global_step_count: u64,
+    /// AI patch-morph orchestration state — set by `/api/morph` or
+    /// the UI menu, polled by `tick_patch_morph` each UI frame to
+    /// fire the next LLM nudge when the bar interval elapses.
+    /// `#[serde(skip)]` because morph progress is ephemeral —
+    /// reloading a session shouldn't resurrect a half-finished
+    /// arc.
+    #[serde(skip)]
+    pub patch_morph: PatchMorphState,
     /// API-requested zone collapse: (ai, global, voice, fxmod). None = no change.
     #[serde(skip)]
     pub collapse_requested: Option<(bool, bool, bool, bool)>,
@@ -269,6 +434,31 @@ pub struct AppState {
     /// Injected into every LLM system prompt as global context.
     #[serde(skip)]
     pub audio_snapshot: String,
+    /// MPE per-note expression — captures the latest pitch bend,
+    /// channel pressure, and timbre (CC74) from any non-zero MIDI
+    /// channel.  Surfaced via `/api/state` and `/api/ws/state` so
+    /// downstream patches / OSC bridges can react to MPE
+    /// controllers; DSP integration (per-note pitch / cutoff
+    /// modulation) is a follow-up.  Transient — not serialised.
+    #[serde(skip)]
+    pub mpe: MpeExpression,
+}
+
+/// Latest MPE expression values from any non-zero MIDI channel.
+/// Each channel that emits expression overwrites the same fields,
+/// so V1 is "last-channel-wins" — fine for monophonic bass control,
+/// extensible to per-channel later.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MpeExpression {
+    /// Channel that last sent any expression event (1..=15).  Zero
+    /// = uninitialised (no MPE traffic yet).
+    pub channel: u8,
+    /// Pitch bend, -1.0..=1.0 (raw bend, not semitones).
+    pub pitch_bend: f32,
+    /// Channel pressure / aftertouch, 0.0..=1.0.
+    pub pressure: f32,
+    /// Timbre (CC74), 0.0..=1.0.  Y-axis on the ROLI Seaboard etc.
+    pub timbre: f32,
 }
 
 impl Default for AppState {
@@ -282,10 +472,30 @@ impl Default for AppState {
             fx: Default::default(),
             llm: Default::default(),
             lfo: Default::default(),
+            cv_seq: std::array::from_fn(|_| CvSeqSlot::default()),
+            slew: std::array::from_fn(|_| SlewSlot::default()),
+            quantizer: std::array::from_fn(|_| QuantizerSlot::default()),
+            comparator: std::array::from_fn(|_| ComparatorSlot::default()),
+            sample_hold: std::array::from_fn(|_| SampleHoldSlot::default()),
+            math: std::array::from_fn(|_| MathSlot::default()),
+            trigger_div: std::array::from_fn(|_| TriggerDivSlot::default()),
+            logic_gate: std::array::from_fn(|_| LogicGateSlot::default()),
+            function_gen: std::array::from_fn(|_| FunctionGenSlot::default()),
+            crossfader: std::array::from_fn(|_| CrossfaderSlot::default()),
             free_eg: Default::default(),
             noise_voice: Default::default(),
+            theremin: Default::default(),
+            pendulum: Default::default(),
+            fm_ops: Default::default(),
+            additive: Default::default(),
+            modal: Default::default(),
+            chiptune: Default::default(),
+            vocal: Default::default(),
             granular: Default::default(),
             hoover: Default::default(),
+            pluck: Default::default(),
+            wavetable: Default::default(),
+            sample_instrument: Default::default(),
             an1x: Default::default(),
             amen: Default::default(),
             gabber_kick: Default::default(),
@@ -297,6 +507,8 @@ impl Default for AppState {
             chain_enabled: false,
             chain_pos: 0,
             chain_repeat_count: 0,
+            chain_loop: true,
+            chain_morph: None,
             live_record: false,
             spectrum: Default::default(),
             rack: Default::default(),
@@ -305,9 +517,12 @@ impl Default for AppState {
             style_overrides: HashMap::new(),
             scroll_target: None,
             rack_flip_requested: None,
+            wizard_dismiss_requested: None,
             global_step_count: 0,
+            patch_morph: Default::default(),
             collapse_requested: None,
             audio_snapshot: String::new(),
+            mpe: MpeExpression::default(),
         };
         // Create a default agent for the LlmAgent rack module.
         if let Some(agent_id) = s
@@ -321,7 +536,7 @@ impl Default for AppState {
         }
         // Create TTS module state for any TTS modules in the default rack.
         for m in &s.rack.modules {
-            if m.kind == ModuleKind::NeuTts {
+            if m.kind == ModuleKind::Tts {
                 s.tts_modules.push(TtsModuleState::new(m.id));
             }
         }
@@ -446,6 +661,68 @@ pub struct LlmState {
     /// on overflow (`RETRY_QUEUE_MAX`).  Transient — not serialised.
     #[serde(skip)]
     pub retry_queue: VecDeque<String>,
+    /// Writeback diff log — last `LANE_APPLY_LOG_MAX` successful lane
+    /// applies, newest at the back.  Each row holds the JSON payload
+    /// that was applied (keys = params that changed) so the UI can
+    /// render a "what changed this turn" diff panel.  Transient —
+    /// not serialised; rebuilt as the pipeline runs.
+    #[serde(skip)]
+    pub recent_lane_applies: VecDeque<LaneApplyRecord>,
+    /// Lane-score auto-tuner: long-term running average per
+    /// `(style, lane_label)` key.  Each successful pipeline lane
+    /// apply pushes its evaluated score onto the matching running
+    /// average; the jam scheduler's `effective_dynamism` reads it
+    /// to bias the picker toward lanes that have historically
+    /// scored well in the active style.  Transient (not serialised)
+    /// — rebuilt over a session as cycles run.
+    #[serde(skip)]
+    pub lane_avg_per_style: HashMap<String, LaneAverage>,
+    /// Short-lived feedback lines surfaced from the apply layer when the
+    /// model produced something weak (e.g. a ramp whose target matches
+    /// the current value, a ramp with an imperceptible delta, …).
+    /// Threaded into the next system prompt as `RECENT FEEDBACK:` so
+    /// the LLM can correct on the next turn.  Capped at `FEEDBACK_MAX`
+    /// entries (FIFO).  Transient — not serialised.
+    #[serde(skip)]
+    pub recent_feedback: VecDeque<String>,
+}
+
+/// Cap on `LlmState.recent_feedback` — small enough that the next
+/// prompt's FEEDBACK section stays under ~400 chars even if every slot
+/// is filled.
+pub const FEEDBACK_MAX: usize = 5;
+
+/// Cap on `LlmAgentState.pending_hints` — five queued hints is plenty
+/// for any cycle's prompt-injection budget.  Older entries get
+/// drained when this cap is exceeded.
+pub const HINT_QUEUE_MAX: usize = 5;
+
+/// True when `agent` matches the broadcast scope label.  Scope match
+/// is case-insensitive: an agent whose `scope` contains the label
+/// directly, OR whose persona name matches the label when scope is
+/// empty (i.e. agent is unscoped → reachable by any persona-name
+/// broadcast).  Pure helper so the matcher is unit-testable.
+pub fn agent_matches_broadcast_scope(agent: &LlmAgentState, scope: &str) -> bool {
+    let scope_lower = scope.to_ascii_lowercase();
+    let scope_match = agent
+        .scope
+        .iter()
+        .any(|sc| sc.eq_ignore_ascii_case(&scope_lower));
+    let persona_match =
+        agent.scope.is_empty() && agent.persona_name.eq_ignore_ascii_case(&scope_lower);
+    scope_match || persona_match
+}
+
+/// Push a hint into an agent's `pending_hints` queue, draining the
+/// oldest entries to stay at most `HINT_QUEUE_MAX` deep.  Pure helper
+/// (`&mut LlmAgentState` is a method-style receiver, fine per the
+/// guide — the agent owns its own consistency).
+pub fn push_pending_hint(agent: &mut LlmAgentState, hint: String) {
+    agent.pending_hints.push(hint);
+    if agent.pending_hints.len() > HINT_QUEUE_MAX {
+        let drop_n = agent.pending_hints.len() - HINT_QUEUE_MAX;
+        agent.pending_hints.drain(..drop_n);
+    }
 }
 
 /// One row of `LlmState.lane_scores`.  Tracks how well a lane's last
@@ -464,6 +741,37 @@ pub struct LaneScore {
     pub change_count: u32,
 }
 
+/// Long-term per-(style, lane) running average score — the lane-score
+/// auto-tuner reads this to bias jam-cycle dynamism toward lanes that
+/// have historically scored well in the active style.  Distinct from
+/// `LaneScore` (which is the most recent per-lane score and drives
+/// short-term recency).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LaneAverage {
+    pub sum: f32,
+    pub n: u32,
+}
+
+impl LaneAverage {
+    pub fn mean(&self) -> Option<f32> {
+        if self.n == 0 {
+            None
+        } else {
+            Some(self.sum / self.n as f32)
+        }
+    }
+    pub fn update(&mut self, score: f32) {
+        self.sum += score.clamp(0.0, 1.0);
+        self.n = self.n.saturating_add(1);
+    }
+}
+
+/// Compose the `(style, lane)` map key the auto-tuner uses.  Pure
+/// helper so callers can read the same key in tests / UI.
+pub fn lane_avg_key(style: &str, lane_label: &str) -> String {
+    format!("{}/{}", style, lane_label)
+}
+
 /// Streaming progress for the lane pipeline — populated by the LLM thread's
 /// pipeline callback so the UI can render a "lane 3 of 8: bass" bar.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -476,6 +784,25 @@ pub struct PipelineProgress {
     pub failed_count: usize,
     /// Label of the lane currently inferring, or `None` between lanes.
     pub current_lane: Option<String>,
+}
+
+/// One row in the writeback diff log — captured each time a lane
+/// successfully applies its JSON update to AppState.  The `update`
+/// field already contains *only the keys that changed* (the schema +
+/// filter strip everything outside the lane's scope), so it doubles as
+/// a "what changed this turn" diff payload for the UI.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LaneApplyRecord {
+    /// Display label of the lane (e.g. "BASS 1", "KITA", "FX").
+    pub lane_label: String,
+    /// JSON payload that was applied — keys are the params that
+    /// actually changed, values are the new values.
+    pub update: serde_json::Value,
+    /// Wall-clock time the lane's inference took, in milliseconds.
+    pub ms: u128,
+    /// `LlmState.jam_cycle_count` at apply time — lets the UI group
+    /// rows by jam cycle / one-shot turn.
+    pub cycle: u32,
 }
 
 fn default_true() -> bool {
@@ -535,183 +862,47 @@ impl Default for LlmState {
             pipeline_progress: None,
             lane_scores: HashMap::new(),
             retry_queue: VecDeque::new(),
+            recent_lane_applies: VecDeque::new(),
+            lane_avg_per_style: HashMap::new(),
+            recent_feedback: VecDeque::new(),
         }
     }
 }
 
-// ─── Per-agent LLM state (rackable LLM modules) ─────────────────────────────
+/// Maximum number of `LaneApplyRecord` rows kept in
+/// `LlmState.recent_lane_applies`.  Two jam cycles' worth of lanes is
+/// plenty for a "recently changed" panel; older history goes through
+/// the regular log.
+pub const LANE_APPLY_LOG_MAX: usize = 16;
 
-/// Agent role — affects personality flavor in system prompt.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum AgentRole {
-    #[default]
-    Producer,
-    Mc,
-    Dj,
-    Specialist,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LlmAgentState {
-    pub id: u32, // matches RackModule.id
-    pub persona_name: String,
-    pub heat: f32,
-    pub temperature: f32,
-    pub scope: Vec<String>, // top-level keys this agent may write (empty = all)
-    /// Agent role — affects system prompt personality flavor.
-    #[serde(default)]
-    pub role: AgentRole,
-    /// Whether this agent may spawn new agents during jam cycles.
-    #[serde(default)]
-    pub can_spawn: bool,
-    /// Whether this agent may dismiss itself during jam cycles.
-    #[serde(default)]
-    pub can_dismiss: bool,
-    pub jam_bars: f32,
-    pub conversation_mode: ConversationMode,
-    pub active_style: Option<String>,
-    pub custom_style_text: String,
-    pub user_instructions: String,
-    pub enable_thinking: bool,
-    /// Per-agent system prompt override. Empty = use auto-generated prompt.
-    #[serde(default)]
-    pub system_prompt_override: String,
-    /// Per-agent model override. `None` = inherit from global `LlmState.model_path`.
-    #[serde(default)]
-    pub model_path: Option<String>,
-    // Display-only (updated by inference thread)
-    #[serde(default)]
-    pub is_inferring: bool,
-    #[serde(default)]
-    pub last_response: String,
-    #[serde(default)]
-    pub tokens_per_sec: f32,
-    #[serde(default)]
-    pub jam_cycle_count: u32,
-    /// Persistent memory: conversation snippets preserved across sessions.
-    /// Injected into the system prompt so the agent remembers prior context.
-    #[serde(default)]
-    pub memory: Vec<String>,
-    /// Style learning: user preference observations (e.g. "user likes high reverb").
-    /// Accumulated from UI edits; injected into system prompt alongside memory.
-    #[serde(default)]
-    pub style_observations: Vec<String>,
-    /// Pending hints from other agents, consumed on next inference.
-    #[serde(default)]
-    pub pending_hints: Vec<String>,
-    /// Short-term conversation trail for this agent — the last few
-    /// condensed outputs it produced, injected into the next cycle's
-    /// prompt so the agent can evolve coherently instead of treating
-    /// every cycle as a blank slate.  Capped at `AGENT_RECENT_OUTPUTS_MAX`.
-    /// `#[serde(default)]` so older saves without the field load cleanly.
-    #[serde(default)]
-    pub recent_outputs: VecDeque<String>,
-    /// When true, this agent's style is independent and won't change when the
-    /// global style is changed. When false (default), style syncs with global.
-    #[serde(default)]
-    pub style_locked: bool,
-    /// Per-agent random seed.  -1 = random each call.  Inherited from the
-    /// global LlmState.seed via `propagate_seed` when not locked.
-    #[serde(default = "default_agent_seed")]
-    pub seed: i64,
-    /// When true, this agent's seed is independent and won't change when the
-    /// global seed is changed. When false (default), seed syncs with global.
-    #[serde(default)]
-    pub seed_locked: bool,
-    /// Live pipeline progress for this agent's current inference, or `None`
-    /// when idle.  Transient — not serialised.
-    #[serde(skip)]
-    pub pipeline_progress: Option<PipelineProgress>,
-}
-
-fn default_agent_seed() -> i64 {
-    -1
-}
-
-/// Maximum number of memory entries per agent.
-pub const AGENT_MEMORY_MAX: usize = 20;
-/// Maximum number of style observations.
-pub const STYLE_OBS_MAX: usize = 10;
-/// Maximum number of short-term recent-output entries per agent.  Kept
-/// small on purpose: three cycles of context is enough for coherent
-/// evolution without bloating every prompt or encouraging the model
-/// to repeat stale moves.
-pub const AGENT_RECENT_OUTPUTS_MAX: usize = 3;
-
-impl LlmAgentState {
-    pub fn new_default(id: u32) -> Self {
-        Self {
-            id,
-            persona_name: "PULSE".to_string(),
-            heat: 0.5,
-            temperature: 0.9,
-            scope: Vec::new(),
-            role: AgentRole::Producer,
-            can_spawn: true,
-            can_dismiss: true,
-            jam_bars: 0.0,
-            conversation_mode: ConversationMode::Producer,
-            active_style: None,
-            custom_style_text: String::new(),
-            user_instructions: String::new(),
-            enable_thinking: true,
-            system_prompt_override: String::new(),
-            model_path: None,
-            is_inferring: false,
-            last_response: String::new(),
-            tokens_per_sec: 0.0,
-            jam_cycle_count: 0,
-            memory: Vec::new(),
-            style_observations: Vec::new(),
-            pending_hints: Vec::new(),
-            recent_outputs: VecDeque::new(),
-            style_locked: false,
-            seed: -1,
-            seed_locked: false,
-            pipeline_progress: None,
-        }
+/// Push a short feedback line onto `state.llm.recent_feedback`, capping
+/// at `FEEDBACK_MAX` (oldest-out).  Used by the apply layer when model
+/// output is weak but not invalid — the line gets threaded into the
+/// next system prompt so the LLM can self-correct.
+pub fn push_llm_feedback(state: &mut LlmState, msg: impl Into<String>) {
+    let s = msg.into();
+    while state.recent_feedback.len() >= FEEDBACK_MAX {
+        state.recent_feedback.pop_front();
     }
-
-    /// Create an agent from the current singleton LlmState values.
-    pub fn from_singleton(id: u32, llm: &LlmState) -> Self {
-        Self {
-            id,
-            persona_name: llm.persona_name.clone(),
-            heat: llm.heat,
-            temperature: llm.temperature,
-            scope: Vec::new(),
-            role: AgentRole::Producer,
-            can_spawn: true,
-            can_dismiss: true,
-            jam_bars: llm.jam_bars,
-            conversation_mode: llm.conversation_mode.clone(),
-            active_style: llm.active_style.clone(),
-            custom_style_text: llm.custom_style_text.clone(),
-            user_instructions: llm.user_instructions.clone(),
-            enable_thinking: llm.enable_thinking,
-            system_prompt_override: String::new(),
-            model_path: None,
-            is_inferring: false,
-            last_response: String::new(),
-            tokens_per_sec: 0.0,
-            jam_cycle_count: 0,
-            memory: Vec::new(),
-            style_observations: Vec::new(),
-            pending_hints: Vec::new(),
-            recent_outputs: VecDeque::new(),
-            style_locked: false,
-            seed: llm.seed,
-            seed_locked: false,
-            pipeline_progress: None,
-        }
-    }
+    state.recent_feedback.push_back(s);
 }
+
+/// Per-agent LLM state — extracted into its own module to keep
+/// `state/mod.rs` under the 1000-line cap.  Re-exported below so the
+/// canonical paths `crate::state::AgentRole` /
+/// `crate::state::LlmAgentState` keep working.
+pub mod llm_agent_state;
+pub use llm_agent_state::{
+    AGENT_MEMORY_MAX, AGENT_RECENT_OUTPUTS_MAX, AgentRole, LlmAgentState, STYLE_OBS_MAX,
+};
 
 /// Sync the default (first) LlmAgentState with the global LlmState.
 pub mod jam_tools;
 pub mod llm_apply;
 pub mod llm_apply_seq;
 pub(crate) mod llm_helpers;
+pub(crate) mod llm_helpers_fx;
+pub(crate) mod llm_helpers_voices_v2;
 pub(crate) mod llm_rack;
 pub mod transitions;
 pub mod transitions_presets;

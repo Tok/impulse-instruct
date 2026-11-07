@@ -20,6 +20,7 @@ pub(super) const VOICE_KINDS: &[ModuleKind] = &[
     ModuleKind::HooverLead,
     ModuleKind::An1xVoice,
     ModuleKind::AmenSampler,
+    ModuleKind::SampleInstrument,
     ModuleKind::NoiseVoice,
 ];
 pub(super) const AI_KINDS: &[ModuleKind] = &[ModuleKind::LlmConsole, ModuleKind::LlmAgent];
@@ -29,18 +30,61 @@ pub(super) const FXMOD_KINDS: &[ModuleKind] = &[
     ModuleKind::FxDelay,
     ModuleKind::FxChorus,
     ModuleKind::FxPhaser,
+    ModuleKind::FxFlanger,
+    ModuleKind::FxFilter,
+    ModuleKind::FxComb,
+    ModuleKind::FxTilt,
     ModuleKind::FxEq,
     ModuleKind::FxCompressor,
+    ModuleKind::FxGate,
+    ModuleKind::FxVocoder,
+    ModuleKind::FxLimiter,
     ModuleKind::FxTapeSat,
+    ModuleKind::FxTransient,
+    ModuleKind::FxExciter,
+    ModuleKind::FxMultitap,
+    ModuleKind::FxRevDelay,
+    ModuleKind::FxTapeStop,
+    ModuleKind::FxStutter,
+    ModuleKind::FxFreeze,
     ModuleKind::FxDrive,
     ModuleKind::FxAutotune,
+    ModuleKind::FxWiden,
+    ModuleKind::FxFreqShift,
     ModuleKind::FxWaveshaper,
     ModuleKind::FxBitcrush,
     ModuleKind::FxRingMod,
+    ModuleKind::FxPlate,
+    ModuleKind::FxTranceGate,
+    ModuleKind::FxWaveFolder,
     ModuleKind::SpectrumAnalyzer,
     ModuleKind::StereoMeter,
     ModuleKind::ActivityTimeline,
+    ModuleKind::BarOscilloscope,
+    ModuleKind::StereoVectorscope,
+    ModuleKind::LfoScope,
+    ModuleKind::CvSeqScope,
+    ModuleKind::PitchTracker,
+    ModuleKind::ChordDisplay,
+    ModuleKind::Spectrogram,
+    ModuleKind::LoudnessMeter,
+    ModuleKind::PhaseWheel,
+    ModuleKind::EventStream,
+    ModuleKind::PatternHeatmap,
+    ModuleKind::OnsetGrid,
+    ModuleKind::VoiceMeterStrip,
+    ModuleKind::GrHistory,
     ModuleKind::LfoModule,
+    ModuleKind::CvSequencer,
+    ModuleKind::Slew,
+    ModuleKind::Quantizer,
+    ModuleKind::Comparator,
+    ModuleKind::SampleHold,
+    ModuleKind::Math,
+    ModuleKind::TriggerDiv,
+    ModuleKind::LogicGate,
+    ModuleKind::FunctionGen,
+    ModuleKind::Crossfader,
 ];
 
 pub(super) fn draw_remove_confirm(app: &mut ImpulseApp, ctx: &egui::Context) {
@@ -151,6 +195,18 @@ pub(super) fn draw_add_menu(app: &mut ImpulseApp, ctx: &egui::Context) {
                         let agent =
                             crate::state::LlmAgentState::from_singleton(id, &app.state.read().llm);
                         app.state.write().llm_agents.push(agent);
+                    }
+                    // Mirror /api/rack/add: auto-pick a random amen sample
+                    // when the AmenSampler is added with no path.  Otherwise
+                    // freshly-added amen modules are silent until the user
+                    // hits LOAD/RAND in the panel.
+                    if *kind == ModuleKind::AmenSampler
+                        && app.state.read().amen.path.is_empty()
+                        && let Some(p) = crate::ui::panels::amen::pick_random_sample()
+                    {
+                        let mut s = app.state.write();
+                        s.amen.path = p;
+                        s.amen.slice_positions.clear();
                     }
                     close = true;
                 }

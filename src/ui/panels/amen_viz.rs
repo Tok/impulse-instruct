@@ -52,13 +52,14 @@ pub(super) fn draw_waveform(
     let painter = ui.painter_at(rect);
     painter.rect_filled(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         egui::Color32::from_gray(10),
     );
     painter.rect_stroke(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         egui::Stroke::new(0.5, egui::Color32::from_gray(40)),
+        egui::StrokeKind::Middle,
     );
     if thumb.is_empty() {
         return;
@@ -76,13 +77,13 @@ pub(super) fn draw_waveform(
             egui::Stroke::new(col_w.max(1.0), egui::Color32::from_gray(160)),
         );
     }
-    let shade = egui::Color32::from_rgba_unmultiplied(8, 8, 8, 180);
+    let shade = crate::ui::theme::rgba_unmultiplied(8, 8, 8, 180);
     if start_offset > 0.0 {
         let x0 = rect.min.x;
         let x1 = rect.min.x + start_offset * rect.width();
         painter.rect_filled(
             egui::Rect::from_min_max(egui::pos2(x0, rect.min.y), egui::pos2(x1, rect.max.y)),
-            egui::Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             shade,
         );
     }
@@ -91,7 +92,7 @@ pub(super) fn draw_waveform(
         let x1 = rect.max.x;
         painter.rect_filled(
             egui::Rect::from_min_max(egui::pos2(x0, rect.min.y), egui::pos2(x1, rect.max.y)),
-            egui::Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             shade,
         );
     }
@@ -183,8 +184,8 @@ pub(super) fn draw_waveform(
                 egui::pos2(x0, rect.min.y + 1.0),
                 egui::pos2(x1, rect.max.y - 1.0),
             ),
-            egui::Rounding::ZERO,
-            egui::Color32::from_rgba_unmultiplied(200, 200, 200, alpha),
+            egui::CornerRadius::ZERO,
+            crate::ui::theme::rgba_unmultiplied(200, 200, 200, alpha),
         );
         if trig_t.is_finite() && step_dur > 0.0 {
             let frac = (((now - trig_t).max(0.0) / step_dur) as f32).clamp(0.0, 1.0);

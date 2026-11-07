@@ -189,17 +189,7 @@ impl ImpulseApp {
                         // Respect style lock — agents can't override user-selected style
                         if !self.state.read().llm.style_lock {
                             use crate::llm::styles::StyleCatalog;
-                            let cat = StyleCatalog::get();
-                            let resolved = cat
-                                .find_by_id(sid)
-                                .or_else(|| {
-                                    let lo = sid.to_lowercase();
-                                    cat.styles().iter().find(|s| {
-                                        s.id.to_lowercase() == lo || s.name.to_lowercase() == lo
-                                    })
-                                })
-                                .map(|s| s.id.clone());
-                            if let Some(id) = resolved {
+                            if let Some(id) = StyleCatalog::get().resolve_style_id(sid) {
                                 self.state.write().llm.active_style = Some(id);
                             }
                             self.session_dirty = true;
@@ -212,13 +202,7 @@ impl ImpulseApp {
                         self.session_dirty = true;
                     }
                     LlmAction::SetConversationMode(m) => {
-                        use crate::state::ConversationMode;
-                        let mode = match m.to_lowercase().as_str() {
-                            "off" => ConversationMode::Off,
-                            "dj" => ConversationMode::Dj,
-                            "mc" => ConversationMode::Mc,
-                            _ => ConversationMode::Producer,
-                        };
+                        let mode = crate::state::ConversationMode::from_str_lossy(m);
                         self.state.write().llm.conversation_mode = mode;
                         self.session_dirty = true;
                     }
@@ -351,12 +335,21 @@ impl ImpulseApp {
                             .iter_mut()
                             .find(|a| a.persona_name.eq_ignore_ascii_case(to))
                         {
-                            target.pending_hints.push(hint.clone());
-                            // Cap at 5 pending hints
-                            if target.pending_hints.len() > 5 {
-                                target.pending_hints.drain(..target.pending_hints.len() - 5);
+                            crate::state::push_pending_hint(target, hint.clone());
+                        }
+                    }
+                    LlmAction::BroadcastHint { scope, hint } => {
+                        let mut s = self.state.write();
+                        let mut count = 0usize;
+                        for agent in s.llm_agents.iter_mut() {
+                            if crate::state::agent_matches_broadcast_scope(agent, scope) {
+                                crate::state::push_pending_hint(agent, hint.clone());
+                                count += 1;
                             }
                         }
+                        log::info!(
+                            "[broadcast_hint] scope={scope:?} reached {count} agent(s): {hint:?}"
+                        );
                     }
                 }
             }

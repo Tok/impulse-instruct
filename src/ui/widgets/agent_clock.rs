@@ -43,7 +43,7 @@ pub fn agent_clock(
     let r_outer = size * 0.45;
     let r_inner = r_outer * 0.45;
 
-    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(&painter, rect, egui::CornerRadius::same(2));
     painter.circle_stroke(center, r_outer, Stroke::new(0.75, theme::SLATE));
     painter.circle_stroke(center, r_inner, Stroke::new(0.5, theme::IRON));
 
@@ -130,7 +130,7 @@ pub fn agent_clock(
             painter.circle_stroke(
                 center,
                 r,
-                Stroke::new(1.0, Color32::from_rgba_unmultiplied(220, 220, 220, a)),
+                Stroke::new(1.0, crate::ui::theme::rgba_unmultiplied(220, 220, 220, a)),
             );
         }
         ui.ctx().request_repaint();

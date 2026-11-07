@@ -29,18 +29,143 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // ── Voices with a single pan field — Fixed(Pan) + 2 selectors ─────
         AcidBass => &[Fixed(BassPan), Selector, Selector],
         HooverLead => &[Fixed(HooverPan), Selector],
+        PluckString => &[Selector, Selector, Selector],
+        WavetableVoice => &[Selector, Selector, Selector],
+        SampleInstrument => &[Selector, Selector, Selector],
         An1xVoice => &[Fixed(An1xPan), Selector, Selector],
         NoiseVoice => &[Fixed(NoisePan), Selector],
+        // Theremin: only the selectors — every meaningful target
+        // (X / Y / portamento / brightness) is a continuous knob the
+        // user reaches via mod-routes rather than a fixed jack.
+        Theremin => &[Selector, Selector, Selector],
+        // Pendulum: same as Theremin — selectors only, the user
+        // routes LFOs to base_pitch / detune / mix from the back
+        // panel without dedicated fixed jacks.
+        Pendulum => &[Selector, Selector, Selector],
+        // FM operator synth: 24+ per-op knobs is far too many for
+        // dedicated jacks — selectors let the user route LFOs to
+        // any combination of op level / ratio / ADSR fields.
+        FmOpsVoice => &[Selector, Selector, Selector],
+        // Additive: 16 per-harmonic levels + voice ADSR + vol +
+        // pan — too many fixed jacks would be needed; selectors
+        // let the user pick which fields to drive.
+        AdditiveVoice => &[Selector, Selector, Selector],
+        // Modal: same problem — 8 per-mode levels + voice fields
+        // → selectors let the user pick which fields to drive.
+        ModalVoice => &[Selector, Selector, Selector],
+        // Chiptune: 3 oscs × 6 fields each + filter + flags →
+        // selectors throughout.
+        ChiptuneVoice => &[Selector, Selector, Selector],
+        // Vocal: vowel + morph + brightness + shift + ADSR —
+        // selectors so the user picks which to drive.
+        VocalVoice => &[Selector, Selector, Selector],
         // ── Voices without a single pan (multi-voice kits / pan-less) ─────
-        DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
+        DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | Tts => {
             &[Selector, Selector, Selector]
         }
         GabberKick => &[Selector, Selector, Selector],
         // ── Sequencer — BPM, swing, and a spare selector ──────────────────
         StepSequencer => &[Selector, Selector, Selector],
+        // Vinyl: 3 knobs, all selectors so the user routes LFOs
+        // to noise / wear / mix from the back panel.
+        FxVinyl => &[Selector, Selector, Selector],
+        // DJ filter: 3 knobs (morph / resonance / mix), all
+        // selectors — auto-morph patches need an LFO on the morph
+        // jack, but users may also want resonance riding the LFO.
+        FxDjFilter => &[Selector, Selector, Selector],
+        // Tremolo: 4 knobs (rate / depth / shape / mix); all
+        // selectors so the user can route LFOs to any of them
+        // (e.g. one LFO sweeping the rate for "speeding-up" effects).
+        FxTremolo => &[Selector, Selector, Selector, Selector],
+        // Vibrato: same 4 knobs as tremolo, same routing freedom.
+        FxVibrato => &[Selector, Selector, Selector, Selector],
+        // ISO EQ: 4 knobs (low / mid / high / mix); all selectors so
+        // the user can sequence kill patterns via LFO routing.
+        FxIsoEq => &[Selector, Selector, Selector, Selector],
+        // De-esser: 4 knobs (freq / threshold / amount / mix); all
+        // selectors — LFO on threshold gives a gating-style breath
+        // patch.
+        FxDeEsser => &[Selector, Selector, Selector, Selector],
+        // Resonator bank: 4 knobs (root / chord / resonance / mix);
+        // all selectors so the user can sequence root pitch via
+        // LFO for slow chord-progression patches.
+        FxResBank => &[Selector, Selector, Selector, Selector],
+        // Tape echo: 4 knobs (time / feedback / age / mix); all
+        // selectors — LFO on time gives a "warbling pitch" patch
+        // when paired with low feedback.
+        FxTapeEcho => &[Selector, Selector, Selector, Selector],
+        // Multiband compressor: 4 knobs (low/mid/high thresh + mix);
+        // selectors so an LFO can ride a single band's threshold
+        // for "ducking the bass on every other bar"-style patches.
+        FxMultibandComp => &[Selector, Selector, Selector, Selector],
+        // Grain delay: 4 knobs (delay / size / scatter / mix);
+        // selectors so an LFO on scatter gives a slowly-evolving
+        // jitter floor.
+        FxGrainDelay => &[Selector, Selector, Selector, Selector],
+        // Spectral gate: 4 knobs (thresh / release / tilt / mix);
+        // selectors so users can sequence threshold opens for
+        // gate-and-release patches.
+        FxSpectralGate => &[Selector, Selector, Selector, Selector],
+        // Plate reverb: 4 knobs (size / damping / diffusion / mix);
+        // all selectors so an LFO on size gives a slowly-evolving
+        // tail length.
+        FxPlate => &[Selector, Selector, Selector, Selector],
+        // Trance gate: only 2 continuous knobs (smooth + mix); pattern
+        // is a u16 bitmask and rate is a discrete selector, neither
+        // suited to LFO modulation.  Two selectors lets the user
+        // automate the smooth ramp + wet/dry blend.
+        FxTranceGate => &[Selector, Selector],
+        // Wavefolder: 4 continuous knobs (drive / bias / symmetry /
+        // mix); selectors so an LFO on drive sweeps through the fold
+        // count, producing the classic "wavefolder pitch sweep" sound.
+        FxWaveFolder => &[Selector, Selector, Selector, Selector],
         // ── FX ≤3 knobs → dedicated jack per knob ──────────────────────────
         FxChorus => &[Fixed(ChorusRate), Fixed(ChorusDepth), Fixed(ChorusMix)],
         FxPhaser => &[Fixed(PhaserRate), Fixed(PhaserDepth), Fixed(PhaserMix)],
+        FxFlanger => &[
+            Fixed(FlangerRate),
+            Fixed(FlangerDepth),
+            Fixed(FlangerFeedback),
+            Fixed(FlangerMix),
+        ],
+        FxLimiter => &[
+            Fixed(LimiterThreshold),
+            Fixed(LimiterCeiling),
+            Fixed(LimiterRelease),
+        ],
+        FxFilter => &[
+            Fixed(SvfCutoff),
+            Fixed(SvfResonance),
+            Fixed(SvfDrive),
+            Fixed(SvfMix),
+        ],
+        FxComb => &[
+            Fixed(CombPitch),
+            Fixed(CombFeedback),
+            Fixed(CombDamp),
+            Fixed(CombMix),
+        ],
+        FxTilt => &[Fixed(TiltTilt), Fixed(TiltPivot), Fixed(TiltMix)],
+        FxTransient => &[
+            Fixed(TransientAttack),
+            Fixed(TransientSustain),
+            Fixed(TransientMix),
+        ],
+        FxExciter => &[Fixed(ExciterAmount), Fixed(ExciterFreq), Fixed(ExciterMix)],
+        FxMultitap => &[
+            Fixed(MultitapTime),
+            Fixed(MultitapSpread),
+            Fixed(MultitapFeedback),
+            Fixed(MultitapMix),
+        ],
+        FxRevDelay => &[
+            Fixed(RevDelayTime),
+            Fixed(RevDelayFeedback),
+            Fixed(RevDelayMix),
+        ],
+        FxTapeStop => &[Fixed(TapeStopMix)],
+        FxStutter => &[Fixed(StutterRate), Fixed(StutterSlice), Fixed(StutterMix)],
+        FxFreeze => &[Fixed(FreezeMix)],
         FxWaveshaper => &[Fixed(WaveshaperDrive), Fixed(WaveshaperMix)],
         FxDrive => &[Fixed(DistortionDrive), Fixed(DistortionMix)],
         FxBitcrush => &[Fixed(BitcrushBits), Fixed(BitcrushRate), Fixed(BitcrushMix)],
@@ -48,11 +173,60 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         FxEq => &[Fixed(EqLow), Fixed(EqMid), Fixed(EqHigh)],
         FxTapeSat => &[Fixed(TapeDrive), Fixed(TapeMix), Fixed(TapeFlutter)],
         FxAutotune => &[Fixed(AutotuneAmount), Fixed(AutotuneMix)],
+        FxWiden => &[Fixed(WidenHaas), Fixed(WidenSide), Fixed(WidenMix)],
+        FxFreqShift => &[
+            Fixed(FreqShiftAmount),
+            Fixed(FreqShiftFeedback),
+            Fixed(FreqShiftMix),
+        ],
         // ── FX >3 knobs → 3 selectors ──────────────────────────────────────
-        FxReverb | FxDelay | FxCompressor | FxPan => &[Selector, Selector, Selector],
+        FxReverb | FxDelay | FxCompressor | FxPan | FxConvReverb | FxParamEq | FxPitchShift => {
+            &[Selector, Selector, Selector]
+        }
+        // Sidechain FX (Gate / Vocoder) — knob counts in the >3 bucket;
+        // 3 selectors keep the back-panel uniform.  The sidechain audio
+        // input is its own jack on the front (rendered separately from
+        // these modulation jacks).
+        FxGate | FxVocoder => &[Selector, Selector, Selector],
         // ── Explicit opt-outs ─────────────────────────────────────────────
         MasterOutput | LfoModule | LlmAgent | LlmConsole | SpectrumAnalyzer | StereoMeter
-        | ActivityTimeline => &[],
+        | ActivityTimeline | BarOscilloscope | StereoVectorscope | LfoScope | PitchTracker
+        | ChordDisplay | Spectrogram | LoudnessMeter | PhaseWheel | EventStream
+        | PatternHeatmap | OnsetGrid | VoiceMeterStrip | GrHistory | CvSequencer | CvSeqScope => {
+            &[]
+        }
+        // Slew — one Mod-In jack (CV input).  The compile pass in
+        // params.rs walks `Source.CvOut → Slew.ModIn` cables and
+        // resolves the slot's source_buf_idx; mod_inputs returns
+        // an empty Selector so compile_mod_routes emits zero
+        // direct routes (the module's CV-out cable produces them
+        // separately via the standard mod-route path).
+        Slew => &[Selector],
+        // Quantizer — same shape as Slew.
+        Quantizer => &[Selector],
+        Comparator => &[Selector],
+        SampleHold => &[Selector],
+        // Math — TWO Mod-In jacks (A + B); cables target index
+        // 0 or 1.  Both are Selector with empty target lists;
+        // the per-utility compile pass resolves each input
+        // independently.
+        Math => &[Selector, Selector],
+        // TriggerDiv — single CV input (gate stream).  No knobs are
+        // CV-modulatable in V1 (ratio is a discrete selector); the
+        // Selector slot is for the gate-stream input cable.
+        TriggerDiv => &[Selector],
+        // LogicGate — two CV inputs (A, B); the per-utility compile
+        // pass branches on `cable.to.index` (0 = A, 1 = B), same
+        // pattern as Math.
+        LogicGate => &[Selector, Selector],
+        // FunctionGen — single gate input.  The 3 knobs (attack /
+        // release / curve) are not LFO-modulatable in V1; the
+        // Selector slot is for the gate input cable.
+        FunctionGen => &[Selector],
+        // Crossfader — two CV inputs (A, B) via cable.to.index 0/1
+        // (same dispatch as Math).  Mix knob isn't currently
+        // CV-modulatable.
+        Crossfader => &[Selector, Selector],
     }
 }
 
@@ -104,7 +278,7 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         GranularDensity => "G.DEN",
         GranularGrain => "G.GRN",
         GranularPos => "G.POS",
-        NeuTtsVolume => "TTS.VOL",
+        TtsVolume => "TTS.VOL",
         ReverbMix => "RVB.MX",
         ReverbSize => "RVB.SZ",
         ReverbDamp => "RVB.DP",
@@ -117,6 +291,43 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         PhaserRate => "PH.RT",
         PhaserDepth => "PH.DP",
         PhaserMix => "PH.MX",
+        FlangerRate => "FL.RT",
+        FlangerDepth => "FL.DP",
+        FlangerFeedback => "FL.FB",
+        FlangerMix => "FL.MX",
+        LimiterThreshold => "LM.TH",
+        LimiterCeiling => "LM.CE",
+        LimiterRelease => "LM.RL",
+        LimiterLookahead => "LM.LA",
+        SvfCutoff => "FT.CT",
+        SvfResonance => "FT.RS",
+        SvfDrive => "FT.DR",
+        SvfMix => "FT.MX",
+        CombPitch => "CB.PT",
+        CombFeedback => "CB.FB",
+        CombDamp => "CB.DP",
+        CombMix => "CB.MX",
+        TiltTilt => "TL.TL",
+        TiltPivot => "TL.PV",
+        TiltMix => "TL.MX",
+        TransientAttack => "TR.AT",
+        TransientSustain => "TR.SU",
+        TransientMix => "TR.MX",
+        ExciterAmount => "EX.AM",
+        ExciterFreq => "EX.FQ",
+        ExciterMix => "EX.MX",
+        MultitapTime => "MT.TM",
+        MultitapSpread => "MT.SP",
+        MultitapFeedback => "MT.FB",
+        MultitapMix => "MT.MX",
+        RevDelayTime => "RD.TM",
+        RevDelayFeedback => "RD.FB",
+        RevDelayMix => "RD.MX",
+        TapeStopMix => "TS.MX",
+        StutterRate => "ST.RT",
+        StutterSlice => "ST.SL",
+        StutterMix => "ST.MX",
+        FreezeMix => "FZ.MX",
         WaveshaperDrive => "WS.DR",
         WaveshaperMix => "WS.MX",
         DistortionDrive => "DR.DR",
@@ -132,6 +343,25 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         CompThresh => "CP.TH",
         CompRatio => "CP.RT",
         CompMix => "CP.MX",
+        GateThreshold => "GT.TH",
+        GateAttack => "GT.AT",
+        GateRelease => "GT.RL",
+        GateDepth => "GT.DP",
+        GateMix => "GT.MX",
+        VocoderBands => "VC.BD",
+        VocoderCarrierMix => "VC.CR",
+        VocoderSense => "VC.SN",
+        VocoderMix => "VC.MX",
+        WidenHaas => "WD.HS",
+        WidenSide => "WD.SD",
+        WidenMix => "WD.MX",
+        FreqShiftAmount => "FS.AM",
+        FreqShiftFeedback => "FS.FB",
+        FreqShiftMix => "FS.MX",
+        SampleVolume => "SP.VOL",
+        SamplePan => "SP.PAN",
+        SamplePitch => "SP.PIT",
+        SampleCutoff => "SP.CUT",
         TapeDrive => "TP.DR",
         TapeMix => "TP.MX",
         TapeFlutter => "TP.FL",
@@ -164,17 +394,38 @@ pub(crate) fn lfo_target_module_kind(target: LfoTarget) -> Option<ModuleKind> {
         GranularVolume | GranularDensity | GranularGrain | GranularPos => {
             Some(ModuleKind::GranularTexture)
         }
-        NeuTtsVolume => Some(ModuleKind::NeuTts),
+        TtsVolume => Some(ModuleKind::Tts),
         ReverbMix | ReverbSize | ReverbDamp => Some(ModuleKind::FxReverb),
         DelayTime | DelayFeedback | DelayMix => Some(ModuleKind::FxDelay),
         ChorusRate | ChorusDepth | ChorusMix => Some(ModuleKind::FxChorus),
         PhaserRate | PhaserDepth | PhaserMix => Some(ModuleKind::FxPhaser),
+        FlangerRate | FlangerDepth | FlangerFeedback | FlangerMix => Some(ModuleKind::FxFlanger),
+        LimiterThreshold | LimiterCeiling | LimiterRelease | LimiterLookahead => {
+            Some(ModuleKind::FxLimiter)
+        }
+        SvfCutoff | SvfResonance | SvfDrive | SvfMix => Some(ModuleKind::FxFilter),
+        CombPitch | CombFeedback | CombDamp | CombMix => Some(ModuleKind::FxComb),
+        TiltTilt | TiltPivot | TiltMix => Some(ModuleKind::FxTilt),
+        TransientAttack | TransientSustain | TransientMix => Some(ModuleKind::FxTransient),
+        ExciterAmount | ExciterFreq | ExciterMix => Some(ModuleKind::FxExciter),
+        MultitapTime | MultitapSpread | MultitapFeedback | MultitapMix => {
+            Some(ModuleKind::FxMultitap)
+        }
+        RevDelayTime | RevDelayFeedback | RevDelayMix => Some(ModuleKind::FxRevDelay),
+        TapeStopMix => Some(ModuleKind::FxTapeStop),
+        StutterRate | StutterSlice | StutterMix => Some(ModuleKind::FxStutter),
+        FreezeMix => Some(ModuleKind::FxFreeze),
         WaveshaperDrive | WaveshaperMix => Some(ModuleKind::FxWaveshaper),
         DistortionDrive | DistortionMix => Some(ModuleKind::FxDrive),
         BitcrushBits | BitcrushRate | BitcrushMix => Some(ModuleKind::FxBitcrush),
         RingModFreq | RingModMix => Some(ModuleKind::FxRingMod),
         EqLow | EqMid | EqHigh => Some(ModuleKind::FxEq),
         CompThresh | CompRatio | CompMix => Some(ModuleKind::FxCompressor),
+        GateThreshold | GateAttack | GateRelease | GateDepth | GateMix => Some(ModuleKind::FxGate),
+        VocoderBands | VocoderCarrierMix | VocoderSense | VocoderMix => Some(ModuleKind::FxVocoder),
+        WidenHaas | WidenSide | WidenMix => Some(ModuleKind::FxWiden),
+        FreqShiftAmount | FreqShiftFeedback | FreqShiftMix => Some(ModuleKind::FxFreqShift),
+        SampleVolume | SamplePan | SamplePitch | SampleCutoff => Some(ModuleKind::SampleInstrument),
         TapeDrive | TapeMix | TapeFlutter => Some(ModuleKind::FxTapeSat),
         AutotuneAmount | AutotuneMix => Some(ModuleKind::FxAutotune),
         GabberKickPitch | GabberKickDecay | GabberKickClip | GabberKickPan => {
@@ -225,7 +476,7 @@ pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
         "granulardensity" => GranularDensity,
         "granulargrain" => GranularGrain,
         "granularpos" => GranularPos,
-        "neuttsvolume" | "ttsvolume" => NeuTtsVolume,
+        "ttsvolume" | "neuttsvolume" => TtsVolume, // legacy alias
         "reverbmix" => ReverbMix,
         "reverbsize" => ReverbSize,
         "reverbdamp" => ReverbDamp,
@@ -238,6 +489,43 @@ pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
         "phaserrate" => PhaserRate,
         "phaserdepth" => PhaserDepth,
         "phasermix" => PhaserMix,
+        "flangerrate" => FlangerRate,
+        "flangerdepth" => FlangerDepth,
+        "flangerfeedback" => FlangerFeedback,
+        "flangermix" => FlangerMix,
+        "limiterthreshold" => LimiterThreshold,
+        "limiterceiling" => LimiterCeiling,
+        "limiterrelease" => LimiterRelease,
+        "limiterlookahead" => LimiterLookahead,
+        "svfcutoff" | "filtercutoff" => SvfCutoff,
+        "svfresonance" | "filterresonance" => SvfResonance,
+        "svfdrive" | "filterdrive" => SvfDrive,
+        "svfmix" | "filtermix" => SvfMix,
+        "combpitch" => CombPitch,
+        "combfeedback" => CombFeedback,
+        "combdamp" => CombDamp,
+        "combmix" => CombMix,
+        "tilttilt" | "tilt" => TiltTilt,
+        "tiltpivot" => TiltPivot,
+        "tiltmix" => TiltMix,
+        "transientattack" => TransientAttack,
+        "transientsustain" => TransientSustain,
+        "transientmix" => TransientMix,
+        "exciteramount" => ExciterAmount,
+        "exciterfreq" => ExciterFreq,
+        "excitermix" => ExciterMix,
+        "multitaptime" => MultitapTime,
+        "multitapspread" => MultitapSpread,
+        "multitapfeedback" => MultitapFeedback,
+        "multitapmix" => MultitapMix,
+        "revdelaytime" => RevDelayTime,
+        "revdelayfeedback" => RevDelayFeedback,
+        "revdelaymix" => RevDelayMix,
+        "tapestopmix" => TapeStopMix,
+        "stutterrate" => StutterRate,
+        "stutterslice" => StutterSlice,
+        "stuttermix" => StutterMix,
+        "freezemix" => FreezeMix,
         "waveshaperdrive" => WaveshaperDrive,
         "waveshapermix" => WaveshaperMix,
         "distortiondrive" => DistortionDrive,
@@ -253,6 +541,25 @@ pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
         "compthresh" => CompThresh,
         "compratio" => CompRatio,
         "compmix" => CompMix,
+        "gatethreshold" => GateThreshold,
+        "gateattack" => GateAttack,
+        "gaterelease" => GateRelease,
+        "gatedepth" => GateDepth,
+        "gatemix" => GateMix,
+        "vocoderbands" => VocoderBands,
+        "vocodercarriermix" => VocoderCarrierMix,
+        "vocodersense" => VocoderSense,
+        "vocodermix" => VocoderMix,
+        "widenhaas" => WidenHaas,
+        "widenside" => WidenSide,
+        "widenmix" => WidenMix,
+        "freqshiftamount" | "freqshift" => FreqShiftAmount,
+        "freqshiftfeedback" => FreqShiftFeedback,
+        "freqshiftmix" => FreqShiftMix,
+        "samplevolume" | "samplevol" => SampleVolume,
+        "samplepan" => SamplePan,
+        "samplepitch" => SamplePitch,
+        "samplecutoff" => SampleCutoff,
         "tapedrive" => TapeDrive,
         "tapemix" => TapeMix,
         "tapeflutter" => TapeFlutter,
@@ -335,7 +642,18 @@ pub fn apply_llm_mod_cable_entry(rack: &mut crate::state::RackState, v: &serde_j
 pub(crate) fn rack_out_port_kind(kind: ModuleKind) -> PortKind {
     match kind {
         ModuleKind::LlmAgent => PortKind::Control,
-        ModuleKind::LfoModule | ModuleKind::StepSequencer => PortKind::Cv,
+        ModuleKind::LfoModule
+        | ModuleKind::StepSequencer
+        | ModuleKind::CvSequencer
+        | ModuleKind::Slew
+        | ModuleKind::Quantizer
+        | ModuleKind::Comparator
+        | ModuleKind::SampleHold
+        | ModuleKind::Math
+        | ModuleKind::TriggerDiv
+        | ModuleKind::LogicGate
+        | ModuleKind::FunctionGen
+        | ModuleKind::Crossfader => PortKind::Cv,
         _ => PortKind::Audio,
     }
 }

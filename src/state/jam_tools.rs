@@ -214,23 +214,45 @@ pub fn parse_and_schedule_ramp(
         .map(|v| v as f32)
         .unwrap_or_else(|| current_param_value(&state, &param));
 
-    // No-op guard: if the ramp target is already (effectively) where we are,
-    // don't schedule — it would waste a ramp slot and show a flat line in the
-    // event stream. 0.002 ≈ 0.2 %, below visible knob movement.
-    if (from - to).abs() < 0.002 {
-        log::debug!(
-            "ramp: skipping no-op ({} already at {:.3}, target {:.3})",
-            param,
-            from,
-            to
+    // Validate the delta.  Model-emitted ramps sometimes aim at a value
+    // essentially identical to the current one, producing a flat line in
+    // the event stream and no audible motion — a wasted ramp slot.
+    // Three bands:
+    //   ERROR  (|delta| < 0.001) — target equals source; drop the ramp
+    //          and feed back to the LLM so it stops emitting no-ops.
+    //   WARN   (|delta| < 0.05)  — target is too close to be heard;
+    //          schedule anyway (motion exists) but flag the weak choice.
+    //   OK     (|delta| ≥ 0.05)  — proceed silently.
+    let delta = (from - to).abs();
+    let mut s = state;
+    if delta < 0.001 {
+        let line = format!(
+            "ramp ERROR: {param} from {from:.3} to {to:.3} is a no-op — \
+             pick a target at least 0.05 away (or omit the ramp)"
         );
-        return state;
+        log::error!("{line}");
+        crate::state::push_llm_feedback(&mut s.llm, line);
+        return s;
     }
+    if delta < 0.05 {
+        let line = format!(
+            "ramp WARN: {param} delta only {delta:.3} ({from:.3}→{to:.3}) — \
+             barely audible; next time use deltas ≥ 0.1 for obvious motion"
+        );
+        log::warn!("{line}");
+        crate::state::push_llm_feedback(&mut s.llm, line);
+        // Fall through and still schedule — some motion beats none.
+    }
+    let state = s;
 
     // Bar-based ramp: { "bars": 4 }  →  smooth interpolation over N bars.
+    // Convention: `bars` here counts pattern loops, not musical bars — a
+    // historical vocabulary quirk predating `step_division`.  Renaming is
+    // a separate task; for now preserve the pattern-loop semantics so
+    // existing LLM prompts and tests keep their timing.
     if let Some(bars) = obj.get("bars").and_then(|v| v.as_f64()) {
         let bars = bars.max(1.0) as u64;
-        let steps_per_bar = state.sequencer.steps as u64; // 1 pattern = 1 bar
+        let steps_per_bar = state.sequencer.steps as u64;
         let total_global_steps = bars * steps_per_bar;
         let ramp = ParamRamp {
             param,
@@ -354,6 +376,44 @@ fn current_param_value(state: &AppState, path: &str) -> f32 {
         "fx.phaser_mix" => state.fx.phaser_mix,
         "fx.phaser_rate" => state.fx.phaser_rate,
         "fx.phaser_depth" => state.fx.phaser_depth,
+        "fx.flanger_mix" => state.fx.flanger_mix,
+        "fx.flanger_rate" => state.fx.flanger_rate,
+        "fx.flanger_depth" => state.fx.flanger_depth,
+        "fx.flanger_feedback" => state.fx.flanger_feedback,
+        "fx.limiter_threshold" => state.fx.limiter_threshold,
+        "fx.limiter_ceiling" => state.fx.limiter_ceiling,
+        "fx.limiter_release" => state.fx.limiter_release,
+        "fx.limiter_lookahead" => state.fx.limiter_lookahead,
+        "fx.svf_cutoff" => state.fx.svf_cutoff,
+        "fx.svf_resonance" => state.fx.svf_resonance,
+        "fx.svf_drive" => state.fx.svf_drive,
+        "fx.svf_mix" => state.fx.svf_mix,
+        "fx.comb_pitch" => state.fx.comb_pitch,
+        "fx.comb_feedback" => state.fx.comb_feedback,
+        "fx.comb_damp" => state.fx.comb_damp,
+        "fx.comb_mix" => state.fx.comb_mix,
+        "fx.tilt_tilt" => state.fx.tilt_tilt,
+        "fx.tilt_pivot" => state.fx.tilt_pivot,
+        "fx.tilt_mix" => state.fx.tilt_mix,
+        "fx.transient_attack" => state.fx.transient_attack,
+        "fx.transient_sustain" => state.fx.transient_sustain,
+        "fx.transient_mix" => state.fx.transient_mix,
+        "fx.exciter_amount" => state.fx.exciter_amount,
+        "fx.exciter_freq" => state.fx.exciter_freq,
+        "fx.exciter_mix" => state.fx.exciter_mix,
+        "fx.multitap_time" => state.fx.multitap_time,
+        "fx.multitap_spread" => state.fx.multitap_spread,
+        "fx.multitap_feedback" => state.fx.multitap_feedback,
+        "fx.multitap_mix" => state.fx.multitap_mix,
+        "fx.revdelay_time" => state.fx.revdelay_time,
+        "fx.revdelay_feedback" => state.fx.revdelay_feedback,
+        "fx.revdelay_mix" => state.fx.revdelay_mix,
+        "fx.tapestop_mix" => state.fx.tapestop_mix,
+        "fx.tapestop_time" => state.fx.tapestop_time,
+        "fx.stutter_rate" => state.fx.stutter_rate,
+        "fx.stutter_slice" => state.fx.stutter_slice,
+        "fx.stutter_mix" => state.fx.stutter_mix,
+        "fx.freeze_mix" => state.fx.freeze_mix,
         "fx.waveshaper_drive" => state.fx.waveshaper_drive,
         "fx.waveshaper_mix" => state.fx.waveshaper_mix,
         "fx.ring_mod_freq" => state.fx.ring_mod_freq,
@@ -364,11 +424,42 @@ fn current_param_value(state: &AppState, path: &str) -> f32 {
         "fx.compressor_threshold" => state.fx.compressor_threshold,
         "fx.compressor_ratio" => state.fx.compressor_ratio,
         "fx.compressor_mix" => state.fx.compressor_mix,
+        "fx.gate_threshold" => state.fx.gate_threshold,
+        "fx.gate_attack" => state.fx.gate_attack,
+        "fx.gate_release" => state.fx.gate_release,
+        "fx.gate_depth" => state.fx.gate_depth,
+        "fx.gate_mix" => state.fx.gate_mix,
+        "fx.vocoder_bands" => state.fx.vocoder_bands,
+        "fx.vocoder_carrier_mix" => state.fx.vocoder_carrier_mix,
+        "fx.vocoder_sense" => state.fx.vocoder_sense,
+        "fx.vocoder_mix" => state.fx.vocoder_mix,
+        "fx.widen_haas" => state.fx.widen_haas,
+        "fx.widen_side" => state.fx.widen_side,
+        "fx.widen_mix" => state.fx.widen_mix,
+        "fx.freq_shift_amount" => state.fx.freq_shift_amount,
+        "fx.freq_shift_feedback" => state.fx.freq_shift_feedback,
+        "fx.freq_shift_mix" => state.fx.freq_shift_mix,
         "fx.tape_drive" => state.fx.tape_drive,
         "fx.tape_mix" => state.fx.tape_mix,
         "fx.tape_flutter" => state.fx.tape_flutter,
         "fx.master_volume" => state.fx.master_volume,
         "fx.master_pitch_st" => state.fx.master_pitch_st,
+        "fx.conv_reverb_mix" => state.fx.conv_reverb_mix,
+        "fx.conv_reverb_size" => state.fx.conv_reverb_size,
+        "fx.conv_reverb_predelay" => state.fx.conv_reverb_predelay,
+        "fx.conv_reverb_damp" => state.fx.conv_reverb_damp,
+        "fx.conv_reverb_lowcut" => state.fx.conv_reverb_lowcut,
+        "fx.conv_reverb_width" => state.fx.conv_reverb_width,
+        "fx.pitch_shift_semi" => state.fx.pitch_shift_semi,
+        "fx.pitch_shift_fine" => state.fx.pitch_shift_fine,
+        "fx.pitch_shift_mix" => state.fx.pitch_shift_mix,
+        "fx.pitch_shift_fbk" => state.fx.pitch_shift_fbk,
+        "fx.ms_mid_gain" => state.fx.ms_mid_gain,
+        "fx.ms_mid_tilt" => state.fx.ms_mid_tilt,
+        "fx.ms_mid_sat" => state.fx.ms_mid_sat,
+        "fx.ms_side_gain" => state.fx.ms_side_gain,
+        "fx.ms_side_tilt" => state.fx.ms_side_tilt,
+        "fx.ms_side_sat" => state.fx.ms_side_sat,
         "bass.cutoff" => state.bass_voices[0].synth.cutoff,
         "bass.resonance" => state.bass_voices[0].synth.resonance,
         "bass.volume" => state.bass_voices[0].synth.volume,

@@ -8,13 +8,14 @@ cargo build                          # debug build
 cargo run                            # run (mock LLM, HTTP API on by default)
 cargo run -- --no-api                # run without HTTP/MCP API
 cargo run -- --model models/x.gguf --log debug
-cargo run --features llm --release   # real LLM inference (needs libclang-dev)
+cargo run --release                  # real LLM inference via llama-server (build it with ./scripts/build-llama-server.sh)
 cargo test                           # unit tests (split across src/tests/)
 ./start.sh                           # build + launch (release, mock LLM)
 ./start.sh --dev                     # build + launch (debug + verbose)
 ./scripts/run-tests.sh --coverage    # HTML coverage report
 ./scripts/build-all.sh               # Linux + Windows EXE → dist/
-./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default) + NeuTTS Air Q8 (~803 MB, optional)
+./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default) + offer Qwen3-TTS setup (`tts` target: .tts-venv + ~4.3 GB weights)
+./scripts/download-samples.sh <pack> # fetch CC-licensed sample packs (salamander/sso/vsco2/instruments-all + reference-only amen/textures/wavetables/impulses)
 ./scripts/run-llm-tests.sh           # all LLM integration suites (needs running model)
 ./scripts/run-llm-style.sh           # artist/genre reference tests only
 ./scripts/run-llm-theory.sh          # music theory + producer lingo tests only
@@ -27,6 +28,7 @@ start.bat                            # build + launch
 scripts\run-tests.bat
 scripts\build-all.bat
 scripts\download-models.bat
+scripts\download-samples.bat
 scripts\build-llama-server.bat
 scripts\run-llm-tests.bat
 scripts\run-llm-style.bat
@@ -42,7 +44,7 @@ scripts\run-llm-bass.bat
 | `src/audio/dsp.rs` | All DSP synthesis: 303 ladder filter, 808/909 voices, reverb, delay. Pure functions only - **no allocations inside `process_block()`**. |
 | `src/audio/mod.rs` | cpal stream + rtrb ring buffer. Audio callback reads from rtrb, never touches `Arc<RwLock<AppState>>`. |
 | `src/sequencer/mod.rs` | 16-step clock as a pure function: `advance_clock(ClockState, &SequencerState, block_size, sr) → (ClockState, Vec<TriggerEvent>)` |
-| `src/llm/mod.rs` | LLM inference thread. Mock mode when no model file found. Real inference via `--features llm`. |
+| `src/llm/mod.rs` | LLM inference thread. Mock mode when no model file found or llama-server fails to start. Real inference via the llama-server subprocess pool (`src/llm/server_pool.rs`). |
 | `src/llm/prompt.rs` | System prompt builder + JSON schema for grammar-constrained generation. |
 | `src/api/mod.rs` | axum HTTP/MCP API. Only starts when `--api` flag passed. |
 | `src/midi/mod.rs` | midir input (CC→param mapping, NoteOn/Off → live record) + MIDI clock output (MidiClockOutput struct). |
@@ -73,6 +75,14 @@ Quick summary of the key rules:
 - Lock `Arc<RwLock<AppState>>` only for the duration of a `.clone()`, never across inference or I/O.
 - **No allocations inside `process_block()` or the cpal callback.** No `Vec::new()`, no locks.
 - Every new pure function gets a test in `src/tests/`.
+- **Toolchain alignment**: the Rust version is pinned via `rust-toolchain.toml`
+  to keep local pre-commit clippy and CI clippy on the same lint set. CI runs
+  `cargo clippy -- -D warnings` against `@stable`; if local were one minor
+  behind, new clippy lints would sneak past the pre-commit hook and fail CI
+  (e.g. `collapsible_match` landed in 1.95). To bump Rust: edit the channel
+  in `rust-toolchain.toml`, run `cargo clippy -- -D warnings` locally until
+  clean, then commit. Don't add a `#[allow(clippy::...)]` to silence a CI
+  failure — fix the underlying pattern instead.
 
 ---
 
@@ -96,12 +106,13 @@ Quick summary of the key rules:
 
 ## Crate versions (locked)
 
-- egui/eframe 0.28 - UI
-- cpal 0.15 - audio I/O
-- axum 0.7 - HTTP
-- midir 0.9 - MIDI
-- rtrb 0.3 - lock-free audio ring buffer
-- llama-cpp-2 0.1 - optional, needs `libclang-dev cmake`
+- egui/eframe 0.37 - UI (panels attach to the root `Ui` via `App::ui`; translucent colours go through `theme::rgba_unmultiplied` / `theme::white_alpha`, not `Color32::from_rgba_unmultiplied`, to keep egui 0.28's linear-light alpha)
+- cpal 0.18 - audio I/O
+- axum 0.8 - HTTP (route params use `/{param}`, not `/:param`)
+- ureq 3 - llama-server / TTS-server HTTP client
+- midir 0.11 - MIDI
+- rtrb 0.4 - lock-free audio ring buffer
+- parking_lot 0.13 - `RwLock<AppState>` (not reentrant: never call `.read()`/`.write()` while holding a guard on the same thread)
 
 ## LLM integration
 
@@ -142,8 +153,14 @@ POST /api/amen           { "path": "samples/amen/foo.wav" }  load a specific ame
 POST /api/amen           { "random": true }     load a random sample from samples/amen/
 POST /api/granular       { "path": "samples/textures/pad.wav" }  load a granular texture
 POST /api/granular       { "random": true }     load a random sample from samples/textures/
+POST /api/sample         { "path": "samples/instruments/piano_C4.wav" }  load a specific sample-instrument recording
+POST /api/sample         { "random": true }     load a random sample from samples/instruments/
 POST /api/flip           { "show_back": true }   (true=cables, false=knobs)
 POST /api/rack/reset                              strip to sequencer + master + console
+POST /api/rack/random    { "seed": 42 }            wipe + drop random voices/FX/LFOs (Eurorack patch generator); seed optional
+POST /api/morph          { "prompt": "evolve from cathedral to dystopia", "bars": 8, "calls": 8 }   AI patch morph — schedules N LLM nudges across N bars (calls defaults to bars; capped at 4× bars)
+POST /api/midi/granulise { "voice": "bass", "voice_index": 0, "density": 0.7, "repeat_chance": 0.2, "pitch_jitter_st": 5, "seed": 42 }   MIDI granuliser — scatter triggers in the named voice's pattern (density drops, repeat doubles, pitch_jitter_st transposes ±N st)
+POST /api/midi/granulise { "in_path": "in.mid", "out_path": "out.mid", "density": 0.7, ... }   File-to-file granulise — read SMF, granulise, write SMF (out_path defaults to in_path = in-place)
 POST /api/rack/add       { "kind": "808" }        add module, returns { "id": N }
 POST /api/rack/agent     { "persona": "BASS", "scope": ["bass"], "model": "gemma", "mode": "mc", "tts": true }
 POST /api/rack/cable     { "from": 1, "to": 5, "kind": "audio", "audio_gain": 0.4 }  connect modules (default kind: control; audio_gain 0..1.5, optional)

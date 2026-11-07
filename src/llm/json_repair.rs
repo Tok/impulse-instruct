@@ -252,6 +252,22 @@ pub fn extract_llm_actions(
                 hint: hint.to_string(),
             });
         }
+        // broadcast_hint: { "scope": "bass", "hint": "..." }
+        // Both fields required.  Empty scope is rejected — broadcast-
+        // to-all is admin-only and shouldn't be reachable from LLM
+        // output.
+        if let Some(hint_obj) = s.get("broadcast_hint").and_then(|v| v.as_object())
+            && let (Some(scope), Some(hint)) = (
+                hint_obj.get("scope").and_then(|v| v.as_str()),
+                hint_obj.get("hint").and_then(|v| v.as_str()),
+            )
+            && !scope.trim().is_empty()
+        {
+            actions.push(LlmAction::BroadcastHint {
+                scope: scope.to_string(),
+                hint: hint.to_string(),
+            });
+        }
     }
     obj.remove("settings");
     actions

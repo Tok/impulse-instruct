@@ -6,7 +6,7 @@
 
 use crate::audio::AudioCommand;
 use crate::ui::{ImpulseApp, theme};
-use egui::{Frame, TopBottomPanel};
+use egui::Frame;
 use std::path::{Path, PathBuf};
 
 /// Return every `project-*.json` in `dir`, newest first.  Best-effort:
@@ -40,10 +40,17 @@ pub(crate) fn list_recent_projects_in(dir: &Path) -> Vec<PathBuf> {
 
 impl ImpulseApp {
     /// Menu bar + header transport strip + log/scope combined panel.
-    pub(super) fn draw_menu_and_header(&mut self, ctx: &egui::Context) {
-        self.draw_menu_bar(ctx);
-        self.draw_header_bar(ctx);
-        self.draw_log_and_scope(ctx);
+    /// Performance mode hides the menu bar and the log/scope strip so
+    /// only the transport + rack canvas remain visible.
+    pub(super) fn draw_menu_and_header(&mut self, root: &mut egui::Ui) {
+        let performance = self.state.read().ui_prefs.performance_mode;
+        if !performance {
+            self.draw_menu_bar(root);
+        }
+        self.draw_header_bar(root);
+        if !performance {
+            self.draw_log_and_scope(root);
+        }
     }
 
     /// Combined log + visualizations panel.
@@ -55,32 +62,62 @@ impl ImpulseApp {
     ///
     /// Each visualization can be toggled off in Preferences → Display.
     /// Disabled columns are reclaimed by the remaining elements.
-    pub(super) fn draw_log_and_scope(&mut self, ctx: &egui::Context) {
-        let screen_h = ctx.screen_rect().height();
+    pub(super) fn draw_log_and_scope(&mut self, root: &mut egui::Ui) {
+        let ctx = &root.ctx().clone();
+        let screen_h = ctx.content_rect().height();
 
-        TopBottomPanel::top("header_info")
+        egui::Panel::top("header_info")
             .frame(
-                Frame::none()
+                Frame::NONE
                     .fill(theme::VOID)
-                    .inner_margin(egui::Margin::same(0.0)),
+                    .inner_margin(egui::Margin::same(0)),
             )
             .resizable(true)
-            .min_height(60.0)
-            .max_height(screen_h * 0.5)
-            .default_height(160.0)
-            .show(ctx, |ui| {
-                let (show_bar, show_ring, show_stream) = {
+            .min_size(60.0)
+            .max_size(screen_h * 0.5)
+            .default_size(160.0)
+            .show(root, |ui| {
+                let (
+                    show_bar,
+                    show_spectrum,
+                    show_ring,
+                    show_stream,
+                    huth_bar,
+                    huth_ring,
+                    huth_spec,
+                ) = {
                     let p = &self.state.read().ui_prefs;
                     (
                         p.show_bar_oscilloscope,
+                        p.show_spectrum_bars,
                         p.show_ring_oscilloscope,
                         p.show_event_stream,
+                        p.huth_bar_osc,
+                        p.huth_ring_osc,
+                        p.huth_spectrum,
                     )
                 };
+                // Center column shows ONE of { spectrum, bar oscilloscope }
+                // stacked above the event stream.  Spectrum wins when both
+                // are enabled — the bar oscilloscope is kept in Prefs
+                // mainly for the future rackable-viz wiring (see PLAN.md).
+                let show_center_top = show_spectrum || show_bar;
 
-                let huth_col = if self.state.read().ui_prefs.huth_oscilloscope {
+                // Detect once if ANY scope wants a Huth tint.  The detection
+                // is a zero-crossing FFT-free cycle count, cheap enough but
+                // no reason to run it if nobody's using the result.
+                let detected_note = if huth_bar || huth_ring {
                     super::scope_footer::detect_note(&self.scope_buf, crate::audio::SAMPLE_RATE)
-                        .map(theme::note_color)
+                } else {
+                    None
+                };
+                let huth_bar_col = if huth_bar {
+                    detected_note.map(theme::note_color)
+                } else {
+                    None
+                };
+                let huth_ring_col = if huth_ring {
+                    detected_note.map(theme::note_color)
                 } else {
                     None
                 };
@@ -90,7 +127,7 @@ impl ImpulseApp {
                 // splitter on the log/center seam.
                 let avail_w = ui.available_width();
                 let total_h = ui.available_height();
-                let any_center = show_bar || show_stream;
+                let any_center = show_center_top || show_stream;
 
                 // Ring is square — width = height (like the original layout).
                 let ring_w = if show_ring { total_h } else { 0.0 };
@@ -117,22 +154,25 @@ impl ImpulseApp {
                 theme::draw_screen_panel(
                     ui.painter(),
                     log_rect,
-                    egui::Rounding::same(theme::SCREEN_CHIP_ROUNDING),
+                    egui::CornerRadius::from(theme::SCREEN_CHIP_ROUNDING),
                     theme::DEEP,
                 );
-                ui.allocate_ui_at_rect(log_rect.shrink(theme::HEADER_CHIP_INSET), |ui| {
-                    ui.spacing_mut().item_spacing.y = 0.0;
-                    egui::ScrollArea::vertical()
-                        .id_source("global_log")
-                        .stick_to_bottom(true)
-                        .auto_shrink([false; 2])
-                        .show(ui, |ui: &mut egui::Ui| {
-                            ui.spacing_mut().item_spacing.y = 0.0;
-                            let trimmed = self.log_text.trim_end_matches('\n');
-                            let job = super::llm_log_color::colorize_log(trimmed, theme::FOG);
-                            ui.add(egui::Label::new(job).wrap().selectable(true));
-                        });
-                });
+                ui.scope_builder(
+                    egui::UiBuilder::new().max_rect(log_rect.shrink(theme::HEADER_CHIP_INSET)),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.y = 0.0;
+                        egui::ScrollArea::vertical()
+                            .id_salt("global_log")
+                            .stick_to_bottom(true)
+                            .auto_shrink([false; 2])
+                            .show(ui, |ui: &mut egui::Ui| {
+                                ui.spacing_mut().item_spacing.y = 0.0;
+                                let trimmed = self.log_text.trim_end_matches('\n');
+                                let job = super::llm_log_color::colorize_log(trimmed, theme::FOG);
+                                ui.add(egui::Label::new(job).wrap().selectable(true));
+                            });
+                    },
+                );
 
                 // ── DRAG SPLITTER (between log and center) ─────────────────
                 if any_center {
@@ -143,7 +183,7 @@ impl ImpulseApp {
                     );
                     let resp = ui.interact(
                         handle_rect,
-                        ui.id().with("lower_center_split"),
+                        ui.scope_id().with("lower_center_split"),
                         egui::Sense::drag(),
                     );
                     if resp.hovered() || resp.dragged() {
@@ -156,39 +196,55 @@ impl ImpulseApp {
                     }
                 }
 
-                // ── CENTER: bar-osc (top half) + event stream (bottom half) ─
+                // ── CENTER: (spectrum or bar-osc) on top + event stream below
                 let center_x = origin.x + log_w;
-                let split_h = if show_bar && show_stream {
+                let split_h = if show_center_top && show_stream {
                     total_h * 0.5
                 } else {
                     total_h
                 };
-                if show_bar {
-                    let bar_rect = egui::Rect::from_min_size(
+                if show_center_top {
+                    let top_rect = egui::Rect::from_min_size(
                         egui::pos2(center_x, origin.y),
                         egui::vec2(center_w, split_h),
                     );
-                    ui.allocate_ui_at_rect(bar_rect, |ui| {
-                        super::scope_footer::draw_scope_colored(
-                            ui,
-                            &self.scope_buf,
-                            &self.scope_history,
-                            bar_rect.width(),
-                            bar_rect.height(),
-                            huth_col,
-                        );
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(top_rect), |ui| {
+                        // Spectrum wins when both toggles are on — the bar
+                        // oscilloscope is reachable via Prefs for the
+                        // rackable-viz path (see PLAN.md).
+                        if show_spectrum {
+                            super::spectrum_header::draw_spectrum_bars(
+                                ui,
+                                &self.spectrum_magnitudes,
+                                &self.spectrum_peaks,
+                                top_rect.width(),
+                                top_rect.height(),
+                                huth_spec,
+                            );
+                        } else {
+                            super::scope_footer::draw_scope_colored(
+                                ui,
+                                &self.scope_buf,
+                                &self.scope_history,
+                                top_rect.width(),
+                                top_rect.height(),
+                                huth_bar_col,
+                            );
+                        }
                     });
                 }
                 if show_stream {
-                    let stream_y = origin.y + if show_bar { split_h } else { 0.0 };
+                    let stream_y = origin.y + if show_center_top { split_h } else { 0.0 };
                     let stream_rect = egui::Rect::from_min_size(
                         egui::pos2(center_x, stream_y),
                         egui::vec2(center_w, split_h),
                     );
-                    ui.allocate_ui_at_rect(stream_rect, |ui| {
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(stream_rect), |ui| {
                         let state = self.state.read();
                         let now = ctx.input(|i| i.time);
-                        let secs_per_step = 60.0 / (state.sequencer.bpm as f64 * 4.0);
+                        let secs_per_step = 60.0
+                            / (state.sequencer.bpm as f64
+                                * state.sequencer.step_division.max(1) as f64);
                         let elapsed = (now - self.last_step_time).max(0.0);
                         let frac = if state.sequencer.running && secs_per_step > 0.001 {
                             (elapsed / secs_per_step).clamp(0.0, 0.99)
@@ -222,20 +278,20 @@ impl ImpulseApp {
                         egui::pos2(origin.x + log_w + center_w, origin.y),
                         egui::vec2(ring_w, total_h),
                     );
-                    ui.allocate_ui_at_rect(ring_rect, |ui| {
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(ring_rect), |ui| {
                         super::scope_footer::draw_ring_scope_colored(
                             ui,
                             &self.scope_buf,
                             &self.scope_history,
                             ring_w,
-                            huth_col,
+                            huth_ring_col,
                         );
                     });
                 }
             });
     }
 
-    fn draw_header_bar(&mut self, ctx: &egui::Context) {
+    fn draw_header_bar(&mut self, root: &mut egui::Ui) {
         // Chip column layout (must sum to HEADER_TOTAL_COLS = 105).
         // [TITLE 18][STATUS 7][WARN 5][BPM 6][TRANSPORT 6][HEAT 24][TEMP 8][MUTE+MON 21][VRAM/RAM 10]
         const C_TITLE: u32 = 18;
@@ -248,13 +304,13 @@ impl ImpulseApp {
         const C_MUTE_MON: u32 = 21;
         const C_VRAM_RAM: u32 = 10;
 
-        TopBottomPanel::top("header")
+        egui::Panel::top("header")
             .frame(
-                Frame::none()
+                Frame::NONE
                     .fill(theme::VOID)
-                    .inner_margin(egui::Margin::symmetric(0.0, 0.0)),
+                    .inner_margin(egui::Margin::symmetric(0, 0)),
             )
-            .show(ctx, |ui| {
+            .show(root, |ui| {
                 let avail_w = ui.available_width();
                 let (cell_w, cell_h) = theme::header_cell_size(avail_w);
                 let total_h = cell_h * theme::HEADER_TOP_ROWS as f32;

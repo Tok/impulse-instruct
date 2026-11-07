@@ -5,6 +5,7 @@
 
 use crate::state::AppState;
 use crate::ui::theme;
+use crate::ui::widgets::event_stream_heatmap::draw_heatmap;
 use crate::ui::{DrumLogEntry, MelodicLogEntry};
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
@@ -14,7 +15,11 @@ use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 /// fractional sub-step time, so the past-side log can be positioned
 /// relative to absolute time instead of the per-cycle step counter.
 /// `melodic_log`: frozen history of fired notes (rendered for the past
-/// half of the strip — the future half still reads from the live pattern).
+/// half of the strip).  The future half reads from the live pattern
+/// when chain playback is off, and walks forward through
+/// `chain` + `pattern_bank` when chain_enabled is true, so an imported
+/// MIDI score renders its upcoming bars instead of looping whatever
+/// bank is currently live.
 pub fn event_stream(
     ui: &mut Ui,
     state: &AppState,
@@ -32,10 +37,31 @@ pub fn event_stream(
     let painter = ui.painter_at(rect); // clip to rect bounds
 
     // Recessed-screen background (matches oscilloscopes for visual continuity)
-    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(&painter, rect, egui::CornerRadius::same(2));
 
     let pad = 2.0_f32;
-    let inner = Rect::from_min_max(rect.min + Vec2::splat(pad), rect.max - Vec2::splat(pad));
+    let outer = Rect::from_min_max(rect.min + Vec2::splat(pad), rect.max - Vec2::splat(pad));
+
+    // Heatmap zone reserved at the bottom when enabled.  The note /
+    // dot rendering uses the smaller `inner` rect that excludes this
+    // strip so the two views don't overlap.
+    let heatmap_enabled = state.ui_prefs.stream_heatmap;
+    let heatmap_h = if heatmap_enabled {
+        (outer.height() * 0.40).clamp(28.0, 64.0)
+    } else {
+        0.0
+    };
+    let heatmap_rect =
+        Rect::from_min_max(Pos2::new(outer.min.x, outer.max.y - heatmap_h), outer.max);
+    let inner = if heatmap_enabled {
+        let pad_between = 2.0;
+        Rect::from_min_max(
+            outer.min,
+            Pos2::new(outer.max.x, outer.max.y - heatmap_h - pad_between),
+        )
+    } else {
+        outer
+    };
     let inner_w = inner.width();
     let inner_h = inner.height();
 
@@ -118,8 +144,8 @@ pub fn event_stream(
         }
         let fill_a = ((base_alpha as f32) * 0.30) as u8;
         let stroke_a = ((base_alpha as f32) * 0.55) as u8;
-        let fill = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), fill_a);
-        let stroke = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), stroke_a);
+        let fill = crate::ui::theme::rgba_unmultiplied(color.r(), color.g(), color.b(), fill_a);
+        let stroke = crate::ui::theme::rgba_unmultiplied(color.r(), color.g(), color.b(), stroke_a);
         painter.add(egui::Shape::Path(egui::epaint::PathShape {
             points: poly,
             closed: true,
@@ -132,6 +158,7 @@ pub fn event_stream(
     let bpm = seq.bpm;
     let steps = seq.steps;
     let time_sig = seq.time_sig_num as usize;
+    let step_division = seq.step_division.max(1) as usize;
     let current_step = seq.current_step;
 
     // Show notes only while the sequencer is actively running.
@@ -143,10 +170,11 @@ pub fn event_stream(
     let step_w = inner_w / display_steps;
 
     // The "now" position splits past:future at the golden ratio
-    // (1.618:1), so the now-line sits at 1/φ ≈ 0.618 from the left —
-    // larger past pane (where the played history reads) and a smaller
-    // but still useful future pane.
-    let now_frac = 1.0 / 1.618;
+    // (1:1.618) — now-line at 1 - 1/φ ≈ 0.382 from the left, so the
+    // future pane (on the right) is the larger one.  Reading a score
+    // or an imported MIDI chain benefits from seeing more of what's
+    // coming than what already played.
+    let now_frac = 1.0 - 1.0 / 1.618;
     let now_x = inner.min.x + inner_w * now_frac;
 
     // ── Auto-range: find min/max notes in all active patterns ───────────────
@@ -243,7 +271,9 @@ pub fn event_stream(
     }
 
     // ── Beat / bar grid ─────────────────────────────────────────────────────
-    let steps_per_beat = (steps as f32 / time_sig as f32).max(1.0);
+    // `step_division` steps per beat; `time_sig × step_division` steps per bar.
+    let steps_per_beat = step_division as f32;
+    let steps_per_bar = (time_sig * step_division).max(1);
     // Position within the current pattern cycle (0..steps, fractional).
     // Both global_step_count and current_step increment in lock-step, so
     // (global % steps) == (current_step % steps); using the global form
@@ -269,7 +299,7 @@ pub fn event_stream(
         // Determine absolute step index to check bar/beat alignment.
         // `rem_euclid` keeps the index non-negative when `i` is negative.
         let abs_step = i.rem_euclid(steps as i32) as usize;
-        let is_bar = abs_step == 0;
+        let is_bar = abs_step.is_multiple_of(steps_per_bar);
         let is_beat = (abs_step as f32 % steps_per_beat).abs() < 0.5;
 
         if is_bar {
@@ -325,7 +355,12 @@ pub fn event_stream(
                 [Pos2::new(x + r, y), Pos2::new(x + r + tail_len, y)],
                 Stroke::new(
                     (r * 0.55).max(1.0),
-                    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), tail_alpha),
+                    crate::ui::theme::rgba_unmultiplied(
+                        color.r(),
+                        color.g(),
+                        color.b(),
+                        tail_alpha,
+                    ),
                 ),
             );
         }
@@ -346,27 +381,24 @@ pub fn event_stream(
             render_dot(off, entry.note, entry.gate, entry.accent, entry.slide);
         }
 
-        // ── FUTURE: render upcoming notes from each voice's live pattern.
-        // For each step we compute the *next-fire* offset (always > 0) so
-        // we don't overlap with the log's past dots.
+        // ── FUTURE: render upcoming notes for each bass voice.
+        //
+        // When song mode is OFF (chain_enabled = false), the live
+        // pattern loops — existing `next_fire_offset` / rem_euclid
+        // treatment of "pattern repeats forever" is correct.
+        //
+        // When song mode is ON, the bass pattern changes every chain
+        // advance.  A MIDI import of a 3-minute piece sits on ~50 banks
+        // of 64 steps, so without a cross-bank look-ahead the future
+        // pane would swap out every ~4 s of playback — making "what's
+        // coming next" unreadable.  We walk forward through the chain
+        // and render each bank's bass pattern on a linear timeline so
+        // the display stays continuous across bank transitions.
+        let chain_mode = state.chain_enabled && !state.chain.is_empty();
         for (vi, voice) in state.bass_voices.iter().enumerate() {
             if !voice.enabled {
                 continue;
             }
-            let pattern = if vi == 0 {
-                &seq.bass_pattern
-            } else if let Some(p) = seq.bass_patterns.get(vi) {
-                p
-            } else {
-                continue;
-            };
-            let voice_steps = seq
-                .bass_voice_steps
-                .get(vi)
-                .copied()
-                .unwrap_or(steps)
-                .max(1);
-            let local_pos = pos_in_pattern.rem_euclid(voice_steps as f32);
             // Bass synth has A-S-R only (no separate amp_decay); the single
             // "decay" knob drives the filter envelope.  Pass 0 for D so the
             // leaf goes A → sustain directly without a dip-and-hold.
@@ -376,61 +408,175 @@ pub fn event_stream(
                 sustain: voice.synth.amp_sustain,
                 release: voice.synth.amp_release,
             };
-            for (step_idx, step) in pattern.iter().enumerate().take(voice_steps) {
-                if !step.active {
-                    continue;
-                }
-                // "Next fire" offset, with a small negative slack so a
-                // just-fired step keeps rendering instead of blinking off
-                // for the frame or two before the log catches up.
-                let off = next_fire_offset(step_idx, local_pos, voice_steps);
-                if off > display_steps {
-                    continue;
-                }
-                let dot_x = now_x + off * step_w;
-                let dot_y = note_y(step.note);
-                let color = theme::note_color(step.note);
-                let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
-                let dot_alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
-                draw_envelope_leaf(
-                    &painter,
-                    Pos2::new(dot_x, dot_y),
-                    color,
-                    circle_r * 1.4,
-                    step_w * 1.6,
-                    step.accent,
-                    step.gate,
-                    env,
-                    dot_alpha,
-                );
-                render_dot(off, step.note, step.gate, step.accent, step.slide);
 
-                // Slide: diagonal line to next active step, length and
-                // opacity proportional to the slide intensity (0 = none,
-                // 1 = full slide).  0.5 draws a half-length line at half
-                // alpha so a weak slide reads as a subtle lean.
-                if step.slide > 0.0
-                    && let Some(next) = pattern.get(step_idx + 1)
-                    && next.active
-                {
-                    let s_amount = step.slide.clamp(0.0, 1.0);
-                    let x = now_x + off * step_w;
-                    let y = note_y(step.note);
-                    let ny = note_y(next.note);
-                    let dist = (off / display_steps).clamp(0.0, 1.0);
-                    let base_alpha = (1.0 - dist * 0.7) * 255.0;
-                    let alpha = (base_alpha * 0.5 * s_amount) as u8;
+            // Render helper — same leaf + dot + slide treatment for
+            // every bank we walk.  Captures `env` by value and
+            // painter/note_y by reference.
+            let render_note =
+                |off: f32,
+                 step: &crate::state::TB303Step,
+                 next_step: Option<&crate::state::TB303Step>| {
+                    let dot_x = now_x + off * step_w;
+                    let dot_y = note_y(step.note);
                     let color = theme::note_color(step.note);
-                    let accent_scale = 1.0 + 0.4 * step.accent.clamp(0.0, 1.0);
-                    let r = circle_r * (0.7 + step.gate * 0.3) * accent_scale;
-                    let nx = x + step_w * s_amount;
-                    painter.line_segment(
-                        [Pos2::new(x + r, y), Pos2::new(nx - circle_r, ny)],
-                        Stroke::new(
-                            1.0,
-                            Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha),
-                        ),
+                    let dist = (off.abs() / display_steps).clamp(0.0, 1.0);
+                    let dot_alpha = ((1.0 - dist * 0.7) * 255.0) as u8;
+                    draw_envelope_leaf(
+                        &painter,
+                        Pos2::new(dot_x, dot_y),
+                        color,
+                        circle_r * 1.4,
+                        step_w * 1.6,
+                        step.accent,
+                        step.gate,
+                        env,
+                        dot_alpha,
                     );
+                    render_dot(off, step.note, step.gate, step.accent, step.slide);
+
+                    // Slide: diagonal line to the next step's pitch when
+                    // the next step is active.  Rendered only if the next
+                    // step exists within the same pattern — cross-bank
+                    // slides aren't meaningful for imported scores.
+                    if step.slide > 0.0
+                        && let Some(next) = next_step
+                        && next.active
+                    {
+                        let s_amount = step.slide.clamp(0.0, 1.0);
+                        let x = now_x + off * step_w;
+                        let y = note_y(step.note);
+                        let ny = note_y(next.note);
+                        let dist = (off / display_steps).clamp(0.0, 1.0);
+                        let base_alpha = (1.0 - dist * 0.7) * 255.0;
+                        let alpha = (base_alpha * 0.5 * s_amount) as u8;
+                        let accent_scale = 1.0 + 0.4 * step.accent.clamp(0.0, 1.0);
+                        let r = circle_r * (0.7 + step.gate * 0.3) * accent_scale;
+                        let nx = x + step_w * s_amount;
+                        painter.line_segment(
+                            [Pos2::new(x + r, y), Pos2::new(nx - circle_r, ny)],
+                            Stroke::new(
+                                1.0,
+                                crate::ui::theme::rgba_unmultiplied(
+                                    color.r(),
+                                    color.g(),
+                                    color.b(),
+                                    alpha,
+                                ),
+                            ),
+                        );
+                    }
+                };
+
+            if !chain_mode {
+                // Single-pattern loop: the existing behaviour, preserved
+                // exactly — live pattern, next_fire_offset wraps via
+                // rem_euclid so notes spiral forward as the step cursor
+                // advances.
+                let pattern = if vi == 0 {
+                    &seq.bass_pattern
+                } else if let Some(p) = seq.bass_patterns.get(vi) {
+                    p
+                } else {
+                    continue;
+                };
+                let voice_steps = seq
+                    .bass_voice_steps
+                    .get(vi)
+                    .copied()
+                    .unwrap_or(steps)
+                    .max(1);
+                let local_pos = pos_in_pattern.rem_euclid(voice_steps as f32);
+                for (step_idx, step) in pattern.iter().enumerate().take(voice_steps) {
+                    if !step.active {
+                        continue;
+                    }
+                    let off = next_fire_offset(step_idx, local_pos, voice_steps);
+                    if off > display_steps {
+                        continue;
+                    }
+                    render_note(off, step, pattern.get(step_idx + 1));
+                }
+            } else {
+                // Song-chain mode: walk forward through the chain until
+                // we've filled the future pane.  Bank 0 is the LIVE
+                // sequencer (uncommitted edits + current step cursor);
+                // banks 1+ read their patterns from pattern_bank via the
+                // chain slot indices.  `chain_loop` controls wrap at
+                // the end — a one-shot MIDI import stops walking once
+                // `chain_pos + offset >= chain.len()`, so the future
+                // pane empties gracefully as the piece runs out of
+                // music instead of looping back to bank 0.
+                let chain_len = state.chain.len();
+                let mut acc_off: f32 = -pos_in_pattern;
+                let mut bank_offset = 0usize;
+                while acc_off <= display_steps && bank_offset < chain_len + 1 {
+                    // Pick the bank's bass pattern and per-voice step count.
+                    let (pattern, voice_steps): (&Vec<crate::state::TB303Step>, usize) =
+                        if bank_offset == 0 {
+                            let p = if vi == 0 {
+                                &seq.bass_pattern
+                            } else if let Some(p) = seq.bass_patterns.get(vi) {
+                                p
+                            } else {
+                                break;
+                            };
+                            let vs = seq
+                                .bass_voice_steps
+                                .get(vi)
+                                .copied()
+                                .unwrap_or(steps)
+                                .max(1);
+                            (p, vs)
+                        } else {
+                            // bank 1+: look up the next chain slot.
+                            let chain_idx = state.chain_pos + bank_offset;
+                            let wrapped = if state.chain_loop {
+                                chain_idx % chain_len
+                            } else if chain_idx >= chain_len {
+                                break;
+                            } else {
+                                chain_idx
+                            };
+                            let slot = state.chain[wrapped];
+                            let Some(bank) = state.pattern_bank.get(slot) else {
+                                break;
+                            };
+                            let p = if vi == 0 {
+                                &bank.bass_pattern
+                            } else if let Some(p) = bank.bass_patterns.get(vi) {
+                                p
+                            } else {
+                                break;
+                            };
+                            let vs = bank
+                                .bass_voice_steps
+                                .get(vi)
+                                .copied()
+                                .unwrap_or(bank.steps)
+                                .max(1);
+                            (p, vs)
+                        };
+
+                    for (step_idx, step) in pattern.iter().enumerate().take(voice_steps) {
+                        if !step.active {
+                            continue;
+                        }
+                        let off = acc_off + step_idx as f32;
+                        // Bank 0 may carry just-fired steps (step_idx
+                        // slightly behind `pos_in_pattern`) — keep them
+                        // visible for WRAP_SLACK so the dot doesn't
+                        // blink off at the moment of firing.  Later
+                        // banks can't have past notes at all.
+                        if off < -WRAP_SLACK {
+                            continue;
+                        }
+                        if off > display_steps {
+                            continue;
+                        }
+                        render_note(off, step, pattern.get(step_idx + 1));
+                    }
+                    acc_off += voice_steps as f32;
+                    bank_offset += 1;
                 }
             }
         }
@@ -714,6 +860,22 @@ pub fn event_stream(
         font,
         Color32::from_gray(40),
     );
+
+    // ── Per-voice activity heatmap (bottom strip when enabled) ─────────────
+    if heatmap_enabled {
+        draw_heatmap(
+            &painter,
+            heatmap_rect,
+            melodic_log,
+            drum_log,
+            smooth_global_step,
+            step_w,
+            display_steps,
+            now_x,
+            inner.min.x,
+            inner.max.x,
+        );
+    }
 
     if seq.running {
         ui.ctx().request_repaint();

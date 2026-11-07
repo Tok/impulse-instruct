@@ -300,13 +300,13 @@ impl ImpulseApp {
 
                     // ── Tab 2: Display ────────────────────────────────────────
                     2 => {
-                        use crate::state::HuthStyle;
-
                         widgets::section_header(ui, "HUTH FARBIGE NOTEN");
                         ui.label(
                             egui::RichText::new(
                                 "Color system by Ch. A. B. Huth (Hamburg, 1888). Each semitone\n\
-                                 maps to a unique color counter-clockwise around the RYB wheel.",
+                                 maps to a unique color counter-clockwise around the RYB wheel.\n\n\
+                                 Sequencer step dots and the event-stream history are always\n\
+                                 Huth-coloured. Toggle the other surfaces individually:",
                             )
                             .monospace()
                             .size(8.0)
@@ -314,41 +314,49 @@ impl ImpulseApp {
                         );
                         ui.add_space(6.0);
 
-                        let cur = self.state.read().ui_prefs.huth_style;
-                        for (style, label, hint) in [
-                            (HuthStyle::Off, "OFF", "Monochrome piano, grayscale sequencer dots"),
-                            (HuthStyle::On, "ON", "Huth colors on piano + sequencer LED dots (default)"),
-                        ] {
+                        // Four independent per-component toggles replace the
+                        // old on/off/full triset.  `viz_toggle` is defined
+                        // below in the same tab — we reuse the same widget
+                        // shape for visual consistency.
+                        let huth_toggle = |ui: &mut egui::Ui, label: &str, val: bool| -> bool {
+                            let mut out = val;
                             ui.horizontal(|ui| {
-                                let selected = cur == style;
-                                let label_color = if selected { theme::CHALK } else { theme::SMOKE };
-                                if ui.add(egui::Button::new(
-                                    egui::RichText::new(label).monospace().size(9.5).color(label_color),
-                                ).frame(selected)).clicked() && !selected {
-                                    self.state.write().ui_prefs.huth_style = style;
-                                }
                                 ui.label(
-                                    egui::RichText::new(hint).monospace().size(8.0).color(theme::IRON),
+                                    egui::RichText::new(label)
+                                        .monospace()
+                                        .size(9.5)
+                                        .color(theme::FOG),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        widgets::toggle_button(
+                                            ui,
+                                            if out { "ON" } else { "OFF" },
+                                            &mut out,
+                                        );
+                                    },
                                 );
                             });
+                            out
+                        };
+                        let prefs = self.state.read().ui_prefs.clone();
+                        let piano = huth_toggle(ui, "Piano keys + labels", prefs.huth_piano);
+                        let bar = huth_toggle(ui, "Bar oscilloscope", prefs.huth_bar_osc);
+                        let ring = huth_toggle(ui, "Ring oscilloscope", prefs.huth_ring_osc);
+                        let spec = huth_toggle(ui, "Spectrum bars", prefs.huth_spectrum);
+                        if piano != prefs.huth_piano {
+                            self.state.write().ui_prefs.huth_piano = piano;
                         }
-
-                        // Huth oscilloscope toggle
-                        ui.horizontal(|ui| {
-                            let mut huth_osc = self.state.read().ui_prefs.huth_oscilloscope;
-                            if ui.add(egui::Button::new(
-                                egui::RichText::new(if huth_osc { "OSC ●" } else { "OSC ○" })
-                                    .monospace().size(9.5)
-                                    .color(if huth_osc { theme::CHALK } else { theme::SMOKE }),
-                            ).frame(huth_osc)).clicked() {
-                                huth_osc = !huth_osc;
-                                self.state.write().ui_prefs.huth_oscilloscope = huth_osc;
-                            }
-                            ui.label(
-                                egui::RichText::new("Color oscilloscope waveform by detected frequency")
-                                    .monospace().size(8.0).color(theme::IRON),
-                            );
-                        });
+                        if bar != prefs.huth_bar_osc {
+                            self.state.write().ui_prefs.huth_bar_osc = bar;
+                        }
+                        if ring != prefs.huth_ring_osc {
+                            self.state.write().ui_prefs.huth_ring_osc = ring;
+                        }
+                        if spec != prefs.huth_spectrum {
+                            self.state.write().ui_prefs.huth_spectrum = spec;
+                        }
 
                         ui.add_space(8.0);
                         widgets::section_header(ui, "PIANO DISPLAY");
@@ -412,10 +420,26 @@ impl ImpulseApp {
                                 out
                             };
                             let prefs = self.state.read().ui_prefs.clone();
-                            let bar = viz_toggle(ui, "Bar oscilloscope", prefs.show_bar_oscilloscope);
-                            let ring = viz_toggle(ui, "Ring oscilloscope", prefs.show_ring_oscilloscope);
+                            let spectrum =
+                                viz_toggle(ui, "Spectrum bars", prefs.show_spectrum_bars);
+                            let bar =
+                                viz_toggle(ui, "Bar oscilloscope", prefs.show_bar_oscilloscope);
+                            let ring =
+                                viz_toggle(ui, "Ring oscilloscope", prefs.show_ring_oscilloscope);
                             let stream = viz_toggle(ui, "Event stream", prefs.show_event_stream);
                             let stereo = viz_toggle(ui, "Stereo pan layer", prefs.stream_stereo);
+                            let heatmap =
+                                viz_toggle(ui, "Per-voice heatmap strip", prefs.stream_heatmap);
+                            let automation = viz_toggle(
+                                ui,
+                                "Automation overlay (LFO sparkline)",
+                                prefs.show_automation_overlay,
+                            );
+                            let minimap =
+                                viz_toggle(ui, "Rack mini-map", prefs.show_rack_minimap);
+                            if spectrum != prefs.show_spectrum_bars {
+                                self.state.write().ui_prefs.show_spectrum_bars = spectrum;
+                            }
                             if bar != prefs.show_bar_oscilloscope {
                                 self.state.write().ui_prefs.show_bar_oscilloscope = bar;
                             }
@@ -427,6 +451,58 @@ impl ImpulseApp {
                             }
                             if stereo != prefs.stream_stereo {
                                 self.state.write().ui_prefs.stream_stereo = stereo;
+                            }
+                            if heatmap != prefs.stream_heatmap {
+                                self.state.write().ui_prefs.stream_heatmap = heatmap;
+                            }
+                            if automation != prefs.show_automation_overlay {
+                                self.state.write().ui_prefs.show_automation_overlay = automation;
+                            }
+                            if minimap != prefs.show_rack_minimap {
+                                self.state.write().ui_prefs.show_rack_minimap = minimap;
+                            }
+
+                            // ── Ableton Link ─────────────────────────
+                            ui.add_space(8.0);
+                            ui.separator();
+                            ui.add_space(4.0);
+                            ui.label(
+                                egui::RichText::new("ABLETON LINK")
+                                    .monospace()
+                                    .size(9.5)
+                                    .color(theme::ASH),
+                            );
+                            ui.add_space(2.0);
+                            let supported = crate::sync::LinkSync::is_supported();
+                            if supported {
+                                let link_on = viz_toggle(
+                                    ui,
+                                    "Network tempo sync",
+                                    prefs.link_enabled,
+                                );
+                                if link_on != prefs.link_enabled {
+                                    self.state.write().ui_prefs.link_enabled = link_on;
+                                }
+                                let peers = self.link_sync.num_peers();
+                                ui.label(
+                                    egui::RichText::new(format!(
+                                        "{} peer{} connected",
+                                        peers,
+                                        if peers == 1 { "" } else { "s" },
+                                    ))
+                                    .monospace()
+                                    .size(8.5)
+                                    .color(theme::FOG),
+                                );
+                            } else {
+                                ui.label(
+                                    egui::RichText::new(
+                                        "Unavailable — rebuild with `cargo build --features link`",
+                                    )
+                                    .monospace()
+                                    .size(8.5)
+                                    .color(theme::PIT),
+                                );
                             }
                         }
                     }
@@ -471,7 +547,7 @@ impl ImpulseApp {
         // Per-session UI state — which style's overrides are currently
         // being edited.  Stored in egui memory so it survives frames
         // without needing an AppState field.
-        let pick_id = egui::Id::new("prefs_style_overrides_pick");
+        let pick_id = egui::Id::unique("prefs_style_overrides_pick");
         let mut pick: String = ui
             .ctx()
             .data(|d| d.get_temp::<String>(pick_id))
@@ -501,7 +577,7 @@ impl ImpulseApp {
                 .find_by_id(&pick)
                 .map(|s| s.name.clone())
                 .unwrap_or_else(|| "— none —".into());
-            egui::ComboBox::from_id_source("style_overrides_dropdown")
+            egui::ComboBox::from_id_salt("style_overrides_dropdown")
                 .selected_text(
                     egui::RichText::new(current_label)
                         .monospace()
@@ -549,7 +625,7 @@ impl ImpulseApp {
                 .size(9.0)
                 .color(theme::FOG),
         );
-        let mc_edit_id = egui::Id::new(("prefs_style_mc", pick.clone()));
+        let mc_edit_id = egui::Id::unique(("prefs_style_mc", pick.clone()));
         let mut mc_buf: String = ui
             .ctx()
             .data(|d| d.get_temp::<String>(mc_edit_id))
@@ -573,7 +649,7 @@ impl ImpulseApp {
                 .size(9.0)
                 .color(theme::FOG),
         );
-        let themes_edit_id = egui::Id::new(("prefs_style_themes", pick.clone()));
+        let themes_edit_id = egui::Id::unique(("prefs_style_themes", pick.clone()));
         let mut themes_buf: String = ui
             .ctx()
             .data(|d| d.get_temp::<String>(themes_edit_id))

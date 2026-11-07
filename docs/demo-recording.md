@@ -20,9 +20,9 @@ Output: `demo/output/impulse_demo_<timestamp>.mp4`
 | Tool | Package | Purpose |
 |------|---------|---------|
 | `ffmpeg` (with NVENC) | `ffmpeg` | Screen recording + encoding |
-| NeuTTS Air | `scripts/download-models.sh` (offers setup) | TTS narration (voice cloning GGUF) |
+| Qwen3-TTS | `scripts/download-models.sh tts` | TTS narration (voice cloning, `.tts-venv`) |
 | `espeak-ng` | `espeak-ng` | Reference-voice rendering for `scripts/generate-voices.sh` |
-| `jq` | `jq` | Safe JSON payload building for NeuTTS requests |
+| `jq` | `jq` | Safe JSON payload building for TTS requests |
 | `paplay` | `pulseaudio-utils` | TTS audio playback |
 | `pw-record` | `pipewire` | Per-app audio capture |
 | `wmctrl` | `wmctrl` | Window detection |
@@ -44,7 +44,7 @@ Output: `demo/output/impulse_demo_<timestamp>.mp4`
 ## How it works
 
 1. **Build** — `cargo build --release`
-2. **Pre-generate TTS** — start `scripts/neutts-server.py`, walk the
+2. **Pre-generate TTS** — start `scripts/tts-server.py`, walk the
    scenario matching `narrate` / `say` / `scene` lines, write all clips
    to `$BATCH_DIR/tts/`. Retries up to 3× with a 120 s curl timeout; the
    end of this step prints `(N ok, M failed)` with the missing clip IDs
@@ -52,8 +52,8 @@ Output: `demo/output/impulse_demo_<timestamp>.mp4`
    (`say` / `narrate` / `scene` / `pause` / `wait_seconds`) and writes a
    complete subtitle file before recording starts; durations are
    `max(clip_duration, reading_time)` so subtitles stay on screen long
-   enough even if NeuTTS truncated the audio
-4. **Stop NeuTTS server** — frees GPU memory for the main LLM during
+   enough even if the TTS model truncated the audio
+4. **Stop TTS server** — frees GPU memory for the main LLM during
    recording; runtime playback uses cached WAVs
 5. **Launch app** — `--skip-wizard --fresh-session --model <gemma4>` so
    recordings never inherit the user's saved rack

@@ -423,13 +423,18 @@ mod bank_chain_tests {
     }
 
     #[test]
-    fn chain_push_caps_at_8() {
+    fn chain_push_caps_at_max_banks() {
+        use crate::state::MAX_BANKS;
         let state = AppState::default();
         let mut s = state;
-        for i in 0..10 {
-            s = chain_push(s, i % 8);
+        for i in 0..(MAX_BANKS * 2) {
+            s = chain_push(s, i % MAX_BANKS);
         }
-        assert_eq!(s.chain.len(), 8, "chain should cap at 8 entries");
+        assert_eq!(
+            s.chain.len(),
+            MAX_BANKS,
+            "chain should cap at MAX_BANKS entries"
+        );
     }
 
     #[test]
@@ -545,6 +550,71 @@ mod transition_coverage_tests {
         let s = set_an1x_step(AppState::default(), 7, 55, true);
         assert_eq!(s.sequencer.an1x_pattern[7].note, 55);
         assert!(s.sequencer.an1x_pattern[7].active);
+    }
+
+    /// Pluck / wavetable / sample voices share the same simple
+    /// `set_*_step(state, idx, note, active)` shape as hoover and
+    /// an1x; these tests pin the same contract — out-of-range
+    /// indices are no-ops, in-range writes both the note and the
+    /// active flag.
+    #[test]
+    fn set_pluck_step_stores_note_and_active() {
+        use crate::state::set_pluck_step;
+        let s = set_pluck_step(AppState::default(), 5, 64, true);
+        assert_eq!(s.sequencer.pluck_pattern[5].note, 64);
+        assert!(s.sequencer.pluck_pattern[5].active);
+    }
+
+    #[test]
+    fn set_pluck_step_out_of_range_is_noop() {
+        // Diff each step's `(active, note)` against the default —
+        // the per-step struct has no PartialEq so we project to the
+        // two fields the setter actually touches.
+        use crate::state::set_pluck_step;
+        let baseline: Vec<(bool, u8)> = AppState::default()
+            .sequencer
+            .pluck_pattern
+            .iter()
+            .map(|st| (st.active, st.note))
+            .collect();
+        let len = baseline.len();
+        let s = set_pluck_step(AppState::default(), len + 10, 99, true);
+        let after: Vec<(bool, u8)> = s
+            .sequencer
+            .pluck_pattern
+            .iter()
+            .map(|st| (st.active, st.note))
+            .collect();
+        assert_eq!(after, baseline);
+    }
+
+    #[test]
+    fn set_wavetable_step_stores_note_and_active() {
+        use crate::state::set_wavetable_step;
+        let s = set_wavetable_step(AppState::default(), 3, 67, true);
+        assert_eq!(s.sequencer.wavetable_pattern[3].note, 67);
+        assert!(s.sequencer.wavetable_pattern[3].active);
+    }
+
+    #[test]
+    fn set_sample_step_stores_note_and_active() {
+        use crate::state::set_sample_step;
+        let s = set_sample_step(AppState::default(), 12, 48, true);
+        assert_eq!(s.sequencer.sample_pattern[12].note, 48);
+        assert!(s.sequencer.sample_pattern[12].active);
+    }
+
+    #[test]
+    fn set_sample_step_deactivate_keeps_note_unchanged() {
+        // Light-touch contract: the setter stores both fields, so
+        // toggling `active` to false on a previously-empty step
+        // leaves the (default) note in place; deactivation alone
+        // shouldn't surprise the user with a hidden note shift.
+        use crate::state::set_sample_step;
+        let s = set_sample_step(AppState::default(), 0, 60, true);
+        let s = set_sample_step(s, 0, 60, false);
+        assert_eq!(s.sequencer.sample_pattern[0].note, 60);
+        assert!(!s.sequencer.sample_pattern[0].active);
     }
 
     #[test]

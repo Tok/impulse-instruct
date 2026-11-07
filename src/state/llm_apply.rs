@@ -4,7 +4,13 @@ use super::llm_apply_seq::{
     apply_melodic_lane_lens, apply_preecho_voices, apply_sequencer_globals,
 };
 use super::llm_helpers::{
-    apply_an1x_update, apply_bass_update, apply_fx_update, apply_hoover_update, unlocked_f32,
+    apply_an1x_update, apply_bass_update, apply_hoover_update, apply_pluck_update,
+    apply_sample_instrument_update, apply_wavetable_update, unlocked_f32,
+};
+use super::llm_helpers_fx::apply_fx_update;
+use super::llm_helpers_voices_v2::{
+    apply_additive_update, apply_chiptune_update, apply_fm_ops_update, apply_modal_update,
+    apply_vocal_update,
 };
 use super::transitions::{set_drum_step_probability, set_drum_step_ratchet, set_drum_voice_steps};
 use super::{AppState, DrumVoice, LfoTarget, LfoWaveform, MAX_STEPS};
@@ -183,6 +189,24 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                         }
                     }
                 }
+                // bass_conds — per-step "fire only every Nth voice
+                // cycle" (0 = always, 1..=3 = every 2nd/3rd/4th).
+                // Stored as u8 so the array is JSON integers; we
+                // clamp to the 2-bit range and write into the step.
+                let cond_key = super::llm_apply_seq::bass_voice_field(voice_idx, "conds");
+                if !locked.contains(&format!("sequencer.{}", cond_key))
+                    && let Some(arr) = seq.get(&cond_key).and_then(|v| v.as_array())
+                    && let Some(pat) = s.sequencer.bass_patterns.get_mut(voice_idx)
+                {
+                    for (i, v) in arr.iter().enumerate().take(pat.len()) {
+                        if let Some(n) = v.as_u64() {
+                            pat[i].cond = (n as u8).min(3);
+                        }
+                    }
+                    if voice_idx == 0 {
+                        voice0_dirty = true;
+                    }
+                }
                 // Subset-of-active cleanup: when the same update rewrote
                 // `steps` for this voice, strip accent/slide flags from any
                 // step that is now inactive.  Mirrors the SUBSET RULE in
@@ -241,6 +265,40 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                         step.velocity = default_vel;
                     }
                 });
+            }
+        }
+
+        // Per-drum-voice conditional triggers.  Same naming as the
+        // step-array fields ("kick_a_conds", "snare_b_conds", …) so
+        // the LLM can sketch evolving fills with one extra array.
+        let drum_cond_fields: &[(&str, DrumVoice, bool)] = &[
+            ("kick_a_conds", DrumVoice::Kick808, true),
+            ("hihat_a_conds", DrumVoice::HihatClosed808, true),
+            ("snare_a_conds", DrumVoice::Snare808, true),
+            ("kick_b_conds", DrumVoice::Kick909, false),
+            ("snare_b_conds", DrumVoice::Snare909, false),
+            ("clap_b_conds", DrumVoice::Clap909, false),
+            ("hihat_b_conds", DrumVoice::HihatClosed909, false),
+        ];
+        for &(field, voice, is_kit_a) in drum_cond_fields {
+            let kit_ok = if is_kit_a {
+                seq_scope_flags.kit_a
+            } else {
+                seq_scope_flags.kit_b
+            };
+            if !kit_ok {
+                continue;
+            }
+            let lock_key = format!("sequencer.{}", field);
+            if !locked.contains(&lock_key)
+                && let Some(arr) = seq.get(field).and_then(|v| v.as_array())
+                && let Some(pattern) = s.sequencer.drum_patterns.get_mut(&voice)
+            {
+                for (i, val) in arr.iter().enumerate().take(pattern.len()) {
+                    if let Some(n) = val.as_u64() {
+                        pattern[i].cond = (n as u8).min(3);
+                    }
+                }
             }
         }
 
@@ -451,18 +509,25 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                     };
                 }
                 if let Some(v) = obj.get("target").and_then(|v| v.as_str()) {
+                    // Fall back to the full `parse_lfo_target` for
+                    // names the short list below doesn't cover —
+                    // scenarios / power users can target any LFO
+                    // variant without this file having to mirror every
+                    // enum arm.  Short-circuits to the common cases
+                    // first for readability.
                     s.lfo[i].target = match v {
                         "BassCutoff" => LfoTarget::BassCutoff,
                         "BassResonance" => LfoTarget::BassResonance,
                         "BassPitch" => LfoTarget::BassPitch,
                         "BassVolume" => LfoTarget::BassVolume,
+                        "BassPan" => LfoTarget::BassPan,
                         "ReverbMix" => LfoTarget::ReverbMix,
                         "DelayTime" => LfoTarget::DelayTime,
                         "DelayFeedback" => LfoTarget::DelayFeedback,
                         "ChorusMix" => LfoTarget::ChorusMix,
                         "ChorusRate" => LfoTarget::ChorusRate,
                         "Kick808Pitch" => LfoTarget::Kick808Pitch,
-                        _ => LfoTarget::None,
+                        other => crate::state::parse_lfo_target(other).unwrap_or(LfoTarget::None),
                     };
                 }
             }
@@ -596,12 +661,65 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
             locked,
         );
         s.granular.spray = unlocked_f32(s.granular.spray, g, "spray", "granular.spray", locked);
+        if !locked.contains("granular.pitch_mappable")
+            && let Some(v) = g.get("pitch_mappable").and_then(|v| v.as_bool())
+        {
+            s.granular.pitch_mappable = v;
+        }
     }
 
     if in_scope("hoover")
         && let Some(h) = update.get("hoover").and_then(|v| v.as_object())
     {
         apply_hoover_update(&mut s, h, locked);
+    }
+
+    if in_scope("pluck")
+        && let Some(pl) = update.get("pluck").and_then(|v| v.as_object())
+    {
+        apply_pluck_update(&mut s, pl, locked);
+    }
+
+    if in_scope("wavetable")
+        && let Some(w) = update.get("wavetable").and_then(|v| v.as_object())
+    {
+        apply_wavetable_update(&mut s, w, locked);
+    }
+
+    if in_scope("sample")
+        && let Some(w) = update.get("sample").and_then(|v| v.as_object())
+    {
+        apply_sample_instrument_update(&mut s, w, locked);
+    }
+
+    if in_scope("fm_ops")
+        && let Some(f) = update.get("fm_ops").and_then(|v| v.as_object())
+    {
+        apply_fm_ops_update(&mut s, f, locked);
+    }
+
+    if in_scope("additive")
+        && let Some(a) = update.get("additive").and_then(|v| v.as_object())
+    {
+        apply_additive_update(&mut s, a, locked);
+    }
+
+    if in_scope("modal")
+        && let Some(m) = update.get("modal").and_then(|v| v.as_object())
+    {
+        apply_modal_update(&mut s, m, locked);
+    }
+
+    if in_scope("chiptune")
+        && let Some(c) = update.get("chiptune").and_then(|v| v.as_object())
+    {
+        apply_chiptune_update(&mut s, c, locked);
+    }
+
+    if in_scope("vocal")
+        && let Some(v) = update.get("vocal").and_then(|x| x.as_object())
+    {
+        apply_vocal_update(&mut s, v, locked);
     }
 
     if in_scope("an1x")

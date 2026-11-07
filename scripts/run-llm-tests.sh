@@ -70,8 +70,8 @@ if [[ -z "$MODEL_ARG" || "$MODEL_ARG" == --* ]]; then
   MODELS=()
   for m in "${ALL_GGUF[@]}"; do
     lower="${m,,}"
-    # NeuTTS Air is a TTS model — not a chat LLM, can't respond to the
-    # suite prompts at all.  Skip unconditionally, not gated by
+    # TTS GGUFs (e.g. legacy NeuTTS Air files) aren't chat LLMs and can't
+    # respond to the suite prompts at all.  Skip unconditionally, not gated by
     # --all-models.  Same for any other *tts* GGUF a user might drop in.
     [[ "$lower" == *"neutts"* ]] && continue
     [[ "$lower" == *"-tts"*  ]] && continue

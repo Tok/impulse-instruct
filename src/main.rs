@@ -422,6 +422,9 @@ fn run() -> anyhow::Result<()> {
         stereo_rx: audio_engine.stereo_rx,
         granular_capture_rx: audio_engine.granular_capture_rx,
         tts_tx: audio_engine.tts_tx.clone(),
+        sample_instrument_poly: Arc::clone(&audio_engine.sample_instrument_poly),
+        voice_meters: Arc::clone(&audio_engine.voice_meters),
+        gr_levels: Arc::clone(&audio_engine.gr_levels),
     };
 
     log::info!("Launching UI window…");
@@ -501,13 +504,18 @@ fn install_signal_handler() {
             };
             eprintln!("\n{name} received — shutting down, killing llama-server children");
             log::warn!("{name} received — initiating shutdown");
+            // `.*` must not sit between two literal spaces: the server is
+            // spawned as `llama-server --model …` (one space), which the old
+            // `llama-server .* --model` never matched — every Ctrl-C left the
+            // server running with its VRAM held.
+            const PATTERN: &str = "llama-server.* --model";
             let _ = std::process::Command::new("pkill")
-                .args(["-TERM", "-f", "llama-server .* --model"])
+                .args(["-TERM", "-f", PATTERN])
                 .status();
             // Short grace period so pkill lands before we exit.
             std::thread::sleep(std::time::Duration::from_millis(200));
             let _ = std::process::Command::new("pkill")
-                .args(["-KILL", "-f", "llama-server .* --model"])
+                .args(["-KILL", "-f", PATTERN])
                 .status();
             std::process::exit(128 + sig);
         })

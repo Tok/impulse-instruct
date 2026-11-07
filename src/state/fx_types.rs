@@ -17,6 +17,18 @@ pub enum FxStep {
     Bitcrush,
     Chorus,
     Phaser,
+    Flanger,
+    Limiter,
+    Filter,
+    Comb,
+    Tilt,
+    Transient,
+    Exciter,
+    Multitap,
+    RevDelay,
+    TapeStop,
+    Stutter,
+    Freeze,
     RingMod,
     Eq,
     Compressor,
@@ -24,12 +36,34 @@ pub enum FxStep {
     Drive,
     Autotune,
     Pan,
+    ConvReverb,
+    ParamEq,
+    PitchShift,
+    Gate,
+    Vocoder,
+    Widen,
+    FreqShift,
+    Vinyl,
+    DjFilter,
+    Tremolo,
+    Vibrato,
+    IsoEq,
+    DeEsser,
+    ResBank,
+    TapeEcho,
+    MultibandComp,
+    GrainDelay,
+    SpectralGate,
+    Plate,
+    TranceGate,
+    WaveFolder,
 }
 
 /// Total FxStep variants — sized to pack dense per-FX audio-thread
 /// caches (e.g. previous-sample outputs for feedback routes) without
-/// allocating a HashMap every block.
-pub const FX_STEP_COUNT: usize = 13;
+/// allocating a HashMap every block.  Bump this when adding a new
+/// `FxStep` variant so its `idx()` value has a slot in the cache.
+pub const FX_STEP_COUNT: usize = 46;
 
 impl FxStep {
     /// Dense 0..`FX_STEP_COUNT` index — stable; keep in lock-step with
@@ -43,15 +77,61 @@ impl FxStep {
             FxStep::Bitcrush => 3,
             FxStep::Chorus => 4,
             FxStep::Phaser => 5,
-            FxStep::RingMod => 6,
-            FxStep::Eq => 7,
-            FxStep::Compressor => 8,
-            FxStep::TapeSat => 9,
-            FxStep::Drive => 10,
-            FxStep::Autotune => 11,
-            FxStep::Pan => 12,
+            FxStep::Flanger => 6,
+            FxStep::Limiter => 7,
+            FxStep::Filter => 8,
+            FxStep::Comb => 9,
+            FxStep::Tilt => 10,
+            FxStep::Transient => 11,
+            FxStep::Exciter => 12,
+            FxStep::Multitap => 13,
+            FxStep::RevDelay => 14,
+            FxStep::TapeStop => 15,
+            FxStep::Stutter => 16,
+            FxStep::Freeze => 17,
+            FxStep::RingMod => 18,
+            FxStep::Eq => 19,
+            FxStep::Compressor => 20,
+            FxStep::TapeSat => 21,
+            FxStep::Drive => 22,
+            FxStep::Autotune => 23,
+            FxStep::Pan => 24,
+            FxStep::ConvReverb => 25,
+            FxStep::ParamEq => 26,
+            FxStep::PitchShift => 27,
+            FxStep::Gate => 28,
+            FxStep::Vocoder => 29,
+            FxStep::Widen => 30,
+            FxStep::FreqShift => 31,
+            FxStep::Vinyl => 32,
+            FxStep::DjFilter => 33,
+            FxStep::Tremolo => 34,
+            FxStep::Vibrato => 35,
+            FxStep::IsoEq => 36,
+            FxStep::DeEsser => 37,
+            FxStep::ResBank => 38,
+            FxStep::TapeEcho => 39,
+            FxStep::MultibandComp => 40,
+            FxStep::GrainDelay => 41,
+            FxStep::SpectralGate => 42,
+            FxStep::Plate => 43,
+            FxStep::TranceGate => 44,
+            FxStep::WaveFolder => 45,
         }
     }
+}
+
+/// Where an FX step's sidechain detector reads its signal from.  Resolved
+/// from a `to.kind == PortKind::SidechainIn` cable in `compile_fx_plan`.
+/// The audio thread looks up the value by FxStep target and reads the
+/// corresponding cached sample (one-sample delay) before applying the FX.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum SidechainSource {
+    /// Voice bus output, keyed by `ModuleKind` (e.g. DrumKit808 → 808 mix).
+    Voice(ModuleKind),
+    /// Another FX's previous-sample output (one-sample delay, same
+    /// machinery as feedback routes).
+    Fx(FxStep),
 }
 
 /// One compiled feedback route — an FX→FX back-edge in the cable graph.
@@ -110,4 +190,12 @@ pub struct FxPlan {
     /// thread reads each source's previous-sample output and mixes it into
     /// the target's input before the target processes the current sample.
     pub feedback_routes: Vec<FeedbackRoute>,
+    /// Sidechain edges (`to.kind == PortKind::SidechainIn`).  Keyed by
+    /// the target FxStep so the audio thread can look up the sidechain
+    /// source for each step in O(1).  When a step has no entry, the
+    /// FX's sidechain input is treated as silent — gate / vocoder
+    /// detectors fall back to the main signal so unconnected sidechain
+    /// FX still behave gracefully (gate becomes a noise gate, vocoder
+    /// becomes self-modulating).
+    pub sidechain_routes: HashMap<FxStep, SidechainSource>,
 }

@@ -2,7 +2,7 @@
 // Step sequencer panel.
 
 use super::sequencer_drums::draw_drum_rows;
-use crate::state::{DrumVoice, set_an1x_step, set_hoover_step};
+use crate::state::{DrumVoice, set_an1x_step, set_hoover_step, set_pluck_step};
 use crate::ui::{ImpulseApp, SEQ_LABEL_H, SEQ_LABEL_W, SEQ_VOL_H, SEQ_VOL_W, theme, widgets};
 
 /// Maximum step buttons visible (MAX_STEPS = 64 fits 2 rows of 32).
@@ -84,16 +84,19 @@ pub(super) fn fixed_slider(
 pub(super) fn step_grid_width(
     pad_px: f32,
     time_sig_num: usize,
+    step_division: usize,
     page_start: usize,
     item_spacing_x: f32,
     row_steps: usize,
 ) -> f32 {
+    let steps_per_beat = step_division.max(1);
+    let steps_per_bar = (time_sig_num * steps_per_beat).max(1);
     let mut w = 0.0f32;
     for i in 0..row_steps {
-        let beat_pos = (page_start + i) % time_sig_num;
-        if i > 0 && beat_pos == 0 {
+        let abs_i = page_start + i;
+        if i > 0 && abs_i.is_multiple_of(steps_per_bar) {
             w += 4.0;
-        } else if i > 0 && i.is_multiple_of(4) {
+        } else if i > 0 && abs_i.is_multiple_of(steps_per_beat) {
             w += 2.0;
         }
         w += pad_px + item_spacing_x;
@@ -149,13 +152,14 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let h = (header_h + bass_h + hoover_h + an1x_h + drums_h).max(120.0);
         ui.set_min_height(h);
     }
-    let (current_step, running, seq_steps, time_sig_num, pad_px) = {
+    let (current_step, running, seq_steps, time_sig_num, step_division, pad_px) = {
         let s = app.state.read();
         (
             s.sequencer.current_step,
             s.sequencer.running,
             s.sequencer.steps,
             s.sequencer.time_sig_num as usize,
+            s.sequencer.step_division.max(1) as usize,
             s.ui_prefs.effective_pad_px(),
         )
     };
@@ -202,7 +206,15 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // enabled AND patched into the audio path (same predicate the
     // front-panel LED uses).  Modules sitting in the rack with no
     // cable to MASTER won't take a sequencer row.
-    let (rack_has_bass, rack_has_hoover, rack_has_an1x, active_drum_voices) = {
+    let (
+        rack_has_bass,
+        rack_has_hoover,
+        rack_has_pluck,
+        rack_has_wavetable,
+        rack_has_sample,
+        rack_has_an1x,
+        active_drum_voices,
+    ) = {
         use crate::state::ModuleKind;
         let s = app.state.read();
         let has = |k: ModuleKind| {
@@ -219,6 +231,9 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         (
             has(ModuleKind::AcidBass),
             has(ModuleKind::HooverLead),
+            has(ModuleKind::PluckString),
+            has(ModuleKind::WavetableVoice),
+            has(ModuleKind::SampleInstrument),
             has(ModuleKind::An1xVoice),
             filtered,
         )
@@ -228,14 +243,15 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // ── Helper closure: emit beat dividers ────────────────────────────────────
     // `local_i` is the position within the sub-row (0..STEPS_PER_ROW); no leading
     // spacer at local_i==0. `abs_i` is the absolute step index for beat calculation.
+    let steps_per_beat = step_division.max(1);
+    let steps_per_bar = (time_sig_num * steps_per_beat).max(1);
     let beat_div = |ui: &mut egui::Ui, local_i: usize, abs_i: usize| {
         if local_i == 0 {
             return;
         }
-        let beat_pos = abs_i % time_sig_num;
-        if beat_pos == 0 {
+        if abs_i.is_multiple_of(steps_per_bar) {
             ui.add_space(4.0);
-        } else if abs_i.is_multiple_of(4) {
+        } else if abs_i.is_multiple_of(steps_per_beat) {
             ui.add_space(2.0);
         }
     };
@@ -257,6 +273,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let grid_w = step_grid_width(
             pad_px,
             time_sig_num,
+            step_division,
             page_start,
             ui.spacing().item_spacing.x,
             widest_row_steps,
@@ -349,6 +366,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             let is_current = abs == voice_cursor;
                             ui.add_enabled_ui(abs < voice_steps, |ui| {
                                 let note = step.map(|s| s.note).unwrap_or(36);
+                                let cond = step.map(|s| s.cond).unwrap_or(0);
                                 let note_col = if is_active {
                                     Some(theme::note_color(note))
                                 } else {
@@ -360,7 +378,8 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                     None
                                 };
                                 if let Some(new_active) = widgets::step_button(
-                                    ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                    ui, is_active, is_current, 1.0, 1.0, cond, note_col, label,
+                                    pad_px,
                                 ) {
                                     let s = app.state.read().clone();
                                     let cur_note = s
@@ -378,6 +397,13 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         }
                     });
                 }
+
+                // ── Automation overlay (LFO sparkline) ───────────────────
+                // Opt-in via Preferences → Display; helper lives in
+                // sequencer_automation.rs to keep this file under cap.
+                super::sequencer_automation::draw_bass_voice_overlay(
+                    app, ui, vi, page_start, seq_steps, sub_rows, pad_px, marker_h, row_spacer,
+                );
 
                 // ── ACCENT + SLIDE + PAN rows for this voice ────────────
                 let prev_spacing = ui.spacing().item_spacing.y;
@@ -409,26 +435,73 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                             }
                             let abs = page_start + i;
                             beat_div(ui, j, abs);
-                            let is_accent =
-                                voice_page.get(i).map(|s| s.accent > 0.0).unwrap_or(false);
+                            let value = voice_page.get(i).map(|s| s.accent).unwrap_or(0.0);
                             let enabled = abs < voice_steps;
-                            let color = if !enabled || !is_accent {
-                                theme::PIT
-                            } else {
-                                theme::CHALK
-                            };
-                            let text = egui::RichText::new("A").monospace().size(7.0).color(color);
-                            if ui
-                                .add_sized(
-                                    [pad_px, row_h],
-                                    egui::Button::new(text).fill(egui::Color32::TRANSPARENT),
-                                )
-                                .clicked()
-                                && enabled
-                            {
+                            // Click toggles binary 0↔1 (legacy UX);
+                            // drag-vertical or scroll-wheel set a
+                            // fractional 0..=1 for per-step velocity
+                            // curves without a separate slider lane.
+                            let (rect, resp) = ui.allocate_exact_size(
+                                egui::vec2(pad_px, row_h),
+                                egui::Sense::click_and_drag(),
+                            );
+                            if ui.is_rect_visible(rect) {
+                                let v = value.clamp(0.0, 1.0);
+                                let fill_h = rect.height() * v;
+                                let bar_color = if !enabled {
+                                    theme::PIT
+                                } else if v > 0.001 {
+                                    egui::Color32::from_gray(140)
+                                } else {
+                                    egui::Color32::from_gray(28)
+                                };
+                                let bar = egui::Rect::from_min_max(
+                                    egui::pos2(rect.left(), rect.bottom() - fill_h),
+                                    egui::pos2(rect.right(), rect.bottom()),
+                                );
+                                ui.painter().rect_filled(bar, 1.0, bar_color);
+                                let letter_color = if enabled && v > 0.001 {
+                                    theme::CHALK
+                                } else {
+                                    theme::PIT
+                                };
+                                ui.painter().text(
+                                    rect.center(),
+                                    egui::Align2::CENTER_CENTER,
+                                    "A",
+                                    egui::FontId::monospace(7.0),
+                                    letter_color,
+                                );
+                            }
+                            if !enabled {
+                                continue;
+                            }
+                            if resp.clicked() {
                                 let s = app.state.read().clone();
                                 *app.state.write() =
                                     crate::state::toggle_bass_accent_voice(s, vi, abs);
+                            }
+                            // Drag-vertical: top edge → 1.0, bottom → 0.0.
+                            if resp.dragged()
+                                && let Some(p) = resp.interact_pointer_pos()
+                            {
+                                let frac =
+                                    1.0 - ((p.y - rect.top()) / rect.height()).clamp(0.0, 1.0);
+                                let s = app.state.read().clone();
+                                *app.state.write() =
+                                    crate::state::set_bass_accent_voice(s, vi, abs, frac);
+                            }
+                            // Hover-gated scroll: ±0.1 increments.
+                            if resp.hovered() {
+                                let dy = ui.ctx().input(|i| i.smooth_scroll_delta.y);
+                                if dy.abs() > 0.5 {
+                                    let next = (value + dy.signum() * 0.1).clamp(0.0, 1.0);
+                                    if (next - value).abs() > 1e-4 {
+                                        let s = app.state.read().clone();
+                                        *app.state.write() =
+                                            crate::state::set_bass_accent_voice(s, vi, abs, next);
+                                    }
+                                }
                             }
                         }
                     });
@@ -605,6 +678,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_current = abs == hoover_cursor;
                         ui.add_enabled_ui(abs < hoover_steps, |ui| {
                             let note = step.map(|s| s.note).unwrap_or(57);
+                            let cond = step.map(|s| s.cond).unwrap_or(0);
                             let note_col = if is_active {
                                 Some(theme::note_color(note))
                             } else {
@@ -616,7 +690,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 None
                             };
                             if let Some(new_active) = widgets::step_button(
-                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                ui, is_active, is_current, 1.0, 1.0, cond, note_col, label, pad_px,
                             ) {
                                 let s = app.state.read().clone();
                                 let note = s
@@ -632,6 +706,130 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 });
             }
         } // end if rack_has_hoover
+
+        // ── Pluck row — only shown when PluckString is in the rack ───────────
+        if rack_has_pluck {
+            let (pluck_enabled, pluck_steps) = {
+                let s = app.state.read();
+                (s.pluck.enabled, s.sequencer.pluck_steps)
+            };
+            let pluck_cursor = if running {
+                current_step % pluck_steps.max(1)
+            } else {
+                usize::MAX
+            };
+            let pluck_page: Vec<crate::state::TB303Step> = {
+                let s = app.state.read();
+                let end = (page_start + STEPS_PER_PAGE).min(s.sequencer.pluck_pattern.len());
+                s.sequencer.pluck_pattern[page_start..end].to_vec()
+            };
+            for sub in 0..sub_rows {
+                ui.horizontal(|ui| {
+                    let label_color = if pluck_enabled {
+                        theme::SMOKE
+                    } else {
+                        theme::PIT
+                    };
+                    fixed_space(ui, 10.0);
+                    fixed_space(ui, 10.0);
+                    if sub == 0 {
+                        fixed_label(
+                            ui,
+                            SEQ_LABEL_W - 20.0,
+                            SEQ_LABEL_H,
+                            "PLUCK",
+                            label_color,
+                            8.5,
+                        );
+                        let mut vol = app.state.read().pluck.volume;
+                        if fixed_slider(ui, SEQ_VOL_W, SEQ_VOL_H, &mut vol, 0.0..=1.0).changed() {
+                            app.state.write().pluck.volume = vol;
+                            app.push_audio_params();
+                        }
+                    } else {
+                        fixed_space(ui, SEQ_LABEL_W - 20.0);
+                        fixed_space(ui, SEQ_VOL_W);
+                    }
+                    fixed_space(ui, 18.0);
+                    if row_spacer > 0.0 {
+                        ui.add_space(row_spacer);
+                    }
+                    let base = sub * STEPS_PER_ROW;
+                    for j in 0..STEPS_PER_ROW {
+                        let i = base + j;
+                        if i >= seq_steps {
+                            break;
+                        }
+                        let abs = page_start + i;
+                        beat_div(ui, j, abs);
+                        let step = pluck_page.get(i).copied();
+                        let is_active = step.map(|s| s.active).unwrap_or(false);
+                        let is_current = abs == pluck_cursor;
+                        ui.add_enabled_ui(abs < pluck_steps, |ui| {
+                            let note = step.map(|s| s.note).unwrap_or(57);
+                            let cond = step.map(|s| s.cond).unwrap_or(0);
+                            let note_col = if is_active {
+                                Some(theme::note_color(note))
+                            } else {
+                                None
+                            };
+                            let label = if is_active {
+                                Some(crate::ui::note_name(note))
+                            } else {
+                                None
+                            };
+                            if let Some(new_active) = widgets::step_button(
+                                ui, is_active, is_current, 1.0, 1.0, cond, note_col, label, pad_px,
+                            ) {
+                                let s = app.state.read().clone();
+                                let note = s
+                                    .sequencer
+                                    .pluck_pattern
+                                    .get(abs)
+                                    .map(|b| b.note)
+                                    .unwrap_or(57);
+                                *app.state.write() = set_pluck_step(s, abs, note, new_active);
+                            }
+                        });
+                    }
+                });
+            }
+        } // end if rack_has_pluck
+
+        if rack_has_wavetable {
+            super::sequencer_sample_lane::draw_wavetable_lane(
+                app,
+                ui,
+                current_step,
+                running,
+                sub_rows,
+                seq_steps,
+                page_start,
+                row_spacer,
+                pad_px,
+                steps_per_beat,
+                steps_per_bar,
+            );
+        }
+        // ── Wavetable row — only shown when WavetableVoice is in the rack ────
+
+        // ── Sample-Instrument row — extracted to sequencer_sample_lane.rs
+        // to keep this file under the 1000-line cap.
+        if rack_has_sample {
+            super::sequencer_sample_lane::draw_sample_lane(
+                app,
+                ui,
+                current_step,
+                running,
+                sub_rows,
+                seq_steps,
+                page_start,
+                row_spacer,
+                pad_px,
+                steps_per_beat,
+                steps_per_bar,
+            );
+        }
 
         // ── AN1X row — only shown when An1xVoice is in the rack ───────────────
         if rack_has_an1x {
@@ -693,6 +891,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         let is_current = abs == an1x_cursor;
                         ui.add_enabled_ui(abs < an1x_steps, |ui| {
                             let note = step.map(|s| s.note).unwrap_or(57);
+                            let cond = step.map(|s| s.cond).unwrap_or(0);
                             let note_col = if is_active {
                                 Some(theme::note_color(note))
                             } else {
@@ -704,7 +903,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                                 None
                             };
                             if let Some(new_active) = widgets::step_button(
-                                ui, is_active, is_current, 1.0, 1.0, note_col, label, pad_px,
+                                ui, is_active, is_current, 1.0, 1.0, cond, note_col, label, pad_px,
                             ) {
                                 let s = app.state.read().clone();
                                 let note = s
@@ -733,6 +932,7 @@ pub fn draw_sequencer(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             current_step,
             sub_rows,
             time_sig_num,
+            step_division,
         );
     });
 

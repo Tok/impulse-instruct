@@ -7,6 +7,7 @@ use crate::state::{DrumVoice, SequencerState};
 
 // ─── Events emitted by the sequencer ─────────────────────────────────────────
 
+pub mod granuliser;
 pub mod preecho;
 pub use preecho::{
     NoteApproach, NoteOverride, NoteShift, PreechoApply, PreechoConfig, RampCurve, preecho_apply,
@@ -61,6 +62,129 @@ pub enum TriggerEvent {
         slide: f32,
     },
     An1xGateOff,
+    /// Karplus-Strong pluck trigger.  Accent boosts the amp envelope's
+    /// initial gain; slide is reserved (the plucked-string voice
+    /// doesn't glide pitch today — each trigger re-primes the delay
+    /// line fresh — but the field is carried through so a future
+    /// legato mode can respect it).
+    PluckTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    PluckGateOff,
+    /// Wavetable voice trigger.  Same shape as PluckTrigger; `slide`
+    /// is reserved for future legato handling — the wavetable voice
+    /// snaps pitch on every trigger today.
+    WavetableTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    WavetableGateOff,
+    /// Sample-Instrument trigger — same shape as Wavetable.
+    SampleTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    SampleGateOff,
+    /// FM operator synth trigger — same shape as Wavetable / Sample.
+    /// Carries the played MIDI note + accent + slide; the voice's
+    /// `trigger` resets every op envelope and sets the carrier
+    /// frequency from the played note.
+    FmOpsTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    FmOpsGateOff,
+    /// Additive synth trigger — same shape as the other melodic
+    /// voices.  Voice's `trigger` resets the amp envelope and sets
+    /// the fundamental from the played note; harmonics 1..=16 play
+    /// at integer multiples.
+    AdditiveTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    AdditiveGateOff,
+    /// Modal voice trigger — fires the noise burst that excites
+    /// the resonator bank.  `slide` is reserved (modal voices
+    /// don't glide pitch — each strike re-primes the bank fresh).
+    ModalTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    ModalGateOff,
+    /// Chiptune voice trigger — fires every osc's ADSR and sets
+    /// the played fundamental.  `slide` reserved (chiptune
+    /// voices don't legato today).
+    ChiptuneTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    ChiptuneGateOff,
+    /// Vocal voice trigger — fires the envelope, sets the
+    /// played fundamental for the saw source.  `slide` reserved
+    /// for a future legato mode.
+    VocalTrigger {
+        note: u8,
+        accent: f32,
+        slide: f32,
+    },
+    VocalGateOff,
+    /// Granular voice pitch-mapping trigger.  Fires when pitch-mappable
+    /// mode is on: sets the granular voice's base-note transposition so
+    /// every subsequent grain inherits the played pitch.  Carries no
+    /// gate-off — the granular voice keeps producing grains until
+    /// `granular.enabled` flips off.
+    GranularPitch {
+        note: u8,
+    },
+}
+
+impl TriggerEvent {
+    /// True for events that release a sustaining note rather than start
+    /// a new one.  Used by the chain advance "stop at end" path —
+    /// `advance_clock` may have emitted step-zero note-ons for a
+    /// pattern restart that's about to be cancelled, so the audio
+    /// thread filters those out while keeping gate-offs (any note
+    /// still sounding into the boundary needs a clean release).
+    /// Pure helper so the filter logic is unit-testable.
+    pub fn is_gate_off(&self) -> bool {
+        matches!(
+            self,
+            TriggerEvent::BassGateOff { .. }
+                | TriggerEvent::HooverGateOff
+                | TriggerEvent::An1xGateOff
+                | TriggerEvent::PluckGateOff
+                | TriggerEvent::WavetableGateOff
+                | TriggerEvent::SampleGateOff
+                | TriggerEvent::FmOpsGateOff
+                | TriggerEvent::AdditiveGateOff
+                | TriggerEvent::ModalGateOff
+                | TriggerEvent::ChiptuneGateOff
+                | TriggerEvent::VocalGateOff
+        )
+    }
+}
+
+/// Compute the per-block delta to add to `AppState.global_step_count`.
+/// Returns 0 when the clock didn't advance (or the saved cursor is
+/// somehow ahead of the current step, e.g. session restore from a
+/// future timeline — defensively saturating so the counter never
+/// runs backwards).
+///
+/// Polymeter-aware: the global tick no longer wraps at MAX_STEPS, so
+/// the delta is the straight saturating difference.  Older builds
+/// had a wrap-fallback branch which silently dropped one slot per
+/// MAX_STEPS for any voice whose length didn't divide MAX_STEPS.
+#[inline]
+pub fn step_count_delta(prev_step: usize, curr_step: usize) -> u64 {
+    curr_step.saturating_sub(prev_step) as u64
 }
 
 // ─── Clock state (audio-thread local, not in shared AppState) ─────────────────
@@ -76,6 +200,14 @@ pub struct ClockState {
     pub gate_counters: [u32; crate::state::MAX_BASS_VOICES], // samples remaining per bass voice
     pub gate_counter_hoover: u32, // samples remaining in hoover gate
     pub gate_counter_an1x: u32, // samples remaining in AN1X gate
+    pub gate_counter_pluck: u32, // samples remaining in pluck gate
+    pub gate_counter_wavetable: u32, // samples remaining in wavetable gate
+    pub gate_counter_sample: u32, // samples remaining in sample-instrument gate
+    pub gate_counter_fm_ops: u32, // samples remaining in FM-ops gate
+    pub gate_counter_additive: u32, // samples remaining in additive-voice gate
+    pub gate_counter_modal: u32, // samples remaining in modal-voice gate
+    pub gate_counter_chiptune: u32, // samples remaining in chiptune-voice gate
+    pub gate_counter_vocal: u32, // samples remaining in vocal-voice gate
     // Ratchet sub-hit tracking — fixed arrays, no allocation
     pub ratchet_remaining: [u8; NUM_DRUM_VOICES], // sub-hits left per voice
     pub ratchet_acc: [f64; NUM_DRUM_VOICES],      // sample accumulator since step fire
@@ -93,6 +225,14 @@ impl Default for ClockState {
             gate_counters: [0; crate::state::MAX_BASS_VOICES],
             gate_counter_hoover: 0,
             gate_counter_an1x: 0,
+            gate_counter_pluck: 0,
+            gate_counter_wavetable: 0,
+            gate_counter_sample: 0,
+            gate_counter_fm_ops: 0,
+            gate_counter_additive: 0,
+            gate_counter_modal: 0,
+            gate_counter_chiptune: 0,
+            gate_counter_vocal: 0,
             ratchet_remaining: [0; NUM_DRUM_VOICES],
             ratchet_acc: [0.0; NUM_DRUM_VOICES],
             ratchet_interval: [0.0; NUM_DRUM_VOICES],
@@ -102,12 +242,16 @@ impl Default for ClockState {
     }
 }
 
-/// Compute samples per 16th note at given BPM and sample rate.
-pub fn samples_per_step(bpm: f32, sample_rate: f32) -> f64 {
-    // 1 beat = 4 16th notes; beats_per_sec = bpm/60
-    // samples_per_beat = sr / (bpm/60) = sr * 60 / bpm
-    // samples_per_16th = samples_per_beat / 4
-    (sample_rate as f64 * 60.0) / (bpm as f64 * 4.0)
+/// Compute samples per step at given BPM and sample rate.
+/// `step_division` is the number of steps per beat (4 = 16th-note grid,
+/// 8 = 32nd-note grid, 2 = 8th-note grid).  Pass `seq.step_division` so the
+/// clock advances at whatever subdivision the pattern was authored at.
+pub fn samples_per_step(bpm: f32, sample_rate: f32, step_division: u8) -> f64 {
+    // beats_per_sec = bpm / 60
+    // samples_per_beat = sr / (bpm / 60) = sr * 60 / bpm
+    // samples_per_step = samples_per_beat / step_division
+    let div = step_division.max(1) as f64;
+    (sample_rate as f64 * 60.0) / (bpm as f64 * div)
 }
 
 /// Advance the sequencer clock by `block_size` samples.
@@ -122,7 +266,7 @@ pub fn advance_clock(
         return (clock, vec![]);
     }
 
-    let sps = samples_per_step(seq.bpm, sample_rate);
+    let sps = samples_per_step(seq.bpm, sample_rate, seq.step_division);
     let mut events: Vec<TriggerEvent> = Vec::new();
     let mut acc = clock.sample_accumulator + block_size as f64;
     let mut step = clock.current_step;
@@ -130,6 +274,14 @@ pub fn advance_clock(
     let mut gate_counters = clock.gate_counters;
     let mut gate_counter_hoover = clock.gate_counter_hoover;
     let mut gate_counter_an1x = clock.gate_counter_an1x;
+    let mut gate_counter_pluck = clock.gate_counter_pluck;
+    let mut gate_counter_wavetable = clock.gate_counter_wavetable;
+    let mut gate_counter_sample = clock.gate_counter_sample;
+    let mut gate_counter_fm_ops = clock.gate_counter_fm_ops;
+    let mut gate_counter_additive = clock.gate_counter_additive;
+    let mut gate_counter_modal = clock.gate_counter_modal;
+    let mut gate_counter_chiptune = clock.gate_counter_chiptune;
+    let mut gate_counter_vocal = clock.gate_counter_vocal;
     let mut ratchet_remaining = clock.ratchet_remaining;
     let mut ratchet_acc = clock.ratchet_acc;
     let mut ratchet_interval = clock.ratchet_interval;
@@ -186,6 +338,86 @@ pub fn advance_clock(
         }
     }
 
+    // Handle gate-off for Pluck
+    if gate_counter_pluck > 0 {
+        if block_size as u32 >= gate_counter_pluck {
+            events.push(TriggerEvent::PluckGateOff);
+            gate_counter_pluck = 0;
+        } else {
+            gate_counter_pluck -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for Wavetable
+    if gate_counter_wavetable > 0 {
+        if block_size as u32 >= gate_counter_wavetable {
+            events.push(TriggerEvent::WavetableGateOff);
+            gate_counter_wavetable = 0;
+        } else {
+            gate_counter_wavetable -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for FM operator synth
+    if gate_counter_fm_ops > 0 {
+        if block_size as u32 >= gate_counter_fm_ops {
+            events.push(TriggerEvent::FmOpsGateOff);
+            gate_counter_fm_ops = 0;
+        } else {
+            gate_counter_fm_ops -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for additive voice
+    if gate_counter_additive > 0 {
+        if block_size as u32 >= gate_counter_additive {
+            events.push(TriggerEvent::AdditiveGateOff);
+            gate_counter_additive = 0;
+        } else {
+            gate_counter_additive -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for modal voice
+    if gate_counter_modal > 0 {
+        if block_size as u32 >= gate_counter_modal {
+            events.push(TriggerEvent::ModalGateOff);
+            gate_counter_modal = 0;
+        } else {
+            gate_counter_modal -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for chiptune voice
+    if gate_counter_chiptune > 0 {
+        if block_size as u32 >= gate_counter_chiptune {
+            events.push(TriggerEvent::ChiptuneGateOff);
+            gate_counter_chiptune = 0;
+        } else {
+            gate_counter_chiptune -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for vocal voice
+    if gate_counter_vocal > 0 {
+        if block_size as u32 >= gate_counter_vocal {
+            events.push(TriggerEvent::VocalGateOff);
+            gate_counter_vocal = 0;
+        } else {
+            gate_counter_vocal -= block_size as u32;
+        }
+    }
+
+    // Handle gate-off for Sample Instrument
+    if gate_counter_sample > 0 {
+        if block_size as u32 >= gate_counter_sample {
+            events.push(TriggerEvent::SampleGateOff);
+            gate_counter_sample = 0;
+        } else {
+            gate_counter_sample -= block_size as u32;
+        }
+    }
+
     // Swing: even steps (downbeats) are long, odd steps (upbeats) are short.
     // swing=0 → equal; swing=0.5 → 75%/25% triplet shuffle.
     // The duration before the NEXT step fires depends on the CURRENT step's parity.
@@ -204,12 +436,24 @@ pub fn advance_clock(
             break;
         }
         acc -= step_sps;
-        let prev_step = step;
-        // Advance the global tick counter, wrapping at MAX_STEPS.
-        // Each voice uses `step % voice_steps` to index its own pattern.
-        step = (step + 1) % crate::state::MAX_STEPS;
-        if step < prev_step {
-            loop_count = loop_count.wrapping_add(1);
+        // Advance the global tick counter without wrapping.  Voice
+        // indexing uses `step % voice_steps` so any voice length is
+        // honoured cleanly — wrapping at MAX_STEPS used to skip a
+        // step when `MAX_STEPS % voice_steps != 0` (e.g. a 5-step
+        // bass against the 64-cap dropped one slot every 64 ticks).
+        // `usize` on 64-bit holds ~18 quintillion ticks; even at a
+        // hot 16 steps/sec this overflows after centuries of
+        // continuous play, so a deliberate wrap is unnecessary.
+        step += 1;
+        // Loop count derives from the global cycle length; chain
+        // advancement + probability-RNG seeds use this to detect
+        // pattern boundaries.  Computing it here (rather than
+        // tracking a hand-incremented counter) makes the value
+        // robust against polymetric voice lengths that don't divide
+        // `seq.steps`.
+        let new_loop_count = (step / seq.steps.max(1)) as u32;
+        if new_loop_count != loop_count {
+            loop_count = new_loop_count;
         }
 
         // Drum triggers — each voice uses its own step length for polyrhythm.
@@ -263,7 +507,9 @@ pub fn advance_clock(
                     .map(|cfg| preecho::preecho_apply(vstep, voice_steps, cfg))
                     .unwrap_or(preecho::PreechoApply::IDENTITY);
 
+                let voice_cycle = step / voice_steps;
                 if s.active
+                    && cond_gate(voice_cycle, s.cond)
                     && prob_hit(
                         pre.probability_override.unwrap_or(s.probability),
                         vstep,
@@ -333,7 +579,7 @@ pub fn advance_clock(
                     .unwrap_or(&[])
             };
             let bs = pattern.get(bstep).copied().unwrap_or_default();
-            if bs.active {
+            if bs.active && cond_gate(step / vsteps, bs.cond) {
                 let gate_samples = (sps * bs.gate as f64) as u32;
                 gate_counters[vi] = gate_samples;
                 // Melodic preecho: when the "bass" voice has accent_ramp
@@ -377,7 +623,7 @@ pub fn advance_clock(
         // just like the bass path above.
         let hstep = step % seq.hoover_steps.max(1);
         let hs = seq.hoover_pattern.get(hstep).copied().unwrap_or_default();
-        if hs.active {
+        if hs.active && cond_gate(step / seq.hoover_steps.max(1), hs.cond) {
             let gate_samples = (sps * 0.75) as u32;
             gate_counter_hoover = gate_samples;
             let hsteps = seq.hoover_steps.max(1);
@@ -409,7 +655,7 @@ pub fn advance_clock(
         // AN1X trigger — independent step length, same preecho shape.
         let astep = step % seq.an1x_steps.max(1);
         let ax = seq.an1x_pattern.get(astep).copied().unwrap_or_default();
-        if ax.active {
+        if ax.active && cond_gate(step / seq.an1x_steps.max(1), ax.cond) {
             let gate_samples = (sps * ax.gate as f64) as u32;
             gate_counter_an1x = gate_samples;
             let asteps = seq.an1x_steps.max(1);
@@ -437,6 +683,159 @@ pub fn advance_clock(
                 slide,
             });
         }
+
+        // Pluck trigger — independent step length, same preecho shape.
+        // The Karplus-Strong voice re-primes its delay line on every
+        // trigger so slide is informational today, but we carry it
+        // through for future legato / freq-interp work.
+        let pstep = step % seq.pluck_steps.max(1);
+        let ps = seq.pluck_pattern.get(pstep).copied().unwrap_or_default();
+        if ps.active && cond_gate(step / seq.pluck_steps.max(1), ps.cond) {
+            let gate_samples = (sps * ps.gate as f64) as u32;
+            gate_counter_pluck = gate_samples;
+            let psteps = seq.pluck_steps.max(1);
+            let pre = seq
+                .preecho
+                .get("pluck")
+                .map(|cfg| preecho::preecho_apply(pstep, psteps, cfg))
+                .unwrap_or(preecho::PreechoApply::IDENTITY);
+            let accent = pre.accent_override.unwrap_or(ps.accent);
+            let slide = pre.slide_override.unwrap_or(ps.slide);
+            let note = match pre.note_override {
+                Some(ov) => {
+                    let anchor_note = seq
+                        .pluck_pattern
+                        .get(ov.anchor_step as usize)
+                        .map(|s| s.note)
+                        .unwrap_or(ps.note);
+                    preecho::resolve_note_shift(anchor_note, ov.shift, seq.root_note, seq.scale)
+                }
+                None => ps.note,
+            };
+            events.push(TriggerEvent::PluckTrigger {
+                note,
+                accent,
+                slide,
+            });
+        }
+
+        // Wavetable trigger — own step length + preecho hookup, same
+        // shape as the other melodic lanes.
+        let wstep = step % seq.wavetable_steps.max(1);
+        let ws = seq
+            .wavetable_pattern
+            .get(wstep)
+            .copied()
+            .unwrap_or_default();
+        if ws.active && cond_gate(step / seq.wavetable_steps.max(1), ws.cond) {
+            let gate_samples = (sps * ws.gate as f64) as u32;
+            gate_counter_wavetable = gate_samples;
+            let wsteps = seq.wavetable_steps.max(1);
+            let pre = seq
+                .preecho
+                .get("wavetable")
+                .map(|cfg| preecho::preecho_apply(wstep, wsteps, cfg))
+                .unwrap_or(preecho::PreechoApply::IDENTITY);
+            let accent = pre.accent_override.unwrap_or(ws.accent);
+            let slide = pre.slide_override.unwrap_or(ws.slide);
+            let note = match pre.note_override {
+                Some(ov) => {
+                    let anchor_note = seq
+                        .wavetable_pattern
+                        .get(ov.anchor_step as usize)
+                        .map(|s| s.note)
+                        .unwrap_or(ws.note);
+                    preecho::resolve_note_shift(anchor_note, ov.shift, seq.root_note, seq.scale)
+                }
+                None => ws.note,
+            };
+            events.push(TriggerEvent::WavetableTrigger {
+                note,
+                accent,
+                slide,
+            });
+        }
+
+        // Sample-Instrument trigger — V1 reuses the WavetableVoice
+        // pattern shape but reads from `sample_pattern` / `sample_steps`.
+        // No preecho hookup yet (deferred with the rest of V1.1).
+        let sstep = step % seq.sample_steps.max(1);
+        let ss = seq.sample_pattern.get(sstep).copied().unwrap_or_default();
+        if ss.active && cond_gate(step / seq.sample_steps.max(1), ss.cond) {
+            let gate_samples = (sps * ss.gate as f64) as u32;
+            gate_counter_sample = gate_samples;
+            events.push(TriggerEvent::SampleTrigger {
+                note: ss.note,
+                accent: ss.accent,
+                slide: ss.slide,
+            });
+        }
+
+        // FM operator synth trigger — same TB303Step pattern as the
+        // other melodic lanes; reads from `fm_ops_pattern` / `fm_ops_steps`.
+        let fstep = step % seq.fm_ops_steps.max(1);
+        let fs = seq.fm_ops_pattern.get(fstep).copied().unwrap_or_default();
+        if fs.active && cond_gate(step / seq.fm_ops_steps.max(1), fs.cond) {
+            let gate_samples = (sps * fs.gate as f64) as u32;
+            gate_counter_fm_ops = gate_samples;
+            events.push(TriggerEvent::FmOpsTrigger {
+                note: fs.note,
+                accent: fs.accent,
+                slide: fs.slide,
+            });
+        }
+
+        // Additive voice trigger.
+        let astep = step % seq.additive_steps.max(1);
+        let as_step = seq.additive_pattern.get(astep).copied().unwrap_or_default();
+        if as_step.active && cond_gate(step / seq.additive_steps.max(1), as_step.cond) {
+            let gate_samples = (sps * as_step.gate as f64) as u32;
+            gate_counter_additive = gate_samples;
+            events.push(TriggerEvent::AdditiveTrigger {
+                note: as_step.note,
+                accent: as_step.accent,
+                slide: as_step.slide,
+            });
+        }
+
+        // Modal voice trigger.
+        let mstep = step % seq.modal_steps.max(1);
+        let ms_step = seq.modal_pattern.get(mstep).copied().unwrap_or_default();
+        if ms_step.active && cond_gate(step / seq.modal_steps.max(1), ms_step.cond) {
+            let gate_samples = (sps * ms_step.gate as f64) as u32;
+            gate_counter_modal = gate_samples;
+            events.push(TriggerEvent::ModalTrigger {
+                note: ms_step.note,
+                accent: ms_step.accent,
+                slide: ms_step.slide,
+            });
+        }
+
+        // Chiptune voice trigger.
+        let cstep = step % seq.chiptune_steps.max(1);
+        let cs_step = seq.chiptune_pattern.get(cstep).copied().unwrap_or_default();
+        if cs_step.active && cond_gate(step / seq.chiptune_steps.max(1), cs_step.cond) {
+            let gate_samples = (sps * cs_step.gate as f64) as u32;
+            gate_counter_chiptune = gate_samples;
+            events.push(TriggerEvent::ChiptuneTrigger {
+                note: cs_step.note,
+                accent: cs_step.accent,
+                slide: cs_step.slide,
+            });
+        }
+
+        // Vocal voice trigger.
+        let vstep = step % seq.vocal_steps.max(1);
+        let vs_step = seq.vocal_pattern.get(vstep).copied().unwrap_or_default();
+        if vs_step.active && cond_gate(step / seq.vocal_steps.max(1), vs_step.cond) {
+            let gate_samples = (sps * vs_step.gate as f64) as u32;
+            gate_counter_vocal = gate_samples;
+            events.push(TriggerEvent::VocalTrigger {
+                note: vs_step.note,
+                accent: vs_step.accent,
+                slide: vs_step.slide,
+            });
+        }
     }
 
     let new_clock = ClockState {
@@ -446,6 +845,14 @@ pub fn advance_clock(
         gate_counters,
         gate_counter_hoover,
         gate_counter_an1x,
+        gate_counter_pluck,
+        gate_counter_wavetable,
+        gate_counter_sample,
+        gate_counter_fm_ops,
+        gate_counter_additive,
+        gate_counter_modal,
+        gate_counter_chiptune,
+        gate_counter_vocal,
         ratchet_remaining,
         ratchet_acc,
         ratchet_interval,
@@ -453,6 +860,17 @@ pub fn advance_clock(
         ratchet_slice,
     };
     (new_clock, events)
+}
+
+/// Conditional-trigger gate — Monome-style "fire only every Nth voice
+/// cycle".  `cond` is the 2-bit value stored on the step (0 = always,
+/// 1 = every 2nd cycle, 2 = every 3rd, 3 = every 4th).  `voice_cycle`
+/// is `step / voice_steps`, so the gate is independent for each
+/// voice's natural cycle length and stays correct under polymeter.
+#[inline]
+pub(crate) fn cond_gate(voice_cycle: usize, cond: u8) -> bool {
+    let n = (cond as usize + 1).max(1);
+    voice_cycle.is_multiple_of(n)
 }
 
 /// Cheap deterministic probability gate — no allocation, no global state.

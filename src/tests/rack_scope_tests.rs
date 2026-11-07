@@ -70,6 +70,23 @@ fn parse_module_kind_handles_fx_aliases() {
 
     assert_eq!(parse_module_kind("chorus"), Some(ModuleKind::FxChorus));
     assert_eq!(parse_module_kind("phaser"), Some(ModuleKind::FxPhaser));
+    assert_eq!(parse_module_kind("flanger"), Some(ModuleKind::FxFlanger));
+    assert_eq!(parse_module_kind("flange"), Some(ModuleKind::FxFlanger));
+    assert_eq!(parse_module_kind("limiter"), Some(ModuleKind::FxLimiter));
+    assert_eq!(parse_module_kind("filter"), Some(ModuleKind::FxFilter));
+    assert_eq!(parse_module_kind("svf"), Some(ModuleKind::FxFilter));
+    assert_eq!(parse_module_kind("comb"), Some(ModuleKind::FxComb));
+    assert_eq!(parse_module_kind("tilt"), Some(ModuleKind::FxTilt));
+    assert_eq!(
+        parse_module_kind("transient"),
+        Some(ModuleKind::FxTransient),
+    );
+    assert_eq!(parse_module_kind("exciter"), Some(ModuleKind::FxExciter));
+    assert_eq!(parse_module_kind("multitap"), Some(ModuleKind::FxMultitap));
+    assert_eq!(parse_module_kind("revdelay"), Some(ModuleKind::FxRevDelay));
+    assert_eq!(parse_module_kind("tapestop"), Some(ModuleKind::FxTapeStop));
+    assert_eq!(parse_module_kind("stutter"), Some(ModuleKind::FxStutter));
+    assert_eq!(parse_module_kind("freeze"), Some(ModuleKind::FxFreeze));
     assert_eq!(parse_module_kind("eq"), Some(ModuleKind::FxEq));
     assert_eq!(
         parse_module_kind("compressor"),
@@ -122,6 +139,18 @@ fn rack_kind_name_matches_fx_catchall_covers_all_fx_kinds() {
         ModuleKind::FxDelay,
         ModuleKind::FxChorus,
         ModuleKind::FxPhaser,
+        ModuleKind::FxFlanger,
+        ModuleKind::FxLimiter,
+        ModuleKind::FxFilter,
+        ModuleKind::FxComb,
+        ModuleKind::FxTilt,
+        ModuleKind::FxTransient,
+        ModuleKind::FxExciter,
+        ModuleKind::FxMultitap,
+        ModuleKind::FxRevDelay,
+        ModuleKind::FxTapeStop,
+        ModuleKind::FxStutter,
+        ModuleKind::FxFreeze,
         ModuleKind::FxRingMod,
         ModuleKind::FxWaveshaper,
         ModuleKind::FxBitcrush,

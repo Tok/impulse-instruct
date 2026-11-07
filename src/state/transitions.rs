@@ -262,6 +262,33 @@ pub fn toggle_bass_accent(state: AppState, step: usize) -> AppState {
     toggle_bass_accent_voice(state, vi, step)
 }
 
+/// Set the per-step accent intensity to an explicit 0..=1 value.
+/// Companion to `toggle_bass_accent_voice` for the per-step velocity-
+/// curve editor, where users want to dial in fractional accents
+/// ("quiet-loud-quiet-medium" grooves) instead of just binary
+/// flips.  Voice 0's `bass_pattern` is kept in sync with
+/// `bass_patterns[0]` so any UI that still reads the legacy slot
+/// stays correct.
+pub fn set_bass_accent_voice(
+    state: AppState,
+    voice_idx: usize,
+    step: usize,
+    value: f32,
+) -> AppState {
+    let mut s = state;
+    let vi = voice_idx.min(crate::state::MAX_BASS_VOICES - 1);
+    let v = value.clamp(0.0, 1.0);
+    if let Some(pat) = s.sequencer.bass_patterns.get_mut(vi)
+        && step < pat.len()
+    {
+        pat[step].accent = v;
+    }
+    if vi == 0 && step < s.sequencer.bass_pattern.len() {
+        s.sequencer.bass_pattern[step].accent = v;
+    }
+    s
+}
+
 /// Toggle slide on a 303 step on a specific voice.
 pub fn toggle_bass_slide_voice(state: AppState, voice_idx: usize, step: usize) -> AppState {
     let mut s = state;
@@ -310,17 +337,51 @@ pub fn set_an1x_step(state: AppState, step: usize, note: u8, active: bool) -> Ap
     s
 }
 
+/// Set a Pluck (Karplus-Strong) sequencer step.
+pub fn set_pluck_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+    let mut s = state;
+    if step < s.sequencer.pluck_pattern.len() {
+        s.sequencer.pluck_pattern[step].active = active;
+        s.sequencer.pluck_pattern[step].note = note;
+    }
+    s
+}
+
+/// Set a Wavetable sequencer step.
+pub fn set_wavetable_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+    let mut s = state;
+    if step < s.sequencer.wavetable_pattern.len() {
+        s.sequencer.wavetable_pattern[step].active = active;
+        s.sequencer.wavetable_pattern[step].note = note;
+    }
+    s
+}
+
+/// Set a Sample-Instrument sequencer step.
+pub fn set_sample_step(state: AppState, step: usize, note: u8, active: bool) -> AppState {
+    let mut s = state;
+    if step < s.sequencer.sample_pattern.len() {
+        s.sequencer.sample_pattern[step].active = active;
+        s.sequencer.sample_pattern[step].note = note;
+    }
+    s
+}
+
 // ─── LLM state update — see llm_apply.rs ─────────────────────────────────────
 
 // ─── Pattern bank & chain ─────────────────────────────────────────────────────
 
-/// Save the live `sequencer` state into `pattern_bank[slot]` (0–7).
+/// Save the live `sequencer` state into `pattern_bank[slot]`.  Slot is
+/// clamped to `0..MAX_BANKS`; the bank vec grows lazily up to `slot+1`
+/// so normal edits only carry the 8 default banks until something
+/// (like a MIDI import) reaches further.
 pub fn bank_write(state: AppState, slot: usize) -> AppState {
     let mut s = state;
-    let slot = slot.min(7);
-    if s.pattern_bank.len() < 8 {
+    let slot = slot.min(super::MAX_BANKS - 1);
+    let needed = (slot + 1).max(super::DEFAULT_BANKS);
+    if s.pattern_bank.len() < needed {
         s.pattern_bank
-            .resize_with(8, super::SequencerState::default);
+            .resize_with(needed, super::SequencerState::default);
     }
     s.pattern_bank[slot] = s.sequencer.clone();
     s
@@ -330,7 +391,7 @@ pub fn bank_write(state: AppState, slot: usize) -> AppState {
 /// `keep_transport` = true preserves BPM/swing/running (used during live performance).
 pub fn bank_load(state: AppState, slot: usize, keep_transport: bool) -> AppState {
     let mut s = state;
-    let slot = slot.min(7);
+    let slot = slot.min(super::MAX_BANKS - 1);
     if let Some(pattern) = s.pattern_bank.get(slot).cloned() {
         let bpm = s.sequencer.bpm;
         let swing = s.sequencer.swing;
@@ -347,17 +408,22 @@ pub fn bank_load(state: AppState, slot: usize, keep_transport: bool) -> AppState
     s
 }
 
-/// Set which bank slot the UI is editing (0–7). Does not affect playback.
+/// Set which bank slot the UI is editing. Does not affect playback.
 pub fn set_pattern_edit(state: AppState, slot: usize) -> AppState {
     let mut s = state;
-    s.pattern_edit = slot.min(7);
+    s.pattern_edit = slot.min(super::MAX_BANKS - 1);
     s
 }
 
-/// Replace the entire chain sequence (entries clamped to 0–7, max 8 slots).
+/// Replace the entire chain sequence.  Entries clamped to `0..MAX_BANKS`;
+/// the chain itself is capped at `MAX_BANKS` entries.
 pub fn set_chain(state: AppState, chain: Vec<usize>) -> AppState {
     let mut s = state;
-    s.chain = chain.into_iter().map(|v| v.min(7)).take(8).collect();
+    s.chain = chain
+        .into_iter()
+        .map(|v| v.min(super::MAX_BANKS - 1))
+        .take(super::MAX_BANKS)
+        .collect();
     s
 }
 
@@ -379,11 +445,11 @@ pub fn swap_chain_slots(state: AppState, a: usize, b: usize) -> AppState {
     s
 }
 
-/// Append one slot index to the chain (noop if already 8 entries).
+/// Append one slot index to the chain (noop if already `MAX_BANKS` entries).
 pub fn chain_push(state: AppState, slot: usize) -> AppState {
     let mut s = state;
-    if s.chain.len() < 8 {
-        s.chain.push(slot.min(7));
+    if s.chain.len() < super::MAX_BANKS {
+        s.chain.push(slot.min(super::MAX_BANKS - 1));
     }
     s
 }
@@ -409,13 +475,16 @@ pub fn set_chain_enabled(state: AppState, enabled: bool) -> AppState {
 /// This is the primary bank-switch operation: always saves before loading so no edits are lost.
 pub fn bank_swap(state: AppState, new_slot: usize) -> AppState {
     let mut s = state;
-    let new_slot = new_slot.min(7);
+    let new_slot = new_slot.min(super::MAX_BANKS - 1);
     if s.pattern_edit == new_slot {
         return s; // already on this slot — save in place
     }
-    if s.pattern_bank.len() < 8 {
+    let needed = (new_slot + 1)
+        .max(s.pattern_edit + 1)
+        .max(super::DEFAULT_BANKS);
+    if s.pattern_bank.len() < needed {
         s.pattern_bank
-            .resize_with(8, super::SequencerState::default);
+            .resize_with(needed, super::SequencerState::default);
     }
     // Save current edits to the previously active slot
     s.pattern_bank[s.pattern_edit] = s.sequencer.clone();
@@ -504,7 +573,7 @@ pub fn spawn_agent(
 }
 
 /// After an agent is spawned, optionally apply a conversation-mode override
-/// and add + wire a NeuTts module if TTS is requested.  Shared by the
+/// and add + wire a Tts module if TTS is requested.  Shared by the
 /// HTTP `/api/rack/agent` handler and the LLM `spawn_agent` action so both
 /// paths produce identical results.  No-op if `agent_id` doesn't exist.
 pub fn apply_agent_mode_and_tts(
@@ -530,7 +599,7 @@ pub fn apply_agent_mode_and_tts(
         }
     }
     if tts {
-        let tts_id = s.rack.add_module(crate::state::ModuleKind::NeuTts);
+        let tts_id = s.rack.add_module(crate::state::ModuleKind::Tts);
         s.tts_modules
             .push(crate::state::TtsModuleState::new(tts_id));
         s.rack.connect_control(agent_id, tts_id);
@@ -550,10 +619,25 @@ pub fn apply_agent_mode_and_tts(
 pub fn format_llm_display(
     param_update: Option<&serde_json::Value>,
     text: &str,
-    conversation_mode: &ConversationMode,
+    _conversation_mode: &ConversationMode,
 ) -> String {
     match param_update {
         Some(update) => {
+            // Producer commentary is on by default: whenever the agent
+            // included a `_comment`, surface it verbatim regardless of
+            // conversation_mode.  The mode only shapes WHAT the model
+            // writes into `_comment` via the system prompt (producer
+            // voice vs DJ hype vs MC slang); it doesn't gate whether we
+            // SHOW a comment the model already produced.  Falls back to
+            // a key list when `_comment` is absent so the log still
+            // carries something the user can read.
+            if let Some(comment) = update
+                .get("_comment")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.trim().is_empty())
+            {
+                return comment.to_string();
+            }
             let keys: Vec<&str> = update
                 .as_object()
                 .map(|o| {
@@ -563,13 +647,7 @@ pub fn format_llm_display(
                         .collect()
                 })
                 .unwrap_or_default();
-            if *conversation_mode == ConversationMode::Off {
-                format!("updated {}", keys.join(", "))
-            } else if let Some(comment) = update.get("_comment").and_then(|v| v.as_str()) {
-                comment.to_string()
-            } else {
-                format!("updated {}", keys.join(", "))
-            }
+            format!("updated {}", keys.join(", "))
         }
         None => text.to_string(),
     }
@@ -651,6 +729,20 @@ pub fn set_chain_slot_repeats(state: AppState, pos: usize, repeats: u8) -> AppSt
     s
 }
 
+/// Set the pattern-morph length for chain slot `pos`.  `0` is the
+/// classic hard cut; `1..=8` schedules a step-by-step crossfade over
+/// that many loop boundaries when the chain advances into this slot.
+/// See `crate::state::morph::ChainMorph`.
+pub fn set_chain_slot_morph(state: AppState, pos: usize, bars: u8) -> AppState {
+    let mut s = state;
+    if pos >= s.chain.len() {
+        return s;
+    }
+    ensure_chain_overrides_len(&mut s, pos + 1);
+    s.chain_overrides[pos].morph_bars = bars.min(8);
+    s
+}
+
 /// Clear every override on the given slot — brings it back to plain
 /// chain-position behaviour (no style swap, no BPM force, one loop).
 pub fn clear_chain_slot_override(state: AppState, pos: usize) -> AppState {
@@ -663,8 +755,8 @@ pub fn clear_chain_slot_override(state: AppState, pos: usize) -> AppState {
 
 /// Replace the whole chain + overrides + enabled state at once.  Used by
 /// the `/api/song` bulk-set endpoint and the Song-mode UI's bulk save.
-/// Chains are clamped to 8 entries / slot indices 0..=7 to match the
-/// existing chain helpers.
+/// Chains are clamped to `MAX_BANKS` entries / slot indices
+/// `0..MAX_BANKS` to match the other chain helpers.
 pub fn set_song(
     state: AppState,
     chain: Vec<usize>,
@@ -672,7 +764,11 @@ pub fn set_song(
     enabled: bool,
 ) -> AppState {
     let mut s = state;
-    s.chain = chain.into_iter().map(|v| v.min(7)).take(8).collect();
+    s.chain = chain
+        .into_iter()
+        .map(|v| v.min(super::MAX_BANKS - 1))
+        .take(super::MAX_BANKS)
+        .collect();
     s.chain_overrides = overrides.into_iter().take(s.chain.len()).collect();
     s.chain_enabled = enabled;
     if !enabled {
@@ -731,6 +827,52 @@ pub fn chain_advance_transport(
         s.swing = prior_swing;
     }
     s.running = prior_running;
+    s
+}
+
+/// Variant of `chain_advance_transport` for MIDI-playback imports: swap
+/// only the bass patterns across bank advances and keep drum / hoover /
+/// an1x / time-sig / preecho state intact from the outgoing sequencer.
+///
+/// Why: a long MIDI import (e.g. Bach III at 53 banks × 4 s/bank) flips
+/// the live sequencer every few seconds.  If a KIT agent writes a drum
+/// pattern during playback, the very next chain-advance wipes it —
+/// because the imported banks have empty drum patterns.  For
+/// "one-shot" imported songs (signalled by `AppState.chain_loop = false`)
+/// we want the agent-authored drums / FX layering on top of the
+/// imported bass score to persist for the whole piece.  User-composed
+/// songs keep the classic "every bank replaces everything" behaviour.
+pub fn chain_advance_preserve_non_bass(
+    loaded: crate::state::SequencerState,
+    prior: &crate::state::SequencerState,
+    prior_running: bool,
+) -> crate::state::SequencerState {
+    let mut s = loaded;
+    // BPM and swing always inherit from prior in preserve mode.  The
+    // importer stores the MIDI file's tempo in every bank (with
+    // pattern_bpm_apply=true), but we deliberately ignore that here
+    // so a scripted `set_bpm` (e.g. the Bach scenario halfstepping
+    // from 240 to 120) survives every one of the ~50 bank swaps.
+    // Per-bank tempo variation is a user-composed-song concern and
+    // lives on the loop=true path via `chain_advance_transport`.
+    s.bpm = prior.bpm;
+    s.swing = prior.swing;
+    s.running = prior_running;
+    // Non-bass state flows across the bank boundary unchanged.  We
+    // take ownership of the clones rather than borrow so the result
+    // is a standalone SequencerState — matches the sibling function's
+    // contract.
+    s.drum_patterns = prior.drum_patterns.clone();
+    s.drum_steps = prior.drum_steps.clone();
+    s.hoover_pattern = prior.hoover_pattern.clone();
+    s.hoover_steps = prior.hoover_steps;
+    s.an1x_pattern = prior.an1x_pattern.clone();
+    s.an1x_steps = prior.an1x_steps;
+    s.muted_drums = prior.muted_drums.clone();
+    s.soloed_drums = prior.soloed_drums.clone();
+    s.preecho = prior.preecho.clone();
+    s.time_sig_num = prior.time_sig_num;
+    s.amen_slice_order = prior.amen_slice_order.clone();
     s
 }
 

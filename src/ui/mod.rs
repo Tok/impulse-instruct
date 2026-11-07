@@ -6,7 +6,8 @@ mod app_update;
 mod flip;
 pub mod fx_dir;
 pub(crate) mod header;
-mod header_menu;
+pub(crate) mod header_menu;
+mod link_handler;
 mod llm_drain;
 mod llm_log_color;
 mod llm_strip;
@@ -16,28 +17,41 @@ pub mod module_card_back;
 pub mod module_card_mod;
 mod note;
 pub mod panels;
+pub mod patch_morph_handler;
 mod rack_ai;
 pub mod rack_cables;
 pub mod rack_canvas;
 mod rack_canvas_menus;
 pub(crate) mod rack_content;
+pub(crate) mod rack_content_conv_reverb;
+pub(crate) mod rack_content_drag;
+pub(crate) mod rack_content_fx_extras;
+pub(crate) mod rack_content_fx_lfo;
 pub(crate) mod rack_content_pad;
+pub(crate) mod rack_content_param_eq;
+pub(crate) mod rack_content_pitch_shift;
+pub(crate) mod rack_content_util;
 mod rack_grid;
+pub(crate) mod rack_minimap;
 mod rack_scroll;
 mod rack_toolbar;
-mod scope_footer;
+pub(crate) mod scope_footer;
+mod spectrum_header;
 pub mod style_rack;
 pub mod theme;
 mod ui_helpers;
-mod util;
+pub(crate) mod util;
 pub mod widgets;
 pub(crate) use note::{ansi_colorize_notes, note_freq_label, note_name};
 pub(crate) use util::{scan_models, webbrowser_open};
 mod prefs_controls;
 mod windows;
 mod windows_about;
+mod windows_lane_diff;
+mod windows_patch_morph;
 mod windows_prefs;
 mod windows_sysinfo;
+mod windows_undo_timeline;
 mod wizard;
 
 /// Convert a dot-path + float value into a nested JSON object.
@@ -93,17 +107,18 @@ impl MidiClockTracker {
         let now = std::time::Instant::now();
         if let Some(last) = self.last {
             let secs = now.duration_since(last).as_secs_f64();
-            // 10ms = 300 BPM, 300ms ≈ 8 BPM — ignore outliers outside this range.
-            if secs > 0.01 && secs < 0.30 {
+            // Outliers (doubled / dropped pulse) get discarded by the
+            // pure helper — see midi::is_valid_clock_interval.
+            if crate::midi::is_valid_clock_interval(secs) {
                 self.intervals[self.head] = secs;
                 self.head = (self.head + 1) % 8;
                 if self.count < 8 {
                     self.count += 1;
                 }
                 let avg = self.intervals[..self.count].iter().sum::<f64>() / self.count as f64;
-                let bpm = 60.0 / (avg * crate::midi::MIDI_CLOCK_PPQN);
+                let bpm = crate::midi::clock_interval_to_bpm(avg);
                 self.last = Some(now);
-                return Some(bpm as f32);
+                return Some(bpm);
             }
         }
         self.last = Some(now);
@@ -126,6 +141,17 @@ use undo::StateHistory;
 pub(crate) const MELODIC_LOG_CAP: usize = 256;
 pub(crate) const DRUM_LOG_CAP: usize = 512;
 
+/// Which melodic voice fired a given log entry.  Bass tracks the per-voice
+/// index so the heatmap can split bass1 / bass2 / etc., while the other
+/// voices are singletons.  Variants kept narrow so the per-entry footprint
+/// stays at one byte.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MelodicVoice {
+    Bass(u8),
+    An1x,
+    Hoover,
+}
+
 /// One entry in the melodic-note history.  Recorded on each sequencer
 /// step transition by snapshotting active notes from every melodic
 /// pattern, so the event stream can render past notes from a frozen log
@@ -142,6 +168,10 @@ pub struct MelodicLogEntry {
     pub accent: f32,
     /// Slide intensity 0..=1 — renders proportionally longer trail.
     pub slide: f32,
+    /// Source voice — used by the heatmap overlay to bin per-voice
+    /// activity.  Existing dot rendering ignores this (every melodic
+    /// entry renders identically).
+    pub voice: MelodicVoice,
 }
 
 /// One entry in the drum-hit history — analogous to `MelodicLogEntry`
@@ -230,8 +260,76 @@ pub struct ImpulseApp {
     capture_rx: rtrb::Consumer<f32>,
     dsp_load_rx: rtrb::Consumer<f32>,
     dsp_load_buf: Vec<f32>,
+    /// Live SampleInstrument polyphony readout (0..=POLY_VOICES).
+    /// Updated once per audio callback by the engine; the panel reads
+    /// it on paint to drive the dot meter.
+    pub(crate) sample_instrument_poly: Arc<std::sync::atomic::AtomicU8>,
+    /// Per-voice peak-decay envelope levels for the `VoiceMeterStrip`
+    /// viz module.  Updated once per audio callback by the engine; the
+    /// panel reads atomically when painting.
+    pub(crate) voice_meters: Arc<crate::audio::voice_meters::VoiceLevels>,
+    /// Momentary gain-reduction snapshot for the `GrHistory` viz.
+    /// Audio thread publishes once per callback; the panel reads at
+    /// each repaint and appends to its own scrolling ring buffer.
+    pub(crate) gr_levels: Arc<crate::audio::gr_levels::GrLevels>,
+    /// Scrolling history buffer for the `GrHistory` viz — appended
+    /// every UI repaint by sampling `gr_levels`.  Stores linear gain
+    /// ratios; UI converts to dB at paint time.  Sized for ~8 sec at
+    /// 60 fps.
+    pub(crate) gr_history: std::collections::VecDeque<f32>,
     pub(crate) amen_ui: panels::amen_viz::AmenUiState,
-    pub(crate) neutts_online: bool,
+    /// Most recently loaded IR path for the convolution reverb.  The
+    /// main update tick watches `fx.conv_reverb_ir_path` and reloads when
+    /// it diverges from this — covers the API path that writes the
+    /// string without sending a LoadImpulseResponse command directly.
+    pub(crate) last_conv_reverb_ir_path: String,
+    /// Same poll-cache pattern for the wavetable voice's `wave_path`
+    /// — surfaces `/api/wavetable` writes into the audio thread on
+    /// the next frame without coupling the API thread to the audio
+    /// command queue directly.
+    pub(crate) last_wavetable_path: String,
+    pub(crate) last_sample_instrument_path: String,
+    /// SampleInstrument runtime regions cached on the UI side for the
+    /// zone-map visualizer.  Mirrors what the audio thread holds —
+    /// populated when an SFZ loads and cleared when a single WAV is
+    /// loaded (single-WAV mode shows the waveform thumbnail instead).
+    /// Cheap copy because each entry's `samples` is an `Arc`.
+    pub(crate) sample_sfz_regions: Vec<crate::audio::dsp::sample_instrument::SfzRegionRuntime>,
+    /// Index into `sample_sfz_regions` for the currently selected
+    /// SFZ region — drives the per-zone parameter inspector beneath
+    /// the zone map.  UI-only state (not persisted to AppState).
+    /// Cleared when a fresh SFZ loads or a single-WAV swap empties
+    /// the region list.
+    pub(crate) sample_selected_region: Option<usize>,
+    /// Preset list parsed from the loaded `.sf2` SoundFont.  Empty
+    /// for `.sfz` / single-WAV / no-load — the UI hides the picker
+    /// when this is empty.  V2 SF2 follow-up.
+    pub(crate) sample_sf2_presets: Vec<crate::audio::sf2_loader::Sf2PresetInfo>,
+    /// Currently-selected preset index into `sample_sf2_presets`.
+    /// Defaults to 0 (the V1 SF2 behaviour); changing it re-parses
+    /// the bank for the chosen preset and pushes the new region
+    /// list to the audio thread.
+    pub(crate) sample_sf2_preset_idx: usize,
+    /// Ableton Link bidirectional tempo sync.  Disabled by default;
+    /// the user toggles via Preferences → Sync.  When enabled +
+    /// built with the `link` feature, `update()` polls every frame
+    /// to keep `state.sequencer.bpm` aligned with the network and
+    /// pushes local edits back to peers.
+    pub(crate) link_sync: crate::sync::LinkSync,
+    /// Last BPM written to AppState by the Link pull — used to
+    /// distinguish "user edited bpm" (push to network) from "network
+    /// pulled the bpm" (don't push, would create a feedback loop).
+    pub(crate) last_link_bpm: f32,
+    /// Wall-clock instant of the last drift re-snap (or session
+    /// start as a sentinel).  Rate-limits the continuous drift
+    /// correction so a thrashing source can't cause a re-snap on
+    /// every UI tick.  None until the first drift check fires.
+    pub(crate) last_link_drift_resnap: Option<std::time::Instant>,
+    /// Min/max waveform thumbnail for the SampleInstrument's loaded
+    /// single-WAV buffer.  Cached on path so the per-frame paint just
+    /// reads the vec.  Empty / stale-path → rebuilt on next paint.
+    pub(crate) sample_wave_cache: (String, Vec<(f32, f32)>),
+    pub(crate) tts_online: bool,
     pub(crate) granular_capture_rx: rtrb::Consumer<f32>,
     pub(crate) granular_tap: Vec<f32>, // ring buffer, ~3s master output for CAPTURE
     pub(crate) granular_tap_head: usize,
@@ -243,6 +341,15 @@ pub struct ImpulseApp {
     midi_rx: Receiver<MidiEvent>,
     midi_port: Option<String>,
     pressed_notes: std::collections::HashSet<u8>,
+    /// Transient target for "learn next CC".  When `Some(path)`, the
+    /// next incoming CC binds itself to that dot-path in
+    /// `UiPrefs.midi_cc_bindings` and clears the field.  Cleared on
+    /// app start; never persisted.  See Preferences → Controls → MIDI.
+    pub(crate) midi_learn_target: Option<String>,
+    /// Text-input buffer for the "Add MIDI binding" form in
+    /// Preferences → Controls.  Holds the dot-path the user is
+    /// typing before they click "Learn next CC".
+    pub(crate) midi_learn_input: String,
     piano_mouse_note: Option<u8>, // mouse-held note, separate from MIDI
     prompt_input: String,
     log_text: String,
@@ -267,6 +374,12 @@ pub struct ImpulseApp {
     stereo_buf: Vec<f32>,
     pub(crate) stereo_corr: f32,
     pub(crate) stereo_balance: f32,
+    /// Rolling FFT history for the `Spectrogram` viz module.  One entry
+    /// per UI update tick; capped at `SPECTROGRAM_HISTORY_LEN` frames
+    /// (≈5 s of scroll at typical UI rates).
+    pub(crate) spectrogram_history: std::collections::VecDeque<Vec<f32>>,
+    /// LUFS meter — driven from the master scope buffer per UI tick.
+    pub(crate) lufs_meter: crate::audio::analysis::LufsMeter,
     last_thinking: Option<String>,
     seq_page: usize,
     pub(crate) seq_prefix_width: f32,
@@ -295,6 +408,30 @@ pub struct ImpulseApp {
     pub(crate) flip_to_back_count: u32, // flips-to-back count, cycles scroll target
     pub(crate) ctrl_locked: bool,
     pub(crate) show_shortcuts: bool,
+    /// Toggle for the Lane Diff window — shows the per-lane writeback
+    /// log captured by the pipeline.  Off by default; opened from the
+    /// header's view menu.
+    pub(crate) show_lane_diff: bool,
+    /// Toggle for the Undo Timeline window — slider over the
+    /// `StateHistory` past/future stacks for visual A/B comparison
+    /// of recent state changes.  Off by default; opened from the
+    /// header's view menu.
+    pub(crate) show_undo_timeline: bool,
+    /// Toggle for the AI patch-morph dialog.  Modal — the user types a
+    /// target prompt and picks bars/calls; submit configures
+    /// `state.patch_morph` (same path as `POST /api/morph`).  Off by
+    /// default; opened from the Edit menu.
+    pub(crate) show_patch_morph: bool,
+    /// Buffered prompt for the AI patch-morph dialog.  Lives on the
+    /// app instead of in state so an aborted dialog leaves no residue.
+    pub(crate) patch_morph_input_prompt: String,
+    /// Buffered bar-count for the AI patch-morph dialog.  Range 1–64
+    /// (matches the API clamp).  Default 8 — one nudge per bar.
+    pub(crate) patch_morph_input_bars: u32,
+    /// Buffered call-count for the AI patch-morph dialog.  Range
+    /// 1..=bars*4 (the API soft cap).  Default tracks `bars` so users
+    /// who don't change it land on one nudge per bar.
+    pub(crate) patch_morph_input_calls: u32,
     pub(crate) add_menu_zone: Option<crate::state::Zone>,
     // Module being dragged by its title bar (id + current pointer position).
     pub(crate) module_drag: Option<rack_canvas::ModuleDrag>,
@@ -335,6 +472,9 @@ pub struct AudioChannels {
     pub stereo_rx: rtrb::Consumer<f32>,
     pub granular_capture_rx: rtrb::Consumer<f32>,
     pub tts_tx: crate::audio::TtsSink,
+    pub sample_instrument_poly: Arc<std::sync::atomic::AtomicU8>,
+    pub voice_meters: Arc<crate::audio::voice_meters::VoiceLevels>,
+    pub gr_levels: Arc<crate::audio::gr_levels::GrLevels>,
 }
 
 impl ImpulseApp {
@@ -420,8 +560,23 @@ impl ImpulseApp {
             capture_rx: audio.capture_rx,
             dsp_load_rx: audio.dsp_load_rx,
             dsp_load_buf: Vec::with_capacity(64),
+            sample_instrument_poly: audio.sample_instrument_poly,
+            voice_meters: audio.voice_meters,
+            gr_levels: audio.gr_levels,
+            gr_history: std::collections::VecDeque::with_capacity(512),
             amen_ui: Default::default(),
-            neutts_online: false,
+            last_conv_reverb_ir_path: String::new(),
+            last_wavetable_path: String::new(),
+            last_sample_instrument_path: String::new(),
+            sample_sfz_regions: Vec::new(),
+            sample_selected_region: None,
+            sample_sf2_presets: Vec::new(),
+            sample_sf2_preset_idx: 0,
+            sample_wave_cache: (String::new(), Vec::new()),
+            link_sync: crate::sync::LinkSync::new(120.0),
+            last_link_bpm: 0.0,
+            last_link_drift_resnap: None,
+            tts_online: false,
             granular_capture_rx: audio.granular_capture_rx,
             granular_tap: vec![0.0; crate::audio::SAMPLE_RATE_HZ as usize * 3], // 3s ring buffer
             granular_tap_head: 0,
@@ -433,6 +588,8 @@ impl ImpulseApp {
             midi_rx,
             midi_port,
             pressed_notes: std::collections::HashSet::new(),
+            midi_learn_target: None,
+            midi_learn_input: String::new(),
             piano_mouse_note: None,
             prompt_input: String::new(),
             log_text,
@@ -454,6 +611,10 @@ impl ImpulseApp {
             stereo_buf: Vec::with_capacity(4096),
             stereo_corr: 0.0,
             stereo_balance: 0.0,
+            spectrogram_history: std::collections::VecDeque::with_capacity(
+                crate::audio::analysis::SPECTROGRAM_HISTORY_LEN,
+            ),
+            lufs_meter: crate::audio::analysis::LufsMeter::new(crate::audio::SAMPLE_RATE),
             last_thinking: None,
             seq_page: 0,
             seq_prefix_width: 0.0,
@@ -493,6 +654,12 @@ impl ImpulseApp {
             flip_to_back_count: 0,
             ctrl_locked: false,
             show_shortcuts: false,
+            show_lane_diff: false,
+            show_undo_timeline: false,
+            show_patch_morph: false,
+            patch_morph_input_prompt: String::new(),
+            patch_morph_input_bars: 8,
+            patch_morph_input_calls: 8,
             add_menu_zone: None,
             module_drag: None,
             session_dirty: false,

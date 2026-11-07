@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─── Jungle Demo ────────────────────────────────────────────────────────────
-# 165 BPM, chopped amen break, sub bass, NeuTTS MC shouting selector lines.
+# 165 BPM, chopped amen break, sub bass, Qwen3-TTS MC shouting selector lines.
 
 scene_count 7
 
@@ -60,7 +60,7 @@ scene "Selector on the mic"
 
 look_at console
 
-say "The SELECTA agent runs in MC mode with NeuTTS. Classic jungle calls."
+say "The SELECTA agent runs in MC mode with Qwen TTS. Classic jungle calls."
 
 ask "shout 'jungle selector massive' then 'rewind'" SELECTA
 wait_seconds 6

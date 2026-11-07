@@ -260,11 +260,15 @@ impl LaneKind {
                 step. Do not write other voices."
                 .into(),
             LaneKind::Fx => "Write ONLY the `fx` object — reverb / delay / distortion / \
-                chorus / phaser / ring_mod / bitcrush / master_pitch. Defaults for a subtle jam:\n\
+                chorus / phaser / flanger / filter / comb / tilt / transient / exciter / limiter / \
+                multitap / revdelay / tapestop / stutter / freeze / \
+                ring_mod / bitcrush / master_pitch. Defaults for a subtle jam:\n\
                 reverb_mix 0.10-0.25, reverb_size 0.4-0.6\n\
                 delay_mix 0.06-0.18, delay_feedback 0.3-0.5\n\
                 chorus_mix 0.10-0.25 (width / stereo ensemble)\n\
                 phaser_mix 0.15-0.45, phaser_rate 0.1-0.3, phaser_depth 0.4-0.7\n\
+                flanger_mix 0.15-0.40, flanger_rate 0.1-0.3, flanger_depth 0.4-0.7, \
+                flanger_feedback 0.55-0.75 (light positive feedback for that jet-airliner sweep)\n\
                 ring_mod_mix 0.05-0.2, ring_mod_freq 0.1-0.5 (inharmonic clangs — use sparingly)\n\
                 distortion_drive + _mix only if style asks (gabber / hard techno).\n\
                 Heavier values OK when the user prompt or style explicitly calls for it. \
@@ -373,18 +377,26 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
         String::new()
     };
 
+    // Optional in-context few-shot examples loaded from
+    // `examples/<lane_slug>.json` — silently absent when the file
+    // doesn't exist.  Lets users steer a lane's style without
+    // touching the system prompt.
+    let examples = crate::llm::few_shot::load_examples_for_lane(lane);
+    let examples_block = crate::llm::few_shot::render_examples_section(&examples);
+
     format!(
         "You are the {lane_label} writer inside Impulse Instruct. Output ONLY valid JSON \
          matching the schema. No prose.\n\
          \n\
          STATE: {state_header}\n\
          LOCKED (never overwrite): {locked_str}\n\
-         {style_hint}{coverage}{harmony_block}{bass_context}\n\
+         {style_hint}{coverage}{harmony_block}{bass_context}{examples_block}\n\
          TASK: {task}\n\
          \n\
          The style above is USER-FIXED — if the user prompt says \"pick a style\" or \
-         similar, ignore that and write within the style listed above. Emit ONLY the \
-         required fields; skip `_thinking` / `_comment`. Prefer index lists \
+         similar, ignore that and write within the style listed above. Emit the \
+         required fields plus a one-sentence `_comment` describing what you changed \
+         and why (producer voice, ≤ 80 chars). Skip `_thinking`. Prefer index lists \
          (`[0, 4, 8]`) over inline bool arrays — 4× shorter.\n\
          Never emit an empty array like `[]` for a required pattern field — that \
          silences the voice. If you don't have ideas, reuse the example rhythm above.",
@@ -395,6 +407,7 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
         coverage = coverage,
         harmony_block = harmony_block,
         bass_context = bass_context,
+        examples_block = examples_block,
         task = lane.task_description(),
     )
 }
@@ -649,6 +662,63 @@ pub fn lane_schema(lane: LaneKind) -> serde_json::Value {
                         "phaser_mix":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "phaser_rate":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "phaser_depth":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "flanger_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "flanger_rate":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "flanger_depth":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "flanger_feedback": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "limiter_threshold":{ "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "limiter_ceiling":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "limiter_release":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "limiter_lookahead":{ "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "svf_cutoff":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "svf_resonance":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "svf_drive":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "svf_mix":          { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "svf_mode":         { "type": "integer", "minimum": 0, "maximum": 3 },
+                        "comb_pitch":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "comb_feedback":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "comb_damp":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "comb_mix":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "tilt_tilt":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "tilt_pivot":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "tilt_mix":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "transient_attack": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "transient_sustain":{ "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "transient_mix":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "exciter_amount":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "exciter_freq":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "exciter_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "multitap_time":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "multitap_spread":  { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "multitap_feedback":{ "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "multitap_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "revdelay_time":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "revdelay_feedback":{ "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "revdelay_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "tapestop_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "tapestop_time":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "stutter_rate":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "stutter_slice":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "stutter_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "freeze_mix":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "compressor_sidechain": { "type": "boolean" },
+                        "gate_threshold":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "gate_attack":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "gate_release":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "gate_depth":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "gate_mix":         { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "vocoder_bands":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "vocoder_carrier_mix": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "vocoder_sense":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "vocoder_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "widen_haas":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "widen_side":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "widen_mix":        { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "param_eq_ms_mode": { "type": "boolean" },
+                        "freq_shift_amount":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "freq_shift_feedback": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "freq_shift_mix":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+                        "conv_reverb_cabinet":{ "type": "boolean" },
                         "ring_mod_mix":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "ring_mod_freq":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
                         "bitcrush_bits":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },

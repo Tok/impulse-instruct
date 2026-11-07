@@ -8,7 +8,9 @@
 //   • `spectrum_temperature` — magnitude-weighted warm/cold scalar
 //     (drives the UI's Huth color tint).
 
-use crate::audio::analysis::stereo_correlation;
+use crate::audio::analysis::{
+    analyse_audio, chroma_from_spectrum, detect_pitch_hz, stereo_correlation,
+};
 use crate::audio::spectrum::{log_bands, spectrum_temperature};
 
 // ─── stereo_correlation ─────────────────────────────────────────────────────
@@ -207,4 +209,127 @@ fn spectrum_temperature_stays_in_unit_range() {
         (-1.0..=1.0).contains(&t),
         "output must be in [-1, 1] (matches semi_temps range), got {t}",
     );
+}
+
+// ─── analyse_audio ──────────────────────────────────────────────────────────
+
+/// Silence in → every band at the dB floor (-96).  Default `peak_db`
+/// is the same floor, so every analysis field on silent input has to
+/// land at the floor exactly.
+#[test]
+fn analyse_audio_silence_returns_floor_everywhere() {
+    let silence = vec![0.0_f32; 4096];
+    let a = analyse_audio(&silence, 48_000.0);
+    assert_eq!(a.sub_rms_db, -96.0);
+    assert_eq!(a.low_rms_db, -96.0);
+    assert_eq!(a.mid_rms_db, -96.0);
+    assert_eq!(a.high_rms_db, -96.0);
+    assert_eq!(a.peak_db, -96.0);
+}
+
+/// Empty input → default analysis (no panic, no NaN).  Guards against
+/// a divide-by-zero refactor that would crash the LLM analysis path.
+#[test]
+fn analyse_audio_empty_returns_default() {
+    let a = analyse_audio(&[], 48_000.0);
+    assert_eq!(a.peak_db, -96.0);
+    assert_eq!(a.duration_secs, 0.0);
+    assert_eq!(a.crest_db, 0.0);
+}
+
+/// 60 Hz sine should land most of its energy in the sub band
+/// (<80 Hz) — pin the band split so a future filter retune doesn't
+/// silently shift sub/low boundary content.
+#[test]
+fn analyse_audio_sub_band_captures_60hz_sine() {
+    let sr = 48_000.0_f32;
+    let buf: Vec<f32> = (0..sr as usize)
+        .map(|i| (std::f32::consts::TAU * 60.0 * i as f32 / sr).sin() * 0.5)
+        .collect();
+    let a = analyse_audio(&buf, sr);
+    // Sub band should dominate.  Tolerate the broad-LP filter's
+    // skirt: high band has to be at least 6 dB lower than sub.
+    assert!(
+        a.sub_rms_db > a.high_rms_db + 6.0,
+        "sub_rms {} should dominate high_rms {} for a 60 Hz sine",
+        a.sub_rms_db,
+        a.high_rms_db
+    );
+}
+
+// ─── detect_pitch_hz ───────────────────────────────────────────────────────
+
+/// Pure 220 Hz (A3) sine should detect within ±1 Hz.  The autocorr
+/// pitch tracker is the UI's "Listen" tuner — pin the accuracy
+/// floor so a future smoothing change doesn't silently regress.
+#[test]
+fn detect_pitch_hz_identifies_pure_sine() {
+    let sr = 48_000.0_f32;
+    let freq = 220.0_f32;
+    let buf: Vec<f32> = (0..sr as usize)
+        .map(|i| (std::f32::consts::TAU * freq * i as f32 / sr).sin() * 0.5)
+        .collect();
+    let (hz, _conf) = detect_pitch_hz(&buf, sr).expect("pitch detect should succeed");
+    assert!(
+        (hz - freq).abs() < 1.0,
+        "detected {hz} Hz, expected ~{freq} Hz"
+    );
+}
+
+/// Silence-gated input → None.  RMS is below the 0.005 cut-off so
+/// the pitch tracker bails before running the autocorrelation.
+#[test]
+fn detect_pitch_hz_silence_returns_none() {
+    let buf = vec![0.0_f32; 4096];
+    assert!(detect_pitch_hz(&buf, 48_000.0).is_none());
+}
+
+/// Buffer too short for the search range → None.  Guards against a
+/// panic from the autocorr `buf[i + tau]` indexing path on tiny
+/// inputs (notably the mock-trigger spec calls before audio fills
+/// the scope ring).
+#[test]
+fn detect_pitch_hz_short_buffer_returns_none() {
+    let buf = vec![0.5_f32; 256];
+    assert!(detect_pitch_hz(&buf, 48_000.0).is_none());
+}
+
+// ─── chroma_from_spectrum ───────────────────────────────────────────────────
+
+/// Bin centred exactly on A4 (440 Hz, MIDI 69, pitch class 9) puts
+/// all its energy into the A class.  Use `bin_hz = 5.0` so bin 88
+/// lands at 440 Hz exactly — at the typical FFT resolution
+/// (~46 Hz/bin) the closest bin to 440 falls 18 Hz off-centre and
+/// the chroma's fractional-MIDI splitter spreads the contribution
+/// across G# and A as designed.  This test pins the no-fractional-
+/// split case.
+#[test]
+fn chroma_from_spectrum_a_class_dominates_for_440hz() {
+    let bin_hz = 5.0_f32;
+    let mut mags = vec![-96.0_f32; 200];
+    let a4_bin = 88; // 88 × 5 = 440 Hz
+    mags[a4_bin] = -10.0;
+    let chroma = chroma_from_spectrum(&mags, bin_hz);
+    // A = pitch class 9.  Should be the strongest entry.
+    let max_idx = chroma
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+        .map(|(i, _)| i)
+        .unwrap();
+    assert_eq!(max_idx, 9, "chroma {chroma:?}");
+    // Strongest entry normalised to 1.0.
+    assert!((chroma[9] - 1.0).abs() < 1e-3);
+}
+
+/// All-silent magnitudes → all-zero chroma.  Pin the silence
+/// behaviour so the chord detector that consumes chroma can rely
+/// on a clean zero-vector signal.
+#[test]
+fn chroma_from_spectrum_silent_input_is_all_zero() {
+    let mags = vec![-96.0_f32; 512];
+    let chroma = chroma_from_spectrum(&mags, 48_000.0_f32 / 1024.0);
+    for v in chroma {
+        assert_eq!(v, 0.0);
+    }
 }

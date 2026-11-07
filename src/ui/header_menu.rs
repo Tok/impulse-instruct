@@ -4,16 +4,80 @@
 // so the main header module can stay focused on the transport strip
 // and log/scope panel.
 
-use egui::{Frame, TopBottomPanel};
+use egui::Frame;
 use std::path::{Path, PathBuf};
 
 use crate::export::{export_mp3, export_stems, export_wav};
+use crate::midi::{MidiImport, import_midi_file, save_midi_export_to};
 use crate::state::{load_project, save_project};
 use crate::ui::header::list_recent_projects_in;
 use crate::ui::{ImpulseApp, theme};
 
 fn list_recent_projects() -> Vec<PathBuf> {
     list_recent_projects_in(Path::new("."))
+}
+
+/// Process-global executor for `rfd::AsyncFileDialog` calls.
+///
+/// History: rfd ≤ 0.14 drove the XDG portal through ashpd/zbus, which
+/// needed a long-lived multi-thread tokio runtime (a per-call runtime
+/// hung the second picker invocation; the UI thread has no runtime, so
+/// sync `pick_file()` panicked).  rfd 0.17 ships its own portal client
+/// with no tokio dependency, so any executor works now — this runtime is
+/// kept because it is proven on the desktop and costs one idle thread.
+fn picker_runtime() -> &'static tokio::runtime::Runtime {
+    use std::sync::OnceLock;
+    static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    RT.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .thread_name("rfd-picker")
+            .build()
+            .expect("failed to build rfd picker tokio runtime")
+    })
+}
+
+/// Open a native file-picker using `rfd`'s xdg-portal backend, driven
+/// on the shared picker runtime (see `picker_runtime` above).
+///
+/// `block_on` here blocks the UI until the user picks a file or cancels —
+/// matches the behaviour of `rfd::FileDialog::pick_file()` that the rest
+/// of the menu already depends on.  A picker handle on the worker
+/// thread closes the dialog automatically if the future is dropped.
+pub(crate) fn pick_file_via_portal(filter_name: &str, extensions: &[&str]) -> Option<PathBuf> {
+    let filter_name = filter_name.to_string();
+    let extensions: Vec<String> = extensions.iter().map(|s| s.to_string()).collect();
+    picker_runtime().block_on(async move {
+        let exts: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+        rfd::AsyncFileDialog::new()
+            .add_filter(&filter_name, &exts)
+            .set_directory(".")
+            .pick_file()
+            .await
+            .map(|h| h.path().to_path_buf())
+    })
+}
+
+/// Save-file counterpart to `pick_file_via_portal`.
+fn save_file_via_portal(
+    filter_name: &str,
+    extensions: &[&str],
+    default_name: &str,
+) -> Option<PathBuf> {
+    let filter_name = filter_name.to_string();
+    let extensions: Vec<String> = extensions.iter().map(|s| s.to_string()).collect();
+    let default_name = default_name.to_string();
+    picker_runtime().block_on(async move {
+        let exts: Vec<&str> = extensions.iter().map(|s| s.as_str()).collect();
+        rfd::AsyncFileDialog::new()
+            .add_filter(&filter_name, &exts)
+            .set_directory(".")
+            .set_file_name(&default_name)
+            .save_file()
+            .await
+            .map(|h| h.path().to_path_buf())
+    })
 }
 
 impl ImpulseApp {
@@ -37,15 +101,15 @@ impl ImpulseApp {
         }
     }
 
-    pub(super) fn draw_menu_bar(&mut self, ctx: &egui::Context) {
-        TopBottomPanel::top("menu_bar")
+    pub(super) fn draw_menu_bar(&mut self, root: &mut egui::Ui) {
+        egui::Panel::top("menu_bar")
             .frame(
-                Frame::none()
+                Frame::NONE
                     .fill(theme::VOID)
-                    .inner_margin(egui::Margin::symmetric(4.0, 2.0)),
+                    .inner_margin(egui::Margin::symmetric(4, 2)),
             )
-            .show(ctx, |ui| {
-                egui::menu::bar(ui, |ui| {
+            .show(root, |ui| {
+                egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button(egui::RichText::new("File").monospace().size(10.0), |ui| {
                         if ui
                             .button(egui::RichText::new("New project").monospace().size(10.0))
@@ -57,7 +121,7 @@ impl ImpulseApp {
                             // Snapshot keeps current rack/style intact until
                             // the user actually applies a preset, mirroring
                             // wizard "resume" behaviour.
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("Open project…").monospace().size(10.0))
@@ -74,7 +138,7 @@ impl ImpulseApp {
                             if let Some(path) = picked {
                                 self.load_project_from_path(&path);
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(
@@ -95,7 +159,7 @@ impl ImpulseApp {
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         // Recent projects sub-menu — populated from the cwd
                         // scan so each entry round-trips to the same load
@@ -134,7 +198,7 @@ impl ImpulseApp {
                                 }
                                 if let Some(p) = pick {
                                     self.load_project_from_path(&p);
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             },
                         );
@@ -155,7 +219,7 @@ impl ImpulseApp {
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
 
                         ui.separator();
@@ -178,7 +242,7 @@ impl ImpulseApp {
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
 
                         if ui
@@ -199,7 +263,7 @@ impl ImpulseApp {
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
 
                         if ui
@@ -234,7 +298,67 @@ impl ImpulseApp {
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
+                        }
+
+                        ui.separator();
+
+                        if ui
+                            .button(egui::RichText::new("Import MIDI…").monospace().size(10.0))
+                            .clicked()
+                        {
+                            let picked = pick_file_via_portal("MIDI", &["mid", "midi"]);
+                            if let Some(path) = picked {
+                                let current = self.state.read().clone();
+                                match import_midi_file(current, &path, &MidiImport::default()) {
+                                    Ok((new_state, summary)) => {
+                                        *self.state.write() = new_state;
+                                        self.push_audio_params();
+                                        let trunc = if summary.was_truncated { " (truncated)" } else { "" };
+                                        let msg = format!(
+                                            "[ imported ← {} — {} BPM, /{} grid, {} banks, v0={} v1={}{} ]",
+                                            path.display(),
+                                            summary.bpm.round() as i32,
+                                            summary.step_division,
+                                            summary.banks_used,
+                                            summary.notes_voice_0,
+                                            summary.notes_voice_1,
+                                            trunc,
+                                        );
+                                        log::info!("{}", msg);
+                                        self.log_text.push_str(&format!("{}\n", msg));
+                                    }
+                                    Err(e) => {
+                                        let msg = format!("[ MIDI import failed: {} ]", e);
+                                        log::error!("{}", msg);
+                                        self.log_text.push_str(&format!("{}\n", msg));
+                                    }
+                                }
+                            }
+                            ui.close();
+                        }
+
+                        if ui
+                            .button(egui::RichText::new("Export MIDI…").monospace().size(10.0))
+                            .clicked()
+                        {
+                            let picked = save_file_via_portal("MIDI", &["mid"], "pattern.mid");
+                            if let Some(path) = picked {
+                                let snapshot = self.state.read().clone();
+                                match save_midi_export_to(&snapshot.sequencer, Some(&path)) {
+                                    Ok(p) => {
+                                        let msg = format!("[ midi → {} ]", p.display());
+                                        log::info!("{}", msg);
+                                        self.log_text.push_str(&format!("{}\n", msg));
+                                    }
+                                    Err(e) => {
+                                        let msg = format!("[ midi export failed: {} ]", e);
+                                        log::error!("{}", msg);
+                                        self.log_text.push_str(&format!("{}\n", msg));
+                                    }
+                                }
+                            }
+                            ui.close();
                         }
 
                         ui.separator();
@@ -243,7 +367,7 @@ impl ImpulseApp {
                             .button(egui::RichText::new("Quit").monospace().size(10.0))
                             .clicked()
                         {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                     });
 
@@ -264,7 +388,7 @@ impl ImpulseApp {
                                 *self.state.write() = prev;
                                 self.push_audio_params();
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .add_enabled(
@@ -280,7 +404,65 @@ impl ImpulseApp {
                                 *self.state.write() = next;
                                 self.push_audio_params();
                             }
-                            ui.close_menu();
+                            ui.close();
+                        }
+                        ui.separator();
+                        // Eurorack patch generator — wipes the rack to
+                        // its core (sequencer + master + console),
+                        // drops in 2..=4 random voices, 3..=7 random
+                        // FX, 1..=3 LFOs, and runs `wire_default_cables`
+                        // so the result makes sound immediately.  The
+                        // shared `apply_random_layout` is the same
+                        // helper `POST /api/rack/random` calls, so the
+                        // two paths are bit-identical.  Nanosecond
+                        // seed → fresh roll on every click.
+                        if ui
+                            .button(
+                                egui::RichText::new("Random Patch (Eurorack)")
+                                    .monospace()
+                                    .size(10.0),
+                            )
+                            .on_hover_text(
+                                "Wipe the rack and drop in a random selection of voices, \
+                                 FX, and LFOs — patch cables included.  Creative-seed tool.",
+                            )
+                            .clicked()
+                        {
+                            use crate::state::rack_random::apply_random_layout;
+                            let seed = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_nanos() as u64)
+                                .unwrap_or(0);
+                            let _layout = {
+                                let mut s = self.state.write();
+                                apply_random_layout(&mut s, seed)
+                            };
+                            self.push_audio_params();
+                            self.session_dirty = true;
+                            ui.close();
+                        }
+                        if ui
+                            .button(
+                                egui::RichText::new("AI Patch Morph...")
+                                    .monospace()
+                                    .size(10.0),
+                            )
+                            .on_hover_text(
+                                "Schedule a sequence of LLM nudges that evolve the \
+                                 patch toward a target prompt across N bars.",
+                            )
+                            .clicked()
+                        {
+                            // Default the call-count to bars on first open (one
+                            // nudge per bar) so the form starts at the API
+                            // default.  Subsequent opens preserve the user's
+                            // last choice.
+                            if self.patch_morph_input_calls == 0 {
+                                self.patch_morph_input_calls =
+                                    self.patch_morph_input_bars.max(1);
+                            }
+                            self.show_patch_morph = true;
+                            ui.close();
                         }
                     });
 
@@ -293,7 +475,7 @@ impl ImpulseApp {
                                 self.module_scales.insert(m.kind, 0.6);
                             }
                             self.session_dirty = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("Expand All").monospace().size(10.0))
@@ -301,7 +483,7 @@ impl ImpulseApp {
                         {
                             self.module_scales.clear();
                             self.session_dirty = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("Arrange").monospace().size(10.0))
@@ -309,7 +491,7 @@ impl ImpulseApp {
                         {
                             self.state.write().rack.arrange_canonical();
                             self.session_dirty = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("Reset Layout").monospace().size(10.0))
@@ -318,7 +500,7 @@ impl ImpulseApp {
                             self.module_scales.clear();
                             self.state.write().rack.arrange_canonical();
                             self.session_dirty = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
 
@@ -328,14 +510,30 @@ impl ImpulseApp {
                             .clicked()
                         {
                             self.show_prefs = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("System…").monospace().size(10.0))
                             .clicked()
                         {
                             self.show_sysinfo = true;
-                            ui.close_menu();
+                            ui.close();
+                        }
+                        if ui
+                            .button(egui::RichText::new("Lane Diff").monospace().size(10.0))
+                            .clicked()
+                        {
+                            self.show_lane_diff = true;
+                            ui.close();
+                        }
+                        if ui
+                            .button(
+                                egui::RichText::new("Undo Timeline").monospace().size(10.0),
+                            )
+                            .clicked()
+                        {
+                            self.show_undo_timeline = true;
+                            ui.close();
                         }
                         ui.separator();
                         if ui
@@ -343,7 +541,7 @@ impl ImpulseApp {
                             .clicked()
                         {
                             self.show_about = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                 });

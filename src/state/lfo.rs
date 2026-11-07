@@ -89,10 +89,11 @@ pub enum LfoTarget {
     GranularDensity,
     GranularGrain,
     GranularPos,
-    /// NeuTts output bus volume — scales the TTS ring-buffer signal
+    /// Tts output bus volume — scales the TTS ring-buffer signal
     /// before FX / master mixing.  Modulating this lets agents fade
     /// their voice in/out under LFO control.
-    NeuTtsVolume,
+    #[serde(alias = "NeuTtsVolume")]
+    TtsVolume,
     // FX: Reverb
     ReverbMix,
     ReverbSize,
@@ -109,6 +110,55 @@ pub enum LfoTarget {
     PhaserRate,
     PhaserDepth,
     PhaserMix,
+    // FX: Flanger
+    FlangerRate,
+    FlangerDepth,
+    FlangerFeedback,
+    FlangerMix,
+    // FX: Limiter
+    LimiterThreshold,
+    LimiterCeiling,
+    LimiterRelease,
+    LimiterLookahead,
+    // FX: State-variable filter (FxFilter module)
+    SvfCutoff,
+    SvfResonance,
+    SvfDrive,
+    SvfMix,
+    // FX: Comb resonator
+    CombPitch,
+    CombFeedback,
+    CombDamp,
+    CombMix,
+    // FX: Tilt EQ
+    TiltTilt,
+    TiltPivot,
+    TiltMix,
+    // FX: Transient designer
+    TransientAttack,
+    TransientSustain,
+    TransientMix,
+    // FX: Exciter
+    ExciterAmount,
+    ExciterFreq,
+    ExciterMix,
+    // FX: Multitap delay
+    MultitapTime,
+    MultitapSpread,
+    MultitapFeedback,
+    MultitapMix,
+    // FX: Reverse delay
+    RevDelayTime,
+    RevDelayFeedback,
+    RevDelayMix,
+    // FX: Tape stop
+    TapeStopMix,
+    // FX: Stutter
+    StutterRate,
+    StutterSlice,
+    StutterMix,
+    // FX: Spectral freezer
+    FreezeMix,
     // FX: Waveshaper (pre-FX soft clipper)
     WaveshaperDrive,
     WaveshaperMix,
@@ -130,6 +180,30 @@ pub enum LfoTarget {
     CompThresh,
     CompRatio,
     CompMix,
+    // FX: Gate (sidechain ducker)
+    GateThreshold,
+    GateAttack,
+    GateRelease,
+    GateDepth,
+    GateMix,
+    // FX: Vocoder (sidechain modulator)
+    VocoderBands,
+    VocoderCarrierMix,
+    VocoderSense,
+    VocoderMix,
+    // FX: Widener (master-stage Haas + side-scaling)
+    WidenHaas,
+    WidenSide,
+    WidenMix,
+    // FX: Frequency shifter (Hilbert SSB)
+    FreqShiftAmount,
+    FreqShiftFeedback,
+    FreqShiftMix,
+    // SampleInstrument voice (V2)
+    SampleVolume,
+    SamplePan,
+    SamplePitch,
+    SampleCutoff,
     // FX: Tape Sat
     TapeDrive,
     TapeMix,

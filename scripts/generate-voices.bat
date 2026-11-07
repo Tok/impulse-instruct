@@ -1,9 +1,11 @@
 @echo off
 REM ─── generate-voices.bat ───────────────────────────────────────────────────
-REM Generate NeuTTS reference voice clips from espeak-ng (Windows version).
+REM Generate TTS reference voice clips from espeak-ng (Windows version).
 REM Run once after setup — creates voices\*.wav + *.txt pairs.
 REM ────────────────────────────────────────────────────────────────────────────
-cd /d "%~dp0\.."
+cd /d "%~dp0"
+rem Dev checkout: step up from scripts\ to the repo root; release zip: stay.
+if exist "..\Cargo.toml" cd ..
 
 if not exist "voices" mkdir voices
 

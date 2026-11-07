@@ -3,6 +3,7 @@
 // Loads a GGUF model and runs continuous inference to control synth params.
 // Communicates with UI via crossbeam channels.
 
+pub mod few_shot;
 pub mod instructions;
 pub mod json_repair;
 pub mod lane_eval;
@@ -11,6 +12,8 @@ pub mod lanes;
 pub mod mock;
 pub mod pipeline;
 pub mod pipeline_events;
+pub mod pipeline_filter;
+pub mod pipeline_pool;
 pub mod planner;
 pub mod planner_heuristic;
 pub mod planner_jam;
@@ -778,7 +781,7 @@ pub fn run_llm_loop(
                                 let target = c.to.module_id;
                                 if s.rack.modules.iter().any(|m| {
                                     m.id == target
-                                        && m.kind == crate::state::ModuleKind::NeuTts
+                                        && m.kind == crate::state::ModuleKind::Tts
                                         && m.enabled
                                 }) {
                                     s.tts_modules.iter().find(|t| t.id == target)
@@ -792,10 +795,10 @@ pub fn run_llm_loop(
                         if let Some(tts_mod) = tts_mod {
                             let tts_text = output.mc_line.as_deref().unwrap_or_default();
                             log::info!("[TTS] module={}: {}", tts_mod.id, tts_text);
-                            speak_neutts(tts_text, tts_mod, &tts_tx);
+                            speak_tts(tts_text, tts_mod, &tts_tx);
                         } else {
                             log::warn!(
-                                "[TTS] agent {} emitted mc_line but no NeuTts module is cable-wired from it",
+                                "[TTS] agent {} emitted mc_line but no Tts module is cable-wired from it",
                                 src_id
                             );
                         }
@@ -813,6 +816,17 @@ pub fn run_llm_loop(
                         a.tokens_per_sec = output.tokens_per_sec;
                         a.last_response = output.text.clone();
                         a.jam_cycle_count = a.jam_cycle_count.saturating_add(1);
+                        // Per-agent token-budget bookkeeping.  Lets the
+                        // UI show running totals + per-cycle averages
+                        // so the user can see which agents dominate
+                        // VRAM / throughput.
+                        a.total_prompt_tokens = a
+                            .total_prompt_tokens
+                            .saturating_add(output.prompt_tokens as u64);
+                        a.total_completion_tokens = a
+                            .total_completion_tokens
+                            .saturating_add(output.completion_tokens as u64);
+                        a.completed_cycles = a.completed_cycles.saturating_add(1);
                         // Persist a memory snippet from this response
                         if let Some(ref update) = output.param_update
                             && let Some(comment) = update.get("_comment").and_then(|v| v.as_str())
@@ -904,4 +918,4 @@ pub fn run_llm_loop(
 }
 
 pub mod tts;
-pub use tts::speak_neutts;
+pub use tts::speak_tts;

@@ -57,7 +57,7 @@ pub fn lane_scores(ui: &mut Ui, state: &AppState, rect: Rect) {
     let painter = ui.painter_at(rect);
     // Background: match the ring oscilloscope's recessed screen bezel
     // so the score strip reads as part of the same "screen" surface.
-    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(&painter, rect, egui::CornerRadius::same(2));
 
     let lanes = visible_lanes(state);
     if lanes.is_empty() {
@@ -166,8 +166,9 @@ pub fn lane_scores(ui: &mut Ui, state: &AppState, rect: Rect) {
         );
         painter.rect_stroke(
             bar_full,
-            egui::Rounding::same(0.5),
+            egui::CornerRadius::from(0.5),
             Stroke::new(0.75, theme::IRON),
+            egui::StrokeKind::Middle,
         );
         if let Some(v) = score {
             let w = (bar_right - bar_left) * v.clamp(0.0, 1.0);
@@ -178,7 +179,7 @@ pub fn lane_scores(ui: &mut Ui, state: &AppState, rect: Rect) {
             let fill_lum = (110.0 + 130.0 * v).clamp(110.0, 240.0) as u8;
             painter.rect_filled(
                 bar_fill,
-                egui::Rounding::same(0.5),
+                egui::CornerRadius::from(0.5),
                 Color32::from_gray(fill_lum),
             );
         }
@@ -190,11 +191,12 @@ pub fn lane_scores(ui: &mut Ui, state: &AppState, rect: Rect) {
             let alpha = ((pulse_t * 3.0).sin() * 0.5 + 0.5) * 110.0;
             painter.rect_stroke(
                 ring,
-                egui::Rounding::same(2.0),
+                egui::CornerRadius::same(2),
                 Stroke::new(
                     1.0,
-                    Color32::from_rgba_unmultiplied(220, 220, 220, alpha as u8),
+                    crate::ui::theme::rgba_unmultiplied(220, 220, 220, alpha as u8),
                 ),
+                egui::StrokeKind::Middle,
             );
             ui.ctx().request_repaint();
         }
@@ -203,7 +205,7 @@ pub fn lane_scores(ui: &mut Ui, state: &AppState, rect: Rect) {
         // hit-test against the whole strip with a single interaction.
         let cell_response = ui.interact(
             cell,
-            ui.id().with(("lane_score_cell", label)),
+            ui.scope_id().with(("lane_score_cell", label)),
             Sense::hover(),
         );
         if cell_response.hovered() {
@@ -225,30 +227,31 @@ pub fn lane_scores(ui: &mut Ui, state: &AppState, rect: Rect) {
         } else {
             format!("#{} · {} cycles ago", change_count, gap)
         };
-        egui::show_tooltip_at_pointer(
-            ui.ctx(),
+        egui::Tooltip::always_open(
+            ui.ctx().clone(),
             ui.layer_id(),
-            egui::Id::new(("lane_score_tooltip", lane.label())),
-            |ui| {
-                ui.label(
-                    egui::RichText::new(lane.label())
-                        .monospace()
-                        .size(10.5)
-                        .color(theme::CHALK),
-                );
-                ui.label(
-                    egui::RichText::new(score_line)
-                        .monospace()
-                        .size(9.5)
-                        .color(theme::FOG),
-                );
-                ui.label(
-                    egui::RichText::new(gap_line)
-                        .monospace()
-                        .size(9.0)
-                        .color(theme::SMOKE),
-                );
-            },
-        );
+            egui::Id::unique(("lane_score_tooltip", lane.label())),
+            egui::PopupAnchor::Pointer,
+        )
+        .show(|ui| {
+            ui.label(
+                egui::RichText::new(lane.label())
+                    .monospace()
+                    .size(10.5)
+                    .color(theme::CHALK),
+            );
+            ui.label(
+                egui::RichText::new(score_line)
+                    .monospace()
+                    .size(9.5)
+                    .color(theme::FOG),
+            );
+            ui.label(
+                egui::RichText::new(gap_line)
+                    .monospace()
+                    .size(9.0)
+                    .color(theme::SMOKE),
+            );
+        });
     }
 }

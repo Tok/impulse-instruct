@@ -319,11 +319,15 @@ pub fn run_mock_loop(
                     *s = next;
                     s.sequencer.current_step = live_step;
                     s.sequencer.running = live_running;
+                    // Read through the guard we already hold and release
+                    // it before logging: a nested `state.read()` here
+                    // self-deadlocks (parking_lot RwLock isn't reentrant).
+                    let persona = s.llm.persona_name.clone();
+                    drop(s);
                     let comment = update
                         .get("_comment")
                         .and_then(|v| v.as_str())
                         .unwrap_or("[mock]");
-                    let persona = state.read().llm.persona_name.clone();
                     if one_shot {
                         log::info!("{} (mock): {}", persona, comment);
                     }

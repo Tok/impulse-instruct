@@ -26,6 +26,13 @@ pub enum BassLfoTarget {
     PulseWidth,
     FilterCutoff,
     Amplitude,
+    /// Per-voice stereo pan modulation.  Routes the LFO's depth+fade-
+    /// shaped value into a per-voice side-bus contribution that the
+    /// master mixer sums alongside the existing pan_303 path.  Combined
+    /// with the per-voice `lfo_phase` offset this lets two bass voices
+    /// run anti-phase pan sweeps (e.g. voice 0 phase 0, voice 1 phase
+    /// 0.5) without any host-side automation traffic.
+    Pan,
 }
 
 impl BassLfoTarget {
@@ -36,6 +43,7 @@ impl BassLfoTarget {
             Self::PulseWidth => "PWM",
             Self::FilterCutoff => "CUTOFF",
             Self::Amplitude => "AMP",
+            Self::Pan => "PAN",
         }
     }
 
@@ -45,7 +53,8 @@ impl BassLfoTarget {
             Self::Pitch => Self::PulseWidth,
             Self::PulseWidth => Self::FilterCutoff,
             Self::FilterCutoff => Self::Amplitude,
-            Self::Amplitude => Self::Off,
+            Self::Amplitude => Self::Pan,
+            Self::Pan => Self::Off,
         }
     }
 }
@@ -118,6 +127,14 @@ pub struct BassState {
     pub lfo_bpm_sync: bool,
     #[serde(default = "default_lfo_sync_beats")]
     pub lfo_sync_beats: f32, // division in beats (1=quarter, 0.5=8th, 0.25=16th, 4=bar)
+    /// Per-voice LFO phase offset (0..1 → 0..2π).  Added to the
+    /// running LFO phase before the waveform lookup, so two voices
+    /// sharing the same rate can be set anti-phase (offset 0.5),
+    /// 90° apart (0.25), etc. — particularly useful with the Pan
+    /// target where two voices produce stereo motion that sums to
+    /// mono-safe energy at the L/R extremes.
+    #[serde(default)]
+    pub lfo_phase: f32,
 }
 
 fn default_sustain_full() -> f32 {
@@ -168,6 +185,7 @@ impl Default for BassState {
             lfo_delay: 0.0,
             lfo_bpm_sync: false,
             lfo_sync_beats: default_lfo_sync_beats(),
+            lfo_phase: 0.0,
         }
     }
 }

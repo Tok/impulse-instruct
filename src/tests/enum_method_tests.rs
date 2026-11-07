@@ -138,7 +138,7 @@ fn module_kind_labels_are_non_empty_uppercase_and_distinct() {
         ModuleKind::LlmAgent,
         ModuleKind::LlmConsole,
         ModuleKind::MasterOutput,
-        ModuleKind::NeuTts,
+        ModuleKind::Tts,
     ];
     let mut labels = std::collections::HashSet::new();
     for k in kinds {
@@ -181,15 +181,31 @@ fn allows_multiple_is_true_for_fx_lfo_and_agents() {
         ModuleKind::FxDelay,
         ModuleKind::FxChorus,
         ModuleKind::FxPhaser,
+        ModuleKind::FxFlanger,
+        ModuleKind::FxLimiter,
+        ModuleKind::FxFilter,
+        ModuleKind::FxComb,
+        ModuleKind::FxTilt,
+        ModuleKind::FxTransient,
+        ModuleKind::FxExciter,
+        ModuleKind::FxMultitap,
+        ModuleKind::FxRevDelay,
+        ModuleKind::FxTapeStop,
+        ModuleKind::FxStutter,
+        ModuleKind::FxFreeze,
         ModuleKind::FxRingMod,
         ModuleKind::FxWaveshaper,
         ModuleKind::FxBitcrush,
         ModuleKind::FxEq,
         ModuleKind::FxCompressor,
+        ModuleKind::FxGate,
+        ModuleKind::FxVocoder,
         ModuleKind::FxTapeSat,
         ModuleKind::FxDrive,
         ModuleKind::FxAutotune,
         ModuleKind::FxPan,
+        ModuleKind::FxWiden,
+        ModuleKind::FxFreqShift,
         ModuleKind::LfoModule,
         ModuleKind::LlmAgent,
     ] {
@@ -214,7 +230,7 @@ fn allows_multiple_is_false_for_singletons() {
         ModuleKind::NoiseVoice,
         ModuleKind::GranularTexture,
         ModuleKind::GabberKick,
-        ModuleKind::NeuTts,
+        ModuleKind::Tts,
         ModuleKind::StepSequencer,
         ModuleKind::MasterOutput,
         ModuleKind::LlmConsole,
@@ -222,6 +238,72 @@ fn allows_multiple_is_false_for_singletons() {
         assert!(
             !k.allows_multiple(),
             "{k:?} should be a singleton (only one instance per rack)",
+        );
+    }
+}
+
+// ─── Visualiser modules ─────────────────────────────────────────────────────
+
+#[test]
+fn viz_modules_default_to_fxmod_and_carry_labels() {
+    // BarOscilloscope and EventStream were lifted from the always-on
+    // header into rack-placeable visualisers.  Lock the zone +
+    // distinct labels so future enum additions don't quietly steal
+    // the same label or land in the wrong zone.
+    for k in [
+        ModuleKind::BarOscilloscope,
+        ModuleKind::StereoVectorscope,
+        ModuleKind::LfoScope,
+        ModuleKind::PitchTracker,
+        ModuleKind::ChordDisplay,
+        ModuleKind::Spectrogram,
+        ModuleKind::LoudnessMeter,
+        ModuleKind::PhaseWheel,
+        ModuleKind::EventStream,
+    ] {
+        assert_eq!(k.default_zone(), Zone::FxMod, "{k:?} expected in FxMod");
+        let l = k.label();
+        assert!(!l.is_empty(), "{k:?} label must not be empty");
+    }
+    // All viz labels must be distinct so the title bar never repeats
+    // across two different module kinds.
+    let labels = [
+        ModuleKind::BarOscilloscope.label(),
+        ModuleKind::StereoVectorscope.label(),
+        ModuleKind::LfoScope.label(),
+        ModuleKind::PitchTracker.label(),
+        ModuleKind::ChordDisplay.label(),
+        ModuleKind::Spectrogram.label(),
+        ModuleKind::LoudnessMeter.label(),
+        ModuleKind::PhaseWheel.label(),
+        ModuleKind::EventStream.label(),
+    ];
+    for i in 0..labels.len() {
+        for j in (i + 1)..labels.len() {
+            assert_ne!(labels[i], labels[j], "viz module labels must be distinct");
+        }
+    }
+}
+
+#[test]
+fn viz_modules_have_no_audio_or_mod_io() {
+    // Visualisers don't produce audio (no MASTER reach indicator) and
+    // don't expose mod-input jacks (nothing to modulate).
+    for k in [
+        ModuleKind::BarOscilloscope,
+        ModuleKind::StereoVectorscope,
+        ModuleKind::LfoScope,
+        ModuleKind::PitchTracker,
+        ModuleKind::ChordDisplay,
+        ModuleKind::Spectrogram,
+        ModuleKind::LoudnessMeter,
+        ModuleKind::PhaseWheel,
+        ModuleKind::EventStream,
+    ] {
+        assert!(!k.has_audio_output(), "{k:?} must not produce audio");
+        assert!(
+            crate::state::mod_inputs(k).is_empty(),
+            "{k:?} must not declare mod inputs"
         );
     }
 }

@@ -102,7 +102,7 @@ pub fn draw_cable(
     let hilight: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.0, -1.5)).collect();
     painter.add(egui::Shape::line(
         hilight,
-        Stroke::new(1.0, Color32::from_white_alpha(110)),
+        Stroke::new(1.0, crate::ui::theme::white_alpha(110)),
     ));
 
     // ── Signal flow dots — speed and spacing normalised to cable arc length ──
@@ -118,7 +118,7 @@ pub fn draw_cable(
         for i in 0..num_dots {
             let t_dot = (time * speed + phase_offset * 0.3 + i as f32 * spacing) % 1.0;
             let dot = bezier(from, cp1, cp2, to, t_dot);
-            painter.circle_filled(dot, 5.0, Color32::from_white_alpha(35));
+            painter.circle_filled(dot, 5.0, crate::ui::theme::white_alpha(35));
             painter.circle_filled(dot, 2.5, Color32::from_gray(240));
         }
     }
@@ -167,7 +167,7 @@ pub fn draw_signal_cable(
     let hilight: Vec<Pos2> = points.iter().map(|p| *p + Vec2::new(0.0, -1.2)).collect();
     painter.add(egui::Shape::line(
         hilight,
-        Stroke::new(0.8, Color32::from_white_alpha(70)),
+        Stroke::new(0.8, crate::ui::theme::white_alpha(70)),
     ));
     if animate_flow {
         let arc_len: f32 = points
@@ -181,7 +181,7 @@ pub fn draw_signal_cable(
         for i in 0..num_dots {
             let t_dot = (time * speed + phase_offset * 0.3 + i as f32 * spacing) % 1.0;
             let dot = bezier(from, cp1, cp2, to, t_dot);
-            painter.circle_filled(dot, 3.5, Color32::from_white_alpha(25));
+            painter.circle_filled(dot, 3.5, crate::ui::theme::white_alpha(25));
             painter.circle_filled(dot, 1.8, Color32::from_gray(200));
         }
     }
@@ -260,7 +260,7 @@ pub fn draw_cable_overlay(
     let time = ctx.input(|i| i.time) as f32;
     let mut painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,
-        egui::Id::new("cables"),
+        egui::Id::unique("cables"),
     ));
     painter.set_clip_rect(canvas_rect);
 

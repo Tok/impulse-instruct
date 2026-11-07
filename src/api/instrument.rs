@@ -31,6 +31,37 @@ pub struct GranularRequest {
     pub random: bool,
 }
 
+/// Request body for /api/conv_reverb.  Either `path` names a specific
+/// IR file or `random: true` picks one from `samples/impulses/`.
+#[derive(Deserialize)]
+pub struct ConvReverbRequest {
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub random: bool,
+}
+
+/// Request body for /api/wavetable — either an explicit path or a
+/// random pick from `samples/wavetables/`.
+#[derive(Deserialize)]
+pub struct WavetableRequest {
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub random: bool,
+}
+
+/// Request body for /api/sample — either an explicit path or a random
+/// pick from `samples/instruments/`.  Same shape as `WavetableRequest`
+/// (different folder + different state field).
+#[derive(Deserialize)]
+pub struct SampleRequest {
+    #[serde(default)]
+    pub path: Option<String>,
+    #[serde(default)]
+    pub random: bool,
+}
+
 #[derive(Deserialize)]
 pub struct StyleRequest {
     /// Style id from styles.json (e.g. "drum_and_bass"), "__free__",
@@ -81,6 +112,216 @@ pub async fn post_amen(
             Json(OkResponse {
                 ok: false,
                 message: Some("no path and no samples found in samples/amen/".into()),
+            })
+        }
+    }
+}
+
+/// Scan `samples/impulses/` for .wav files.  Returns paths sorted by name.
+pub fn scan_impulse_samples() -> Vec<std::path::PathBuf> {
+    let mut out: Vec<std::path::PathBuf> = std::fs::read_dir("samples/impulses")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// Pick a random impulse-response path from `samples/impulses/`.
+/// Time-nanos based — good enough for a "surprise me" roll without
+/// dragging in an RNG crate.
+pub fn pick_random_impulse() -> Option<String> {
+    let samples = scan_impulse_samples();
+    if samples.is_empty() {
+        return None;
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize)
+        .unwrap_or(0);
+    samples
+        .get(nanos % samples.len())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Load an impulse response into the convolution-reverb FX step —
+/// mirror of /api/amen.  The API writes `fx.conv_reverb_ir_path`; the
+/// UI's ConvReverb card picks up the change and pushes the decoded
+/// samples to the audio thread via `AudioCommand::LoadImpulseResponse`.
+pub async fn post_conv_reverb(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<ConvReverbRequest>,
+) -> Json<OkResponse> {
+    let resolved: Option<String> = if let Some(p) = req.path.as_deref().filter(|s| !s.is_empty()) {
+        Some(p.to_string())
+    } else if req.random {
+        pick_random_impulse()
+    } else {
+        None
+    };
+    match resolved {
+        Some(p) => {
+            api.app_state.write().fx.conv_reverb_ir_path = p.clone();
+            api_log(&api, format!("[API] conv_reverb: loaded {}", p));
+            Json(OkResponse {
+                ok: true,
+                message: Some(format!("conv_reverb: {}", p)),
+            })
+        }
+        None => {
+            api_log(&api, "[API] conv_reverb: no IR resolved".to_string());
+            Json(OkResponse {
+                ok: false,
+                message: Some("no path and no samples found in samples/impulses/".into()),
+            })
+        }
+    }
+}
+
+/// Scan `samples/wavetables/` for .wav files.
+pub fn scan_wavetable_samples() -> Vec<std::path::PathBuf> {
+    let mut out: Vec<std::path::PathBuf> = std::fs::read_dir("samples/wavetables")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("wav"))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// Pick a random wavetable path — mirrors `pick_random_impulse`.
+pub fn pick_random_wavetable() -> Option<String> {
+    let samples = scan_wavetable_samples();
+    if samples.is_empty() {
+        return None;
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize)
+        .unwrap_or(0);
+    samples
+        .get(nanos % samples.len())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Load a wavetable into the WavetableVoice — mirror of /api/amen.
+/// Writes `wavetable.wave_path` in AppState; the UI panel polls and
+/// pushes the decoded samples to the audio thread via
+/// `AudioCommand::LoadWavetable`.
+pub async fn post_wavetable(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<WavetableRequest>,
+) -> Json<OkResponse> {
+    let resolved: Option<String> = if let Some(p) = req.path.as_deref().filter(|s| !s.is_empty()) {
+        Some(p.to_string())
+    } else if req.random {
+        pick_random_wavetable()
+    } else {
+        None
+    };
+    match resolved {
+        Some(p) => {
+            api.app_state.write().wavetable.wave_path = p.clone();
+            api_log(&api, format!("[API] wavetable: loaded {}", p));
+            Json(OkResponse {
+                ok: true,
+                message: Some(format!("wavetable: {}", p)),
+            })
+        }
+        None => {
+            api_log(&api, "[API] wavetable: no sample resolved".to_string());
+            Json(OkResponse {
+                ok: false,
+                message: Some("no path and no samples found in samples/wavetables/".into()),
+            })
+        }
+    }
+}
+
+/// Scan `samples/instruments/` for `.wav` and `.sfz` files.  Mirrors
+/// `scan_wavetable_samples` but with a different source folder so the
+/// LLM and HTTP API browse the right pool when picking a recording for
+/// the `SampleInstrument` voice.  `.sfz` multisample packs are
+/// included alongside single `.wav` files since V2 — the loader
+/// dispatches on extension.
+pub fn scan_sample_instrument_samples() -> Vec<std::path::PathBuf> {
+    let mut out: Vec<std::path::PathBuf> = std::fs::read_dir("samples/instruments")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("wav") || e.eq_ignore_ascii_case("sfz"))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// Pick a random sample-instrument file — same time-based shuffle as
+/// the other sample pickers (deterministic per nanosecond).
+pub fn pick_random_sample_instrument() -> Option<String> {
+    let samples = scan_sample_instrument_samples();
+    if samples.is_empty() {
+        return None;
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize)
+        .unwrap_or(0);
+    samples
+        .get(nanos % samples.len())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+/// Load a recording into the SampleInstrument voice — mirror of
+/// /api/wavetable.  Writes `sample_instrument.sample_path` in AppState;
+/// the UI panel polls the change and pushes the decoded buffer to the
+/// audio thread via `AudioCommand::LoadSampleInstrument` (and runs
+/// auto-detect-root on the buffer along the way).
+pub async fn post_sample(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<SampleRequest>,
+) -> Json<OkResponse> {
+    let resolved: Option<String> = if let Some(p) = req.path.as_deref().filter(|s| !s.is_empty()) {
+        Some(p.to_string())
+    } else if req.random {
+        pick_random_sample_instrument()
+    } else {
+        None
+    };
+    match resolved {
+        Some(p) => {
+            api.app_state.write().sample_instrument.sample_path = p.clone();
+            api_log(&api, format!("[API] sample: loaded {}", p));
+            Json(OkResponse {
+                ok: true,
+                message: Some(format!("sample: {}", p)),
+            })
+        }
+        None => {
+            api_log(&api, "[API] sample: no sample resolved".to_string());
+            Json(OkResponse {
+                ok: false,
+                message: Some("no path and no samples found in samples/instruments/".into()),
             })
         }
     }

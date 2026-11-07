@@ -12,23 +12,16 @@ use super::{MAX_BASS_VOICES, MAX_STEPS};
 // ─── Bass pattern defaults (used by SequencerState::default + serde) ─────────
 
 fn default_bass_patterns() -> Vec<Vec<TB303Step>> {
-    // Voice 0 gets the same starter pattern as `bass_pattern`; voices 1-3 are silent.
-    let mut patterns = Vec::with_capacity(MAX_BASS_VOICES);
-
-    // Voice 0: A minor starter pattern (mirrors SequencerState default)
-    let mut p0 = vec![TB303Step::default(); MAX_STEPS];
-    let bass_notes: &[(usize, u8)] = &[(0, 45), (6, 48), (12, 52)];
-    for &(step, note) in bass_notes {
-        p0[step].active = true;
-        p0[step].note = note;
-    }
-    patterns.push(p0);
-
-    // Voices 1-3: silent
-    for _ in 1..MAX_BASS_VOICES {
-        patterns.push(vec![TB303Step::default(); MAX_STEPS]);
-    }
-    patterns
+    // Empty patterns for every voice.  `TB303Step::default()` is
+    // inactive, so nothing fires until the agent / scenario writes
+    // real notes.  Keeping a hardcoded starter pattern here (it used
+    // to be an A-minor riff on voice 0) meant fresh sessions loaded
+    // with leftover sound — confusing when you want a blank canvas,
+    // and flatly wrong for MIDI imports where the real notes land
+    // via `bass_patterns` on the pattern_bank slots.  Genre-specific
+    // example patterns still live in `seed_patterns` as prompt
+    // reference only; we never feed them into state directly.
+    vec![vec![TB303Step::default(); MAX_STEPS]; MAX_BASS_VOICES]
 }
 
 fn default_bass_voice_steps() -> Vec<usize> {
@@ -39,6 +32,74 @@ fn default_bass_voice_enabled() -> [bool; MAX_BASS_VOICES] {
     let mut arr = [false; MAX_BASS_VOICES];
     arr[0] = true;
     arr
+}
+
+fn default_step_division() -> u8 {
+    4
+}
+
+fn default_pluck_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_pluck_steps() -> usize {
+    32
+}
+
+fn default_wavetable_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_wavetable_steps() -> usize {
+    32
+}
+
+fn default_sample_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_sample_steps() -> usize {
+    32
+}
+
+fn default_fm_ops_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_fm_ops_steps() -> usize {
+    32
+}
+
+fn default_additive_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_additive_steps() -> usize {
+    32
+}
+
+fn default_modal_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_modal_steps() -> usize {
+    32
+}
+
+fn default_chiptune_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_chiptune_steps() -> usize {
+    32
+}
+
+fn default_vocal_pattern() -> Vec<TB303Step> {
+    vec![TB303Step::default(); MAX_STEPS]
+}
+
+fn default_vocal_steps() -> usize {
+    32
 }
 
 // ─── Step types ──────────────────────────────────────────────────────────────
@@ -55,6 +116,14 @@ pub struct Step {
     /// Ignored by purely synthesised drum voices.
     #[serde(default)]
     pub slice: u8,
+    /// Conditional trigger — fire only every Nth voice cycle.  Stored
+    /// as a 2-bit field: 0 = always fire (the default that keeps every
+    /// existing pattern unchanged), 1 = every 2nd cycle, 2 = every
+    /// 3rd, 3 = every 4th.  Inspired by Monome-style evolving
+    /// patterns where a conditional fill develops over multiple
+    /// passes through the same loop.
+    #[serde(default)]
+    pub cond: u8,
 }
 
 fn default_ratchet() -> u8 {
@@ -69,6 +138,7 @@ impl Default for Step {
             probability: 1.0,
             ratchet: 1,
             slice: 0,
+            cond: 0,
         }
     }
 }
@@ -95,6 +165,11 @@ pub struct TB303Step {
     /// Defaults to 0 so old patterns deserialize unchanged.
     #[serde(default)]
     pub pan: f32,
+    /// Conditional trigger — see `Step::cond` for the field meaning.
+    /// Lets melodic voices participate in the same Monome-style
+    /// every-Nth-cycle gating as drum hits.
+    #[serde(default)]
+    pub cond: u8,
 }
 
 /// Accept either a legacy `bool` (true→1.0, false→0.0) or a numeric
@@ -126,6 +201,7 @@ impl Default for TB303Step {
             slide: 0.0,
             gate: 0.5,
             pan: 0.0,
+            cond: 0,
         }
     }
 }
@@ -140,10 +216,35 @@ pub struct SequencerState {
     pub running: bool,
     pub swing: f32,       // 0–1: 0=straight, 0.5=strong shuffle (75/25 triplet feel)
     pub time_sig_num: u8, // beats per bar (2–9, default 4); denominator always /4
+    /// Step subdivisions per beat.  4 = 16th-note grid (the pre-existing
+    /// behaviour, default); 8 = 32nd-note grid; 2 = 8th-note grid.  The
+    /// sequencer clock and MIDI export both read this to derive samples
+    /// per step and SMF ticks per step respectively.  Bumping it lets a
+    /// pattern address faster subdivisions without changing BPM — e.g.
+    /// importing a Bach Presto at a 32nd grid preserves 32nd-note runs
+    /// that would otherwise collide on a 16th grid.
+    #[serde(default = "default_step_division")]
+    pub step_division: u8,
     pub drum_patterns: std::collections::HashMap<DrumVoice, Vec<Step>>,
     pub bass_pattern: Vec<TB303Step>,
     pub hoover_pattern: Vec<TB303Step>,
     pub an1x_pattern: Vec<TB303Step>,
+    #[serde(default = "default_pluck_pattern")]
+    pub pluck_pattern: Vec<TB303Step>,
+    #[serde(default = "default_wavetable_pattern")]
+    pub wavetable_pattern: Vec<TB303Step>,
+    #[serde(default = "default_sample_pattern")]
+    pub sample_pattern: Vec<TB303Step>,
+    #[serde(default = "default_fm_ops_pattern")]
+    pub fm_ops_pattern: Vec<TB303Step>,
+    #[serde(default = "default_additive_pattern")]
+    pub additive_pattern: Vec<TB303Step>,
+    #[serde(default = "default_modal_pattern")]
+    pub modal_pattern: Vec<TB303Step>,
+    #[serde(default = "default_chiptune_pattern")]
+    pub chiptune_pattern: Vec<TB303Step>,
+    #[serde(default = "default_vocal_pattern")]
+    pub vocal_pattern: Vec<TB303Step>,
     /// Tonic note (0=C … 11=B). Used for scale highlighting and LLM music theory.
     pub root_note: u8,
     /// Active scale / mode for this pattern.
@@ -157,6 +258,22 @@ pub struct SequencerState {
     pub bass_steps: usize,
     pub hoover_steps: usize,
     pub an1x_steps: usize,
+    #[serde(default = "default_pluck_steps")]
+    pub pluck_steps: usize,
+    #[serde(default = "default_wavetable_steps")]
+    pub wavetable_steps: usize,
+    #[serde(default = "default_sample_steps")]
+    pub sample_steps: usize,
+    #[serde(default = "default_fm_ops_steps")]
+    pub fm_ops_steps: usize,
+    #[serde(default = "default_additive_steps")]
+    pub additive_steps: usize,
+    #[serde(default = "default_modal_steps")]
+    pub modal_steps: usize,
+    #[serde(default = "default_chiptune_steps")]
+    pub chiptune_steps: usize,
+    #[serde(default = "default_vocal_steps")]
+    pub vocal_steps: usize,
     /// Per-voice bass patterns for multi-voice support. Voice 0 mirrors `bass_pattern`.
     #[serde(default = "default_bass_patterns")]
     pub bass_patterns: Vec<Vec<TB303Step>>,
@@ -229,10 +346,19 @@ impl Default for SequencerState {
             running: false,
             swing: 0.0,
             time_sig_num: 4,
+            step_division: 4,
             drum_patterns,
             bass_pattern: bass_pattern.clone(),
             hoover_pattern: vec![TB303Step::default(); MAX_STEPS],
             an1x_pattern: vec![TB303Step::default(); MAX_STEPS],
+            pluck_pattern: vec![TB303Step::default(); MAX_STEPS],
+            wavetable_pattern: vec![TB303Step::default(); MAX_STEPS],
+            sample_pattern: vec![TB303Step::default(); MAX_STEPS],
+            fm_ops_pattern: vec![TB303Step::default(); MAX_STEPS],
+            additive_pattern: vec![TB303Step::default(); MAX_STEPS],
+            modal_pattern: vec![TB303Step::default(); MAX_STEPS],
+            chiptune_pattern: vec![TB303Step::default(); MAX_STEPS],
+            vocal_pattern: vec![TB303Step::default(); MAX_STEPS],
             root_note: 9, // A
             scale: Scale::NaturalMinor,
             scale_snap: false,
@@ -240,6 +366,14 @@ impl Default for SequencerState {
             bass_steps: 32,
             hoover_steps: 32,
             an1x_steps: 32,
+            pluck_steps: 32,
+            wavetable_steps: 32,
+            sample_steps: 32,
+            fm_ops_steps: 32,
+            additive_steps: 32,
+            modal_steps: 32,
+            chiptune_steps: 32,
+            vocal_steps: 32,
             muted_drums: std::collections::HashSet::new(),
             soloed_drums: std::collections::HashSet::new(),
             midi_clock_sync: false,

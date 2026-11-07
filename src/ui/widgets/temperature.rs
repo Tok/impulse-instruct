@@ -81,21 +81,22 @@ pub fn draw_temp_chip(ui: &mut Ui, live: f32, bank: f32) {
         let band_x = strip_rect.min.x + (i as f32 / band_count as f32) * strip_w;
         let band_w = (strip_w / band_count as f32) + 0.5;
         let mut col = theme::temperature_color(t);
-        col = Color32::from_rgba_unmultiplied(col.r(), col.g(), col.b(), 190);
+        col = crate::ui::theme::rgba_unmultiplied(col.r(), col.g(), col.b(), 190);
         painter.rect_filled(
             Rect::from_min_size(
                 Pos2::new(band_x, strip_rect.min.y),
                 Vec2::new(band_w, strip_rect.height()),
             ),
-            egui::Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             col,
         );
     }
     // Frame.
     painter.rect_stroke(
         strip_rect,
-        egui::Rounding::ZERO,
+        egui::CornerRadius::ZERO,
         Stroke::new(0.5, Color32::from_gray(60)),
+        egui::StrokeKind::Middle,
     );
 
     // Bank intent — static tick below the strip.
@@ -149,7 +150,7 @@ pub fn draw_temp_chip(ui: &mut Ui, live: f32, bank: f32) {
     );
 
     // Hover tooltip.
-    let hit = ui.interact(inner, egui::Id::new("header_temp_chip"), Sense::hover());
+    let hit = ui.interact(inner, egui::Id::unique("header_temp_chip"), Sense::hover());
     if hit.hovered() {
         hit.on_hover_ui(|ui| {
             ui.label("Huth Warme / Kalte Töne");

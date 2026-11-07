@@ -3,18 +3,6 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Whether Huth *Farbige Noten* coloring is applied to the piano + sequencer.
-/// Older sessions used `PianoOnly` / `Full` — both deserialize to `On`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum HuthStyle {
-    /// Monochrome — piano uses standard black/white, sequencer dots are gray.
-    Off,
-    /// Huth colors on the piano keyboard and sequencer LED dots.
-    #[default]
-    #[serde(alias = "PianoOnly", alias = "Full")]
-    On,
-}
-
 /// How often the session is auto-saved to `session.json`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AutosaveInterval {
@@ -52,8 +40,6 @@ impl AutosaveInterval {
 /// Persistent UI preferences stored in AppState so they survive across sessions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UiPrefs {
-    /// How broadly Huth *Farbige Noten* colors are applied.
-    pub huth_style: HuthStyle,
     /// Post-process bloom glow on note highlights (future: needs wgpu pass).
     pub bloom_enabled: bool,
     /// Bloom intensity 0–1.
@@ -77,9 +63,23 @@ pub struct UiPrefs {
     /// Oscilloscope phosphor glow intensity (0.0–1.0, default 0.6).
     #[serde(default = "default_phosphor_intensity")]
     pub phosphor_intensity: f32,
-    /// When true, oscilloscope waveform is Huth-colored based on detected frequency.
+    // ── Huth *Farbige Noten* per-component toggles ─────────────────────────
+    // Sequencer step dots and the event-stream history are always Huth-
+    // coloured — the toggles below only gate the places where a Huth
+    // treatment competes with a legible grayscale alternative.
+    /// Huth colors on the piano keyboard (key fills + note labels).
+    #[serde(default = "default_true_pref")]
+    pub huth_piano: bool,
+    /// Tint the bar oscilloscope waveform by the detected fundamental pitch.
     #[serde(default)]
-    pub huth_oscilloscope: bool,
+    pub huth_bar_osc: bool,
+    /// Tint the ring oscilloscope waveform by the detected fundamental pitch.
+    #[serde(default)]
+    pub huth_ring_osc: bool,
+    /// Color each spectrum bar by its centre-frequency pitch class, fading
+    /// to grayscale at low amplitudes so silence reads neutral.
+    #[serde(default)]
+    pub huth_spectrum: bool,
     // ── Event stream display layers ─────────────────────────────────────────
     /// Show bass note events (Huth-colored circles).
     #[serde(default = "default_true_pref")]
@@ -93,14 +93,35 @@ pub struct UiPrefs {
     /// Show active ramp indicators.
     #[serde(default = "default_true_pref")]
     pub stream_ramps: bool,
+    /// Show the per-voice activity heatmap overlay along the bottom of
+    /// the EventStream — one row per voice, recent activity time-binned
+    /// per sequencer step and grayscale-shaded by intensity.  Off by
+    /// default so the existing dot rendering stays the canonical view.
+    #[serde(default)]
+    pub stream_heatmap: bool,
+    /// Ableton Link participation toggle.  When true and the build has
+    /// the `link` cargo feature, the app joins the local-network Link
+    /// session on startup — peers see our BPM and we follow theirs.
+    /// Persisted so a Link-set user starts each session in sync.
+    #[serde(default)]
+    pub link_enabled: bool,
     /// When true, LLM responses auto-scroll to the affected module.
     /// Off by default — mainly useful for demo recordings.
     #[serde(default)]
     pub llm_auto_scroll: bool,
     // ── Header visualization toggles ────────────────────────────────────────
-    /// Show the linear (bar) oscilloscope in the header.
-    #[serde(default = "default_true_pref")]
+    /// Show the linear (bar) oscilloscope in the header.  Off by default
+    /// now that the spectrum analyser occupies the same slot; kept
+    /// available via Preferences and set to on if both are enabled
+    /// (oscilloscope draws on top).  The existing renderer lives in
+    /// `scope_footer::draw_scope_colored` and will graduate to a
+    /// rackable viz module — see PLAN.md.
+    #[serde(default)]
     pub show_bar_oscilloscope: bool,
+    /// Show the spectrum analyser (log-band FFT bars) in the header.
+    /// Replaces the bar oscilloscope as the default center-panel viz.
+    #[serde(default = "default_true_pref")]
+    pub show_spectrum_bars: bool,
     /// Show the ring (circular) oscilloscope in the header.
     #[serde(default = "default_true_pref")]
     pub show_ring_oscilloscope: bool,
@@ -120,6 +141,36 @@ pub struct UiPrefs {
     /// who prefer a clean slate each time they relaunch a style.
     #[serde(default)]
     pub autosync_rack_on_start: bool,
+    /// User-defined MIDI CC → parameter dot-path bindings.  Checked
+    /// before the static `cc_to_param_path` table, so a user binding
+    /// always wins.  All bindings normalize the CC's 0..127 value to
+    /// 0..1 via `apply_llm_update`; finer scales (toggles, ranges)
+    /// are out of V1 scope.  Persisted in session so bindings
+    /// survive relaunches.
+    #[serde(default)]
+    pub midi_cc_bindings: std::collections::BTreeMap<u8, String>,
+    /// When true, the sequencer paints a per-voice automation lane
+    /// under each step row showing the bass LFO's value at each
+    /// step.  Off by default so the grid stays compact for users
+    /// who don't use modulation.  Toggle in Preferences → Display.
+    #[serde(default)]
+    pub show_automation_overlay: bool,
+    /// Performance-mode toggle.  When `true`, the layout hides the
+    /// LLM log / event stream / ring scope strip, the piano panel,
+    /// and the menu bar — leaving only the header transport, rack
+    /// canvas, and footer status.  Persisted so demos / live sets
+    /// can launch straight into stripped chrome.  Toggle in the
+    /// header view menu.
+    #[serde(default)]
+    pub performance_mode: bool,
+    /// When true, draw a bird's-eye mini-map overlay in the bottom-
+    /// right corner of the rack canvas — module rectangles scaled
+    /// to fit, plus a viewport indicator showing what's currently
+    /// in view.  Click-to-pan jumps the scroll offset.  Off by
+    /// default; meant for tall racks with many agents / FX where
+    /// scroll position is otherwise hard to track.
+    #[serde(default)]
+    pub show_rack_minimap: bool,
 }
 
 fn default_grid_cols() -> u8 {
@@ -167,7 +218,6 @@ impl UiPrefs {
 impl Default for UiPrefs {
     fn default() -> Self {
         Self {
-            huth_style: HuthStyle::On,
             bloom_enabled: false,
             bloom_intensity: 0.5,
             log_level_idx: 2, // Info
@@ -177,18 +227,28 @@ impl Default for UiPrefs {
             crt_effect: false,
             phosphor_frames: default_phosphor_frames(),
             phosphor_intensity: default_phosphor_intensity(),
-            huth_oscilloscope: false,
+            huth_piano: true,
+            huth_bar_osc: false,
+            huth_ring_osc: false,
+            huth_spectrum: false,
             stream_bass_notes: true,
             stream_drums: false,
             stream_hz_scale: true,
             stream_ramps: true,
+            stream_heatmap: false,
+            link_enabled: false,
             llm_auto_scroll: false,
-            show_bar_oscilloscope: true,
+            show_bar_oscilloscope: false,
+            show_spectrum_bars: true,
             show_ring_oscilloscope: true,
             show_event_stream: true,
             stream_stereo: false,
             rack_grid_cols: 5,
             autosync_rack_on_start: false,
+            midi_cc_bindings: std::collections::BTreeMap::new(),
+            show_automation_overlay: false,
+            performance_mode: false,
+            show_rack_minimap: false,
         }
     }
 }

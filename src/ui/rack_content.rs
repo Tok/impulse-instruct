@@ -8,7 +8,7 @@ use crate::ui::rack_content_pad::{PAD_SECTION_TOP_GAP, render_three_pad, render_
 // Re-export so the drum kits (ui/panels/drums.rs) can pull the pad helpers
 // from rack_content without reaching into the split sub-module directly.
 pub(crate) use crate::ui::rack_content_pad::{render_three_pad_bare, render_two_pad_bare};
-use crate::ui::{ImpulseApp, module_card, theme};
+use crate::ui::{ImpulseApp, theme};
 
 pub(super) fn draw_voice_content(
     app: &mut ImpulseApp,
@@ -21,12 +21,22 @@ pub(super) fn draw_voice_content(
         ModuleKind::DrumKit808 => crate::ui::panels::draw_kit_a(app, ui),
         ModuleKind::DrumKit909 => crate::ui::panels::draw_kit_b(app, ui),
         ModuleKind::HooverLead => crate::ui::panels::draw_hoover(app, ui),
+        ModuleKind::PluckString => crate::ui::panels::draw_pluck(app, ui),
+        ModuleKind::WavetableVoice => crate::ui::panels::draw_wavetable(app, ui),
+        ModuleKind::SampleInstrument => crate::ui::panels::draw_sample_instrument(app, ui),
         ModuleKind::An1xVoice => crate::ui::panels::draw_an1x(app, ui),
         ModuleKind::AmenSampler => crate::ui::panels::draw_amen(app, ui),
         ModuleKind::NoiseVoice => crate::ui::panels::draw_noise(app, ui),
+        ModuleKind::Theremin => crate::ui::panels::draw_theremin(app, ui),
+        ModuleKind::Pendulum => crate::ui::panels::draw_pendulum(app, ui),
+        ModuleKind::FmOpsVoice => crate::ui::panels::draw_fm_ops(app, ui),
+        ModuleKind::AdditiveVoice => crate::ui::panels::draw_additive(app, ui),
+        ModuleKind::ModalVoice => crate::ui::panels::draw_modal(app, ui),
+        ModuleKind::ChiptuneVoice => crate::ui::panels::draw_chiptune(app, ui),
+        ModuleKind::VocalVoice => crate::ui::panels::draw_vocal(app, ui),
         ModuleKind::GranularTexture => crate::ui::panels::draw_granular(app, ui),
         ModuleKind::GabberKick => crate::ui::panels::draw_gabber(app, ui),
-        ModuleKind::NeuTts => crate::ui::panels::draw_tts(app, ui, module_id),
+        ModuleKind::Tts => crate::ui::panels::draw_tts(app, ui, module_id),
         _ => {}
     }
 }
@@ -41,7 +51,7 @@ pub(super) fn draw_fx_content(
 
     let scale: f32 = ui
         .ctx()
-        .data(|d| d.get_temp(egui::Id::new("module_scale")))
+        .data(|d| d.get_temp(egui::Id::unique("module_scale")))
         .unwrap_or(1.0);
     let ctrl = widgets::ControlPrefs::from_prefs_scaled(&app.state.read().ui_prefs, scale);
     let locked = app.state.read().llm.locked_params.clone();
@@ -273,6 +283,73 @@ pub(super) fn draw_fx_content(
                 s.fx.phaser_mix = m;
             }
         }
+        ModuleKind::FxFlanger
+        | ModuleKind::FxLimiter
+        | ModuleKind::FxFilter
+        | ModuleKind::FxComb
+        | ModuleKind::FxTilt
+        | ModuleKind::FxTransient
+        | ModuleKind::FxExciter
+        | ModuleKind::FxGate
+        | ModuleKind::FxVocoder
+        | ModuleKind::FxWiden
+        | ModuleKind::FxFreqShift
+        | ModuleKind::FxVinyl
+        | ModuleKind::FxMultitap
+        | ModuleKind::FxRevDelay
+        | ModuleKind::FxTapeStop
+        | ModuleKind::FxStutter
+        | ModuleKind::FxFreeze
+        | ModuleKind::FxDjFilter
+        | ModuleKind::FxIsoEq => {
+            // FX cards in `rack_content_fx_extras.rs` to keep this file
+            // under the 1000-line cap.  Helper returns the new pad_pair.
+            // Dispatch list MUST stay in lockstep with the accept list
+            // at the top of `try_draw_fx_extras_content` — modules
+            // listed there but missing here render empty (the
+            // catch-all `_ => {}` below silently swallows them).
+            if let Some(new_pair) = crate::ui::rack_content_fx_extras::try_draw_fx_extras_content(
+                app,
+                ui,
+                kind,
+                module_id,
+                ctrl,
+                &locked,
+                &focused,
+                pad_expanded,
+                pad_pair,
+            ) {
+                pad_pair = new_pair;
+            }
+        }
+        ModuleKind::FxTremolo
+        | ModuleKind::FxVibrato
+        | ModuleKind::FxDeEsser
+        | ModuleKind::FxResBank
+        | ModuleKind::FxTapeEcho
+        | ModuleKind::FxMultibandComp
+        | ModuleKind::FxGrainDelay
+        | ModuleKind::FxSpectralGate
+        | ModuleKind::FxPlate
+        | ModuleKind::FxTranceGate
+        | ModuleKind::FxWaveFolder => {
+            // Internal-LFO modulation cluster lives in
+            // `rack_content_fx_lfo.rs` — same split-for-LOC
+            // pattern as the bigger fx_extras file.
+            if let Some(new_pair) = crate::ui::rack_content_fx_lfo::try_draw_fx_lfo_content(
+                app,
+                ui,
+                kind,
+                module_id,
+                ctrl,
+                &locked,
+                &focused,
+                pad_expanded,
+                pad_pair,
+            ) {
+                pad_pair = new_pair;
+            }
+        }
         ModuleKind::FxEq => {
             let (mut lo, mut mi, mut hi) = {
                 let s = app.state.read();
@@ -310,12 +387,13 @@ pub(super) fn draw_fx_content(
             }
         }
         ModuleKind::FxCompressor => {
-            let (mut th, mut ra, mut mi) = {
+            let (mut th, mut ra, mut mi, sc_on) = {
                 let s = app.state.read();
                 (
                     s.fx.compressor_threshold,
                     s.fx.compressor_ratio,
                     s.fx.compressor_mix,
+                    s.fx.compressor_sidechain,
                 )
             };
             hk!(
@@ -324,6 +402,31 @@ pub(super) fn draw_fx_content(
                 ("RATIO", &mut ra, pm("fx.compressor_ratio")),
                 ("MIX", &mut mi, pm("fx.compressor_mix"))
             );
+            // Sidechain toggle.  Compact button below the knob row —
+            // when on, the level detector reads the sidechain audio
+            // input port (cable into PortKind::SidechainIn) instead of
+            // the main signal.  Falls back gracefully to self-detection
+            // when no cable is connected.
+            ui.horizontal(|ui| {
+                let label = if sc_on { "SC ON" } else { "SC" };
+                let col = if sc_on {
+                    crate::ui::theme::CHALK
+                } else {
+                    crate::ui::theme::IRON
+                };
+                if ui
+                    .add_sized(
+                        [44.0, 16.0],
+                        egui::Button::new(
+                            egui::RichText::new(label).monospace().size(8.0).color(col),
+                        ),
+                    )
+                    .clicked()
+                {
+                    app.state.write().fx.compressor_sidechain = !sc_on;
+                    changed = true;
+                }
+            });
             if pad_expanded {
                 ui.add_space(PAD_SECTION_TOP_GAP);
                 let (vc, _) = render_three_pad(
@@ -554,6 +657,27 @@ pub(super) fn draw_fx_content(
                 s.fx.bitcrush_mix = mi;
             }
         }
+        ModuleKind::FxConvReverb => {
+            changed |= super::rack_content_conv_reverb::draw_conv_reverb(
+                app,
+                ui,
+                module_id,
+                pad_expanded,
+                &mut pad_pair,
+            );
+        }
+        ModuleKind::FxParamEq => {
+            changed |= super::rack_content_param_eq::draw_param_eq(app, ui, module_id);
+        }
+        ModuleKind::FxPitchShift => {
+            changed |= super::rack_content_pitch_shift::draw_pitch_shift(
+                app,
+                ui,
+                module_id,
+                pad_expanded,
+                &mut pad_pair,
+            );
+        }
         ModuleKind::FxRingMod => {
             let (mut fr, mut mi) = {
                 let s = app.state.read();
@@ -634,23 +758,163 @@ pub(super) fn draw_lfo_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_i
     crate::ui::panels::draw_lfo_slot(app, ui, slot);
 }
 
+pub(super) fn draw_cv_seq_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    // Multiple CvSequencer instances share the four CV-seq slots.
+    // Slot index = the instance's order in the rack, capped to
+    // CV_SEQ_SLOTS - 1 so a 5th instance stacks on the last slot.
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::CvSequencer)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_cv_seq(app, ui, slot);
+}
+
+pub(super) fn draw_slew_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    // Same per-instance slot mapping as the CV sequencer / LFO.
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::Slew)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_slew(app, ui, slot);
+}
+
+pub(super) fn draw_quantizer_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::Quantizer)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_quantizer(app, ui, slot);
+}
+
+pub(super) fn draw_comparator_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::Comparator)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_comparator(app, ui, slot);
+}
+
+pub(super) fn draw_sample_hold_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::SampleHold)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_sample_hold(app, ui, slot);
+}
+
+pub(super) fn draw_math_content(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
+    let slot = {
+        let rack = app.state.read();
+        rack.rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::Math)
+            .enumerate()
+            .find(|(_, m)| m.id == module_id)
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+    };
+    crate::ui::panels::draw_math(app, ui, slot);
+}
+
+// Newer CV-utility content dispatchers (TriggerDiv / LogicGate /
+// FunctionGen) live in `rack_content_util.rs` (sibling) since this
+// file crossed the 1000-line cap during the FunctionGen ship.
+// Re-exported via the module declaration in `ui::mod`.
+
 pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     use crate::ui::widgets;
     let ctrl = widgets::ControlPrefs::from_prefs(&app.state.read().ui_prefs);
-    let mut master_vol = app.state.read().fx.master_volume;
+    let (
+        mut master_vol,
+        mut mid_gain,
+        mut mid_tilt,
+        mut mid_sat,
+        mut side_gain,
+        mut side_tilt,
+        mut side_sat,
+    ) = {
+        let s = app.state.read();
+        (
+            s.fx.master_volume,
+            s.fx.ms_mid_gain,
+            s.fx.ms_mid_tilt,
+            s.fx.ms_mid_sat,
+            s.fx.ms_side_gain,
+            s.fx.ms_side_tilt,
+            s.fx.ms_side_sat,
+        )
+    };
+    let locked = app.state.read().llm.locked_params.clone();
+    let focused = app.state.read().llm.focused_params.clone();
+    let pm = |path: &str| crate::state::param_mode(path, &locked, &focused);
+    let mut changed = false;
 
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new("MASTER VOLUME")
+            egui::RichText::new("MASTER")
                 .monospace()
                 .size(9.0)
                 .color(theme::ASH),
         );
-        if widgets::param_control(ui, "", &mut master_vol, crate::state::ParamMode::Free, ctrl).0 {
-            app.state.write().fx.master_volume = master_vol;
-            app.push_audio_params();
+        if widgets::param_control(ui, "VOL", &mut master_vol, pm("fx.master_volume"), ctrl).0 {
+            changed = true;
         }
-
+        ui.separator();
+        if widgets::param_control(ui, "MID G", &mut mid_gain, pm("fx.ms_mid_gain"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "MID T", &mut mid_tilt, pm("fx.ms_mid_tilt"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "MID S", &mut mid_sat, pm("fx.ms_mid_sat"), ctrl).0 {
+            changed = true;
+        }
+        ui.separator();
+        if widgets::param_control(ui, "SIDE G", &mut side_gain, pm("fx.ms_side_gain"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "SIDE T", &mut side_tilt, pm("fx.ms_side_tilt"), ctrl).0 {
+            changed = true;
+        }
+        if widgets::param_control(ui, "SIDE S", &mut side_sat, pm("fx.ms_side_sat"), ctrl).0 {
+            changed = true;
+        }
         ui.separator();
         let rack = app.state.read();
         let voice_kinds = [
@@ -675,202 +939,25 @@ pub(super) fn draw_master_content(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             ui.label(egui::RichText::new(*label).monospace().size(8.0).color(col));
         }
     });
+
+    if changed {
+        let mut s = app.state.write();
+        s.fx.master_volume = master_vol;
+        s.fx.ms_mid_gain = mid_gain;
+        s.fx.ms_mid_tilt = mid_tilt;
+        s.fx.ms_mid_sat = mid_sat;
+        s.fx.ms_side_gain = side_gain;
+        s.fx.ms_side_tilt = side_tilt;
+        s.fx.ms_side_sat = side_sat;
+        drop(s);
+        app.push_audio_params();
+    }
 }
 
 pub(super) use super::agent_card::draw_llm_agent_content;
 
-// ─── Cable drag interaction ───────────────────────────────────────────────────
-/// Two port kinds can be patched together iff they're identical OR one side
-/// is CV (LFO/seq output) and the other is Mod (per-knob modulation input).
-fn port_kinds_compatible(a: crate::state::PortKind, b: crate::state::PortKind) -> bool {
-    use crate::state::PortKind::*;
-    a == b || matches!((a, b), (Cv, Mod) | (Mod, Cv))
-}
-
-pub(super) fn handle_cable_drag(
-    app: &mut ImpulseApp,
-    ctx: &egui::Context,
-    ports: &[module_card::PortPos],
-) {
-    // Cable patching only in back-panel view (allow in-progress drags to complete)
-    if !app.rack_flipped && app.cable_drag.is_none() {
-        return;
-    }
-    let pointer = match ctx.pointer_latest_pos() {
-        Some(p) => p,
-        None => return,
-    };
-    let primary_down = ctx.input(|i| i.pointer.primary_down());
-    let primary_released = ctx.input(|i| i.pointer.primary_released());
-
-    let hovered_port = ports
-        .iter()
-        .find(|pp| pp.center.distance(pointer) <= module_card::PORT_RADIUS + 3.0);
-
-    if primary_down
-        && app.cable_drag.is_none()
-        && let Some(pp) = hovered_port
-    {
-        app.cable_drag = Some(super::rack_canvas::CableDrag {
-            from_port: pp.port.clone(),
-            from_screen: pp.center,
-        });
-    }
-
-    if primary_released
-        && let Some(drag) = app.cable_drag.take()
-        && let Some(target) = hovered_port
-        && drag.from_port.dir != target.port.dir
-        && port_kinds_compatible(drag.from_port.kind, target.port.kind)
-        && drag.from_port.module_id != target.port.module_id
-    {
-        let (from, to) = if drag.from_port.dir == crate::state::PortDir::Out {
-            (drag.from_port, target.port.clone())
-        } else {
-            (target.port.clone(), drag.from_port)
-        };
-        app.state.write().rack.connect(from, to);
-        app.push_fx_plan();
-    }
-
-    // Right-click a port to disconnect all cables attached to it.
-    let secondary_released = ctx.input(|i| i.pointer.secondary_released());
-    if secondary_released
-        && app.cable_drag.is_none()
-        && let Some(pp) = hovered_port
-    {
-        let prev_len = app.state.read().rack.cables.len();
-        app.state
-            .write()
-            .rack
-            .cables
-            .retain(|c| c.from != pp.port && c.to != pp.port);
-        if app.state.read().rack.cables.len() != prev_len {
-            app.push_fx_plan();
-        }
-    }
-}
-
-// ─── Drag helpers (moved from rack_canvas.rs to stay under 1000-line limit) ──
-use crate::ui::rack_cables::ModuleDrag;
-
-/// Process drag start/stop from a card response and update app.module_drag.
-/// Returns true if this card was just dropped (so caller can reorder slots).
-pub(super) fn handle_title_drag(
-    app: &mut ImpulseApp,
-    ctx: &egui::Context,
-    id: u32,
-    resp: &module_card::CardResponse,
-    zone: crate::state::Zone,
-    zone_origin: egui::Pos2,
-    step: f32,
-    col_w: f32,
-) -> bool {
-    if resp.title_dragged {
-        if app.module_drag.as_ref().map(|d| d.module_id) != Some(id) {
-            let (cw, rh) = {
-                let s = app.state.read();
-                s.rack
-                    .modules
-                    .iter()
-                    .find(|m| m.id == id)
-                    .map(|m| s.rack.effective_grid_size(m))
-                    .unwrap_or((1, 1))
-            };
-            app.module_drag = Some(ModuleDrag {
-                module_id: id,
-                pointer: ctx.pointer_latest_pos().unwrap_or_default(),
-                zone,
-                col_span: cw,
-                row_span: rh,
-                zone_origin,
-                step,
-                col_w,
-            });
-        } else if let Some(ref mut drag) = app.module_drag {
-            drag.pointer = ctx.pointer_latest_pos().unwrap_or(drag.pointer);
-        }
-    }
-    if resp.title_drag_released && app.module_drag.as_ref().map(|d| d.module_id) == Some(id) {
-        app.module_drag = None;
-        return true;
-    }
-    false
-}
-
-/// Snap-to-grid drop: compute the target grid cell from the pointer position
-/// and move the module there if the cell is free (or swap with occupant).
-pub(super) fn reorder_module_by_drop(
-    app: &mut ImpulseApp,
-    dragged_id: u32,
-    drop_pos: egui::Pos2,
-    zone: crate::state::Zone,
-    zone_origin: egui::Pos2,
-    step: f32,
-    col_w: f32,
-) {
-    let (col_span, row_span) = {
-        let s = app.state.read();
-        s.rack
-            .modules
-            .iter()
-            .find(|m| m.id == dragged_id)
-            .map(|m| s.rack.effective_grid_size(m))
-            .unwrap_or((1, 1))
-    };
-
-    // Compute snap target from pointer position relative to zone origin.
-    let rel_x = drop_pos.x - zone_origin.x;
-    let rel_y = drop_pos.y - zone_origin.y;
-    let snap_col = (rel_x / step).round().max(0.0) as u8;
-    let snap_row = (rel_y / step).round().max(0.0) as u8;
-    let snap_col = snap_col.min(crate::state::GRID_COLS.saturating_sub(col_span));
-
-    // Check current position — no-op if unchanged.
-    let current = app
-        .state
-        .read()
-        .rack
-        .modules
-        .iter()
-        .find(|m| m.id == dragged_id)
-        .map(|m| (m.grid_col, m.grid_row));
-    if current == Some((snap_col, snap_row)) {
-        return;
-    }
-
-    // Overlap check: reject drop if any other module in the same zone occupies
-    // any cell in the target (snap_col..+col_span, snap_row..+row_span) block.
-    let blocked = {
-        let s = app.state.read();
-        s.rack
-            .modules
-            .iter()
-            .filter(|m| m.id != dragged_id && m.zone == zone)
-            .any(|m| {
-                let (mw, mh) = s.rack.effective_grid_size(m);
-                // AABB overlap test
-                snap_col < m.grid_col + mw
-                    && m.grid_col < snap_col + col_span
-                    && snap_row < m.grid_row + mh
-                    && m.grid_row < snap_row + row_span
-            })
-    };
-    if blocked {
-        return; // target occupied — keep original position
-    }
-
-    app.push_history();
-    if let Some(m) = app
-        .state
-        .write()
-        .rack
-        .modules
-        .iter_mut()
-        .find(|m| m.id == dragged_id)
-    {
-        m.grid_col = snap_col;
-        m.grid_row = snap_row;
-    }
-    let _ = col_w;
-}
+// Cable-drag + module-drag helpers live in `rack_content_drag.rs`
+// (extracted to keep this file under the 1000-line limit).
+pub(super) use super::rack_content_drag::{
+    handle_cable_drag, handle_title_drag, reorder_module_by_drop,
+};

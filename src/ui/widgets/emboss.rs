@@ -14,7 +14,7 @@ pub fn button_emboss(ui: &mut Ui, label: &str, active: &mut bool) -> bool {
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        let rounding = egui::Rounding::same(3.0);
+        let rounding = egui::CornerRadius::same(3);
 
         let (fill, top_col, bot_col, text_col) = if *active {
             (

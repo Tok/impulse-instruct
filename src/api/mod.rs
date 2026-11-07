@@ -57,6 +57,13 @@ fn default_one_shot() -> bool {
 #[derive(Deserialize)]
 pub struct ParamsRequest {
     pub params: serde_json::Value,
+    /// When true, skip the API-log line for this request.  Scripted
+    /// high-frequency writers (e.g. the Bach scenario's 20 Hz
+    /// anti-phase pan LFO) set this so they don't flood the log with
+    /// identical "[API] params: bass_voices" messages.  Default
+    /// false keeps the log visible for normal one-shot API calls.
+    #[serde(default)]
+    pub quiet: bool,
 }
 
 #[derive(Deserialize)]
@@ -88,14 +95,16 @@ pub struct PresetRequest {
 
 mod rack;
 pub use rack::{
-    RackAddRequest, RackAgentRequest, RackCableGainRequest, RackCableRequest, RackRemoveRequest,
-    post_rack_add, post_rack_agent, post_rack_cable, post_rack_cable_gain, post_rack_remove,
+    RackAddRequest, RackAgentRequest, RackCableGainRequest, RackCableRequest, RackEnableRequest,
+    RackRemoveRequest, post_rack_add, post_rack_agent, post_rack_cable, post_rack_cable_gain,
+    post_rack_enable, post_rack_remove,
 };
 
 mod instrument;
 pub use instrument::{
-    AmenRequest, FlipRequest, GranularRequest, StyleRequest, post_amen, post_flip, post_granular,
-    post_randomize, post_style,
+    AmenRequest, ConvReverbRequest, FlipRequest, GranularRequest, SampleRequest, StyleRequest,
+    WavetableRequest, post_amen, post_conv_reverb, post_flip, post_granular, post_randomize,
+    post_sample, post_style, post_wavetable,
 };
 
 mod rack_mod;
@@ -114,10 +123,21 @@ mod song;
 pub use song::{SongRequest, SongResponse, get_song, post_song};
 
 mod resets;
-pub use resets::{post_rack_reset, post_state_reset};
+pub use resets::{post_patch_morph, post_rack_random, post_rack_reset, post_state_reset};
 
 mod midi_export;
 pub use midi_export::{MidiExportRequest, post_midi_export};
+
+mod midi_granulise;
+pub use midi_granulise::post_midi_granulise;
+mod midi_import;
+pub use midi_import::{MidiImportRequest, MidiImportResponse, post_midi_import};
+
+mod ui_prefs_api;
+pub use ui_prefs_api::post_ui_prefs;
+
+pub mod ws;
+pub use ws::{ws_state_handler, ws_state_hash};
 
 #[derive(Serialize)]
 pub struct OkResponse {
@@ -198,12 +218,14 @@ async fn post_params(
     // Snapshot first, then release read lock before acquiring write lock.
     let current = snapshot(&api.app_state);
     let next = apply_llm_update(current, &req.params, &[]);
-    let keys: Vec<&str> = req
-        .params
-        .as_object()
-        .map(|o| o.keys().map(|k| k.as_str()).collect())
-        .unwrap_or_default();
-    api_log(&api, format!("[API] params: {}", keys.join(", ")));
+    if !req.quiet {
+        let keys: Vec<&str> = req
+            .params
+            .as_object()
+            .map(|o| o.keys().map(|k| k.as_str()).collect())
+            .unwrap_or_default();
+        api_log(&api, format!("[API] params: {}", keys.join(", ")));
+    }
     *api.app_state.write() = next;
     api.params_dirty
         .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -243,8 +265,14 @@ async fn post_unlock(
     })
 }
 
-async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
-    api.app_state.write().sequencer.running = true;
+pub(crate) async fn post_play(AxumState(api): AxumState<ApiState>) -> Json<OkResponse> {
+    {
+        let mut s = api.app_state.write();
+        s.sequencer.running = true;
+        // Don't leave Rack Setup covering a rack that's now playing.  Hide
+        // only — a preset request (if any) keeps its stronger Some(true).
+        s.wizard_dismiss_requested.get_or_insert(false);
+    }
     api.params_dirty
         .store(true, std::sync::atomic::Ordering::Relaxed);
     api_log(&api, "[API] sequencer: play");
@@ -326,6 +354,7 @@ pub fn build_router(api_state: ApiState) -> Router {
 
     Router::new()
         .route("/api/state", get(get_state))
+        .route("/api/ws/state", get(ws_state_handler))
         .route("/api/schema", get(get_schema))
         .route("/api/prompt", post(post_prompt))
         .route("/api/params", post(post_params))
@@ -340,6 +369,9 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/randomize", post(post_randomize))
         .route("/api/amen", post(post_amen))
         .route("/api/granular", post(post_granular))
+        .route("/api/conv_reverb", post(post_conv_reverb))
+        .route("/api/wavetable", post(post_wavetable))
+        .route("/api/sample", post(post_sample))
         .route("/api/flip", post(post_flip))
         .route("/api/rack/add", post(post_rack_add))
         .route("/api/rack/agent", post(post_rack_agent))
@@ -349,11 +381,17 @@ pub fn build_router(api_state: ApiState) -> Router {
         .route("/api/rack/mod_target", post(post_rack_mod_target))
         .route("/api/rack/mod_depth", post(post_rack_mod_depth))
         .route("/api/rack/remove", post(post_rack_remove))
+        .route("/api/rack/enable", post(post_rack_enable))
         .route("/api/rack/pad", post(post_rack_pad))
         .route("/api/rack/reset", post(post_rack_reset))
+        .route("/api/rack/random", post(post_rack_random))
+        .route("/api/morph", post(post_patch_morph))
         .route("/api/state/reset", post(post_state_reset))
         .route("/api/rack/collapse", post(post_collapse))
         .route("/api/midi/export", post(post_midi_export))
+        .route("/api/midi/import", post(post_midi_import))
+        .route("/api/midi/granulise", post(post_midi_granulise))
+        .route("/api/ui_prefs", post(post_ui_prefs))
         .layer(cors)
         .with_state(api_state)
 }

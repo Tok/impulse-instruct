@@ -1,13 +1,8 @@
 // ─── state/rack.rs ────────────────────────────────────────────────────────────
-// Modular rack state: which modules are active and how they are cabled.
-//
-// The rack replaces the fixed 5-tab layout.  Every voice, FX unit, and
-// modulation source is a `RackModule` with a stable `id`, a `kind`, optional
-// enabled flag, and a layout position used by the UI.
-//
-// Cables connect output ports to input ports.  In this first iteration the DSP
-// still uses the existing fixed chain; cable state drives the visual routing
-// overlay and will be wired into `compile_fx_plan` in a follow-up.
+// Modular rack state: modules + cables.  Each `RackModule` has a stable id,
+// a kind, an enabled flag, and a layout position; cables connect output
+// ports to input ports.  Cycle-checked at connect time (FX→FX cycles are
+// allowed and lifted into feedback edges by `compile_fx_plan`).
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -27,6 +22,11 @@ pub enum PortKind {
     /// Per-knob modulation input (LFO → target knob).  Distinct from Cv so
     /// the rack UI and fx_plan can treat mod cables separately.
     Mod,
+    /// Sidechain audio input (ducker / vocoder modulator / sidechain
+    /// compressor).  Carries audio but is treated as a tap — recorded
+    /// in `sidechain_routes` and read with a one-sample delay, so
+    /// cycles are safe by construction.
+    SidechainIn,
 }
 
 /// Direction of a port relative to its module.
@@ -176,10 +176,17 @@ pub struct RackModule {
 
 impl RackModule {
     pub fn new(id: u32, kind: ModuleKind) -> Self {
+        // FX modules start DISABLED so a freshly-added effect can't
+        // click the signal at its default wet mix.  The user (or an
+        // agent) toggles them on when they want the effect active;
+        // until then the module sits in the rack inert.  Voices /
+        // analysers / utility modules stay enabled — their "on by
+        // default" is the usual expectation.
+        let enabled = crate::state::fx_plan::kind_to_fx_step(kind).is_none();
         Self {
             id,
             kind,
-            enabled: true,
+            enabled,
             zone: kind.default_zone(),
             slot: 0,
             grid_col: 0,
@@ -271,8 +278,15 @@ impl RackState {
                 | ModuleKind::GranularTexture
                 | ModuleKind::GabberKick
                 | ModuleKind::NoiseVoice
+                | ModuleKind::Theremin
+                | ModuleKind::Pendulum
+                | ModuleKind::FmOpsVoice
+                | ModuleKind::AdditiveVoice
+                | ModuleKind::ModalVoice
+                | ModuleKind::ChiptuneVoice
+                | ModuleKind::VocalVoice
                 | ModuleKind::An1xVoice
-                | ModuleKind::NeuTts
+                | ModuleKind::Tts
                 | ModuleKind::FxReverb
                 | ModuleKind::FxDelay
                 | ModuleKind::FxChorus
@@ -282,10 +296,26 @@ impl RackState {
                 | ModuleKind::FxBitcrush
                 | ModuleKind::FxEq
                 | ModuleKind::FxCompressor
+                | ModuleKind::FxGate
+                | ModuleKind::FxVocoder
                 | ModuleKind::FxTapeSat
                 | ModuleKind::FxDrive
                 | ModuleKind::FxAutotune
                 | ModuleKind::FxPan
+                | ModuleKind::FxWiden
+                | ModuleKind::FxFreqShift
+                | ModuleKind::FxTremolo
+                | ModuleKind::FxVibrato
+                | ModuleKind::FxIsoEq
+                | ModuleKind::FxDeEsser
+                | ModuleKind::FxResBank
+                | ModuleKind::FxTapeEcho
+                | ModuleKind::FxMultibandComp
+                | ModuleKind::FxGrainDelay
+                | ModuleKind::FxSpectralGate
+                | ModuleKind::FxPlate
+                | ModuleKind::FxTranceGate
+                | ModuleKind::FxWaveFolder
         );
         if !has_audio_out {
             return true;
@@ -425,7 +455,12 @@ impl RackState {
     /// Dynamic grid height override for modules whose size depends on their
     /// content. Currently only used for StepSequencer (grows with visible lanes).
     /// The caller (rack_canvas) updates this via `set_sequencer_dyn_rows()`.
-    fn dyn_height_override(&self, kind: ModuleKind) -> Option<u8> {
+    /// Visible to the `state` module — `rack_arrange.rs` reads this
+    /// from its impl block during the bin-pack to override
+    /// `kind.grid_size()`'s static height for kinds that grow with
+    /// runtime content (StepSequencer adds rows as voice lanes
+    /// surface in the pattern).
+    pub(super) fn dyn_height_override(&self, kind: ModuleKind) -> Option<u8> {
         if kind == ModuleKind::StepSequencer {
             self.dyn_sequencer_rows
         } else {
@@ -433,286 +468,9 @@ impl RackState {
         }
     }
 
-    pub fn arrange_grid(&mut self) {
-        fn order(kind: ModuleKind) -> u8 {
-            // Within each zone: full-width strips first, then smaller modules pack
-            // into the free cells below. AI zone: console above, agents pack under.
-            // MAIN AUDIO zone: sequencer, then master.
-            match kind {
-                ModuleKind::LlmConsole => 0,
-                ModuleKind::LlmAgent => 1,
-                ModuleKind::StepSequencer => 2,
-                ModuleKind::MasterOutput => 3,
-                // Canonical voice order in the voice zone: put the bass between
-                // the two drum kits so the melodic voice sits centered between
-                // low (808) and high (909) drums — also matches its pitch
-                // register, which lives above 808 kicks and below 909 hats.
-                ModuleKind::DrumKit808 => 10,
-                ModuleKind::AcidBass => 11,
-                ModuleKind::DrumKit909 => 12,
-                // Gabber kick sits next to the drum kits — it's a drum voice.
-                ModuleKind::GabberKick => 13,
-                ModuleKind::HooverLead => 14,
-                ModuleKind::An1xVoice => 15,
-                ModuleKind::AmenSampler => 16,
-                ModuleKind::NoiseVoice => 17,
-                ModuleKind::GranularTexture => 18,
-                ModuleKind::NeuTts => 19,
-                ModuleKind::FxWaveshaper => 20,
-                ModuleKind::FxReverb => 21,
-                ModuleKind::FxDelay => 22,
-                ModuleKind::FxBitcrush => 23,
-                ModuleKind::FxChorus => 24,
-                ModuleKind::FxPhaser => 25,
-                ModuleKind::FxRingMod => 26,
-                ModuleKind::FxEq => 27,
-                ModuleKind::FxCompressor => 28,
-                ModuleKind::FxTapeSat => 29,
-                ModuleKind::FxDrive => 30,
-                ModuleKind::FxAutotune => 31,
-                ModuleKind::FxPan => 36,
-                ModuleKind::SpectrumAnalyzer => 32,
-                ModuleKind::StereoMeter => 33,
-                ModuleKind::ActivityTimeline => 34,
-                ModuleKind::LfoModule => 35,
-            }
-        }
-        let cols = GRID_COLS as usize;
-        let max_rows = 64usize; // generous upper bound
-
-        for zone in [Zone::Ai, Zone::Global, Zone::Voice, Zone::FxMod] {
-            // Collect and sort by canonical order
-            let mut ids: Vec<(u32, ModuleKind, bool)> = self
-                .modules
-                .iter()
-                .filter(|m| m.zone == zone)
-                .map(|m| (m.id, m.kind, m.pad_expanded))
-                .collect();
-            ids.sort_by_key(|&(_, k, _)| order(k));
-
-            // 2D occupancy grid
-            let mut occ = vec![vec![false; cols]; max_rows];
-
-            for (slot_idx, &(id, kind, pad_expanded)) in ids.iter().enumerate() {
-                let (w, h) = kind.grid_size(GRID_COLS);
-                let h = if kind.supports_xy_pad() && pad_expanded {
-                    h + 1
-                } else {
-                    h
-                };
-                let h = self.dyn_height_override(kind).unwrap_or(h);
-                let w = w as usize;
-                let h = h as usize;
-
-                // Find first free position (top-to-bottom, left-to-right)
-                let mut placed = false;
-                'scan: for r in 0..max_rows - h {
-                    for c in 0..=cols - w {
-                        // Check if w×h block is free
-                        let fits = (0..h).all(|dr| (0..w).all(|dc| !occ[r + dr][c + dc]));
-                        if fits {
-                            // Mark occupied
-                            for dr in 0..h {
-                                for dc in 0..w {
-                                    occ[r + dr][c + dc] = true;
-                                }
-                            }
-                            if let Some(m) = self.modules.iter_mut().find(|m| m.id == id) {
-                                m.grid_col = c as u8;
-                                m.grid_row = r as u8;
-                                m.slot = slot_idx as u8;
-                            }
-                            placed = true;
-                            break 'scan;
-                        }
-                    }
-                }
-                if !placed {
-                    // Shouldn't happen with 64 rows, but fallback to (0, 0)
-                    if let Some(m) = self.modules.iter_mut().find(|m| m.id == id) {
-                        m.grid_col = 0;
-                        m.grid_row = 0;
-                        m.slot = slot_idx as u8;
-                    }
-                }
-            }
-
-            // ── Center-bias pass: shift row bands toward the center ──────
-            // Find the rightmost occupied column per row, then group rows
-            // connected by multi-row modules and apply a uniform shift.
-            let zone_mods: Vec<(u32, u8, u8, u8, u8)> = self
-                .modules
-                .iter()
-                .filter(|m| m.zone == zone)
-                .map(|m| {
-                    let (w, h) = self.effective_grid_size(m);
-                    (m.id, m.grid_col, m.grid_row, w, h)
-                })
-                .collect();
-            if zone_mods.is_empty() {
-                continue;
-            }
-            // Union-find to group rows linked by tall modules
-            let used_rows = zone_mods
-                .iter()
-                .map(|&(_, _, r, _, h)| (r + h) as usize)
-                .max()
-                .unwrap_or(0);
-            let mut parent: Vec<usize> = (0..used_rows).collect();
-            fn find(p: &mut [usize], x: usize) -> usize {
-                if p[x] != x {
-                    p[x] = find(p, p[x]);
-                }
-                p[x]
-            }
-            fn union(p: &mut [usize], a: usize, b: usize) {
-                let ra = find(p, a);
-                let rb = find(p, b);
-                if ra != rb {
-                    p[rb] = ra;
-                }
-            }
-            for &(_, _, r, _, h) in &zone_mods {
-                for dr in 1..h {
-                    union(&mut parent, r as usize, (r + dr) as usize);
-                }
-            }
-            // Compute max right edge per row-band
-            let mut band_right: std::collections::HashMap<usize, u8> =
-                std::collections::HashMap::new();
-            for &(_, c, r, w, h) in &zone_mods {
-                let right = c + w;
-                for dr in 0..h {
-                    let band = find(&mut parent, (r + dr) as usize);
-                    let entry = band_right.entry(band).or_insert(0);
-                    *entry = (*entry).max(right);
-                }
-            }
-            // Apply centering shift per module
-            for &(id, _, r, _, _) in &zone_mods {
-                let band = find(&mut parent, r as usize);
-                let right = band_right.get(&band).copied().unwrap_or(cols as u8);
-                if right < cols as u8 {
-                    let shift = (cols as u8 - right) / 2;
-                    if shift > 0
-                        && let Some(m) = self.modules.iter_mut().find(|m| m.id == id)
-                    {
-                        m.grid_col += shift;
-                    }
-                }
-            }
-        }
-    }
-
-    /// Wire standard default cables for whichever modules are present:
-    /// seq→voices (CV), voices→master (audio), FX serial chain, TTS→reverb,
-    /// and agent→all controllable (control). Safe to call on any rack — only
-    /// wires modules that actually exist.
-    pub fn wire_default_cables(&mut self) {
-        let find = |modules: &[RackModule], kind: ModuleKind| -> Option<u32> {
-            modules.iter().find(|m| m.kind == kind).map(|m| m.id)
-        };
-        let master_id = find(&self.modules, ModuleKind::MasterOutput);
-        let seq_id = find(&self.modules, ModuleKind::StepSequencer);
-        // Voices that get a direct CV trigger from the sequencer and their
-        // dry audio cabled to master.
-        let voice_ids: Vec<u32> = [
-            ModuleKind::AcidBass,
-            ModuleKind::DrumKit808,
-            ModuleKind::DrumKit909,
-            ModuleKind::HooverLead,
-            ModuleKind::An1xVoice,
-            ModuleKind::AmenSampler,
-            ModuleKind::NoiseVoice,
-            ModuleKind::GranularTexture,
-            ModuleKind::GabberKick,
-        ]
-        .iter()
-        .filter_map(|&k| find(&self.modules, k))
-        .collect();
-        let tts_id = find(&self.modules, ModuleKind::NeuTts);
-        let reverb_id = find(&self.modules, ModuleKind::FxReverb);
-        let delay_id = find(&self.modules, ModuleKind::FxDelay);
-
-        let audio_cable = |from_id: u32, to_id: u32| {
-            (
-                PortRef {
-                    module_id: from_id,
-                    dir: PortDir::Out,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-                PortRef {
-                    module_id: to_id,
-                    dir: PortDir::In,
-                    kind: PortKind::Audio,
-                    index: 0,
-                },
-            )
-        };
-
-        // Seq → voices (CV)
-        if let Some(sid) = seq_id {
-            for vid in &voice_ids {
-                self.connect(
-                    PortRef {
-                        module_id: sid,
-                        dir: PortDir::Out,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                    PortRef {
-                        module_id: *vid,
-                        dir: PortDir::In,
-                        kind: PortKind::Cv,
-                        index: 0,
-                    },
-                );
-            }
-        }
-        // Voices → master (dry direct path)
-        if let Some(mid) = master_id {
-            for vid in &voice_ids {
-                let (a, b) = audio_cable(*vid, mid);
-                self.connect(a, b);
-            }
-        }
-        // TTS → Reverb (TTS gets ambience).  Reverb output is wired to
-        // master below so this stays in the audio path.
-        if let (Some(tid), Some(rid)) = (tts_id, reverb_id) {
-            let (a, b) = audio_cable(tid, rid);
-            self.connect(a, b);
-        }
-        // ── Wire the "important" FX to master so they have a complete
-        // path.  Other FX live in the rack but stay unwired by default —
-        // the user can patch them in as needed (transparent FX nodes).
-        if let (Some(rid), Some(mid)) = (reverb_id, master_id) {
-            let (a, b) = audio_cable(rid, mid);
-            self.connect(a, b);
-        }
-        if let (Some(did), Some(mid)) = (delay_id, master_id) {
-            let (a, b) = audio_cable(did, mid);
-            self.connect(a, b);
-        }
-        // Agent → all controllable
-        let agent_id = find(&self.modules, ModuleKind::LlmAgent);
-        if let Some(aid) = agent_id {
-            let targets: Vec<u32> = self
-                .modules
-                .iter()
-                .filter(|m| {
-                    !matches!(
-                        m.kind,
-                        ModuleKind::MasterOutput | ModuleKind::LlmAgent | ModuleKind::LlmConsole
-                    )
-                })
-                .map(|m| m.id)
-                .collect();
-            for tid in &targets {
-                self.connect_control(aid, *tid);
-            }
-        }
-    }
+    // `wire_default_cables` lives in `rack_wiring.rs`, `arrange_grid`
+    // lives in `rack_arrange.rs` — both are `impl RackState` blocks
+    // in sibling files so this one stays under the 1000-line cap.
 
     /// Remove audio cables that participate in cycles.  Non-audio cables are
     /// kept unconditionally.  Returns the number of cables removed.
@@ -755,9 +513,12 @@ impl RackState {
         }
         // Build adjacency from existing audio cables, then check if to_id can
         // already reach from_id (i.e. adding from→to would close a cycle).
+        // Sidechain edges (`to.kind == SidechainIn`) are excluded — they're
+        // taps, read with a one-sample delay, and don't propagate signal
+        // forward in the chain.
         let mut adj: HashMap<u32, Vec<u32>> = HashMap::new();
         for c in &self.cables {
-            if c.from.kind == PortKind::Audio {
+            if c.from.kind == PortKind::Audio && c.to.kind != PortKind::SidechainIn {
                 adj.entry(c.from.module_id)
                     .or_default()
                     .push(c.to.module_id);
@@ -791,8 +552,10 @@ impl RackState {
         // feedback routes at compile time with a clamped gain so the loop
         // can't diverge).  Cycles involving a voice / master / LLM module
         // stay rejected — those would be genuine graph errors, not
-        // musical feedback.
+        // musical feedback.  Sidechain destinations are taps — they read
+        // the source with a one-sample delay so no cycle check applies.
         if from.kind == PortKind::Audio
+            && to.kind != PortKind::SidechainIn
             && self.would_create_audio_cycle(from.module_id, to.module_id)
             && !(self.is_fx_module(from.module_id) && self.is_fx_module(to.module_id))
         {
@@ -811,6 +574,21 @@ impl RackState {
             audio_gain: default_audio_gain(),
         });
         true
+    }
+
+    /// Connect a sidechain cable: `from_id`'s audio out → `to_id`'s
+    /// sidechain in.  Tap, not a forward send.
+    pub fn connect_sidechain(&mut self, from_id: u32, to_id: u32) -> bool {
+        let mk = |id, dir, kind| PortRef {
+            module_id: id,
+            dir,
+            kind,
+            index: 0,
+        };
+        self.connect(
+            mk(from_id, PortDir::Out, PortKind::Audio),
+            mk(to_id, PortDir::In, PortKind::SidechainIn),
+        )
     }
 
     /// Connect a control cable from `from_id` (Out) to `to_id` (In).
@@ -863,7 +641,7 @@ impl Default for RackState {
         rack.add_module(ModuleKind::AmenSampler);
         rack.add_module(ModuleKind::NoiseVoice);
         rack.add_module(ModuleKind::GranularTexture);
-        rack.add_module(ModuleKind::NeuTts);
+        rack.add_module(ModuleKind::Tts);
 
         // ── FX + Mod zone — order matches the fixed chain in process_block ───
         rack.add_module(ModuleKind::FxWaveshaper);

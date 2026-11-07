@@ -8,7 +8,7 @@ use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 /// Return the currently selected pair index for an XY pad with the given `pad_id`.
 /// Call this *before* `xy_pad` on each frame to dispatch the correct `&mut f32` values.
 pub fn xy_pad_pair(ctx: &egui::Context, pad_id: &str) -> usize {
-    ctx.data(|d| d.get_temp(egui::Id::new(pad_id)).unwrap_or(0usize))
+    ctx.data(|d| d.get_temp(egui::Id::unique(pad_id)).unwrap_or(0usize))
 }
 
 /// XY pad with optional pair cycling.
@@ -39,7 +39,7 @@ pub fn xy_pad(
     let pad_rect = Rect::from_min_size(outer.min, Vec2::splat(size));
 
     // ── Pair cycling (right-click) ────────────────────────────────────────────
-    let mem_id = egui::Id::new(pad_id);
+    let mem_id = egui::Id::unique(pad_id);
     let pair: usize = ui.ctx().data(|d| d.get_temp(mem_id).unwrap_or(0usize));
     if num_pairs > 1 && response.secondary_clicked() {
         let next = (pair + 1) % num_pairs;
@@ -68,25 +68,32 @@ pub fn xy_pad(
         let hovered = response.hovered() && !locked;
 
         // ── Outer frame (neumorphic raised panel) ─────────────────────────────
-        let frame_r = egui::Rounding::same(7.0);
+        let frame_r = egui::CornerRadius::same(7);
         painter.rect_filled(pad_rect, frame_r, Color32::from_gray(22));
         // Top-left highlight — light catches the raised frame edge
         painter.rect_stroke(
             pad_rect.shrink(0.5),
             frame_r,
             Stroke::new(1.0, Color32::from_gray(50)),
+            egui::StrokeKind::Middle,
         );
         // Bottom-right shadow — underside of raised frame
-        painter.rect_stroke(pad_rect.shrink(1.5), frame_r, Stroke::new(1.5, theme::VOID));
+        painter.rect_stroke(
+            pad_rect.shrink(1.5),
+            frame_r,
+            Stroke::new(1.5, theme::VOID),
+            egui::StrokeKind::Middle,
+        );
 
         // ── Inner well (recessed rubber surface) ──────────────────────────────
-        let well_r = egui::Rounding::same(4.0);
+        let well_r = egui::CornerRadius::same(4);
         painter.rect_filled(well, well_r, Color32::from_gray(11));
         // Inset shadow along top+left edges of well
         painter.rect_stroke(
             well.shrink(0.5),
             well_r,
             Stroke::new(1.0, Color32::from_gray(5)),
+            egui::StrokeKind::Middle,
         );
         // Subtle sheen — light reflected off the rubber surface top edge
         painter.line_segment(
@@ -157,7 +164,7 @@ pub fn xy_pad(
             painter.circle_filled(
                 dot_pos + Vec2::new(1.0, 2.0),
                 dot_r + 1.5,
-                Color32::from_rgba_unmultiplied(0, 0, 0, 90),
+                crate::ui::theme::rgba_unmultiplied(0, 0, 0, 90),
             );
             // Outer ambient ring — rubber material edge
             painter.circle_filled(dot_pos, dot_r + 1.0, Color32::from_gray(12));
@@ -173,12 +180,12 @@ pub fn xy_pad(
                 painter.circle_stroke(
                     dot_pos,
                     dot_r + 2.5,
-                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(180, 180, 180, 30)),
+                    Stroke::new(1.0, crate::ui::theme::rgba_unmultiplied(180, 180, 180, 30)),
                 );
                 painter.circle_stroke(
                     dot_pos,
                     dot_r + 1.2,
-                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(200, 200, 200, 50)),
+                    Stroke::new(1.0, crate::ui::theme::rgba_unmultiplied(200, 200, 200, 50)),
                 );
             }
         } else {

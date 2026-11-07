@@ -8,6 +8,7 @@
 // The ADSR primitives + `osc_sample` still live in `voices`; this file
 // just consumes them.
 
+use super::dsp_util::{nyquist_guard, one_pole_coef};
 use super::voices::{AdsrPhase, adsr_tick, osc_sample};
 
 pub(super) struct An1xVoice {
@@ -135,7 +136,7 @@ impl An1xVoice {
         let eff_glide = p.an1x_glide_time.max(self.slide);
         let glide_time = eff_glide * 0.5; // 0–500 ms
         if glide_time > 0.001 {
-            let coeff = (-1.0_f32 / (glide_time * sr)).exp();
+            let coeff = one_pole_coef(glide_time, sr);
             self.current_pitch = self.note - (self.note - self.current_pitch) * coeff;
         } else {
             self.current_pitch = self.note;
@@ -263,7 +264,7 @@ impl An1xVoice {
             + key_track * 0.1
             + cutoff_lfo)
             .clamp(0.0, 1.0);
-        let cutoff_hz = (80.0_f32 * 225.0_f32.powf(cutoff_norm)).min(sr * 0.45);
+        let cutoff_hz = (80.0_f32 * 225.0_f32.powf(cutoff_norm)).min(nyquist_guard(sr));
         let f_coeff = (std::f32::consts::PI * cutoff_hz / sr).clamp(0.001, 0.49);
         // Allow q to reach near-zero for self-oscillation at resonance ≥ ~0.95
         let q = (1.0 - p.an1x_filter_resonance * 0.995).max(0.005);

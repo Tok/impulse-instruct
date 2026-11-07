@@ -5,7 +5,8 @@
 use crate::llm::styles::StyleCatalog;
 use crate::state::{
     bank_swap, bank_write, chain_pop, chain_push, clear_chain_slot_override, set_chain_enabled,
-    set_chain_slot_bpm, set_chain_slot_repeats, set_chain_slot_style, swap_chain_slots,
+    set_chain_slot_bpm, set_chain_slot_morph, set_chain_slot_repeats, set_chain_slot_style,
+    swap_chain_slots,
 };
 use crate::ui::{ImpulseApp, theme};
 
@@ -75,7 +76,26 @@ pub(crate) fn pan_cell_voice(
     }
 }
 
-const SLOT_NAMES: [&str; 8] = ["A", "B", "C", "D", "E", "F", "G", "H"];
+/// Bank slots per pagination page.  `MAX_BANKS = 64` divides into 8
+/// pages of 8 — keeps each page exactly the width of the historical
+/// A..H strip so layout is unchanged when the user stays on page 1.
+const BANKS_PER_PAGE: usize = 8;
+
+/// Compact label for a bank slot index.  1-based throughout — bank
+/// index 0 shows as "1", index 7 as "8", index 52 as "53".
+/// Previously the first 8 banks used letters A..H and machine-
+/// generated banks past H rendered as decimals; mixing letters with
+/// numbers (A..H then 9, 10, 11) was confusing, so everything is now
+/// a plain 1-based count.
+fn slot_label(idx: usize) -> String {
+    (idx + 1).to_string()
+}
+
+/// Minimum number of chain slots the song timeline renders inline.
+/// The actual count is computed from `ui.available_width()` so the row
+/// fills the sequencer panel; this is just a floor for very narrow
+/// windows where the divisor math would otherwise yield 0.
+const TIMELINE_VISIBLE_MIN: usize = 8;
 
 /// Compact bank + chain on a single horizontal line.
 pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
@@ -89,14 +109,63 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         )
     };
 
-    // Bank slots
+    // Tight button padding for this compact strip — default style
+    // pads buttons 6 × 3 px which makes the 16 × 14 slot cells render
+    // as `[   A   ]` instead of `[A]`, because egui grows a button's
+    // intrinsic size past the requested `add_sized` when text +
+    // padding exceeds it.  Shrinking to 2 × 1 keeps "A" snug inside
+    // its 16-px cell.  Scoped via `ui.style_mut` so only this strip
+    // is affected; surrounding panels keep their normal button feel.
+    ui.style_mut().spacing.button_padding = egui::vec2(2.0, 1.0);
+    ui.spacing_mut().item_spacing.x = 2.0;
+
+    // Bank slots — paginated when MAX_BANKS > BANKS_PER_PAGE.
+    // Page tracking lives in egui's per-frame data so it survives
+    // re-renders without bloating AppState.  Default page follows
+    // whichever page contains `pattern_edit` so machine-generated
+    // long imports (Bach III at 53 banks) auto-flip into view.
+    let total_pages = crate::state::MAX_BANKS.div_ceil(BANKS_PER_PAGE);
+    let edit_page = pattern_edit / BANKS_PER_PAGE;
+    let page_key = egui::Id::unique("bank_page");
+    let stored: Option<usize> = ui.ctx().data(|d| d.get_temp(page_key));
+    let mut page = stored
+        .unwrap_or(edit_page)
+        .min(total_pages.saturating_sub(1));
+    // Auto-track edit_page when it changes outside the user's current
+    // view — only rewinds when stored is stale (different from edit
+    // page AND nothing has been navigated manually this session).
+    if stored.is_none() {
+        page = edit_page;
+    }
+
     ui.label(
         egui::RichText::new("BANK")
             .color(theme::SMOKE)
             .monospace()
             .size(8.0),
     );
-    for (slot, &name) in SLOT_NAMES.iter().enumerate() {
+    if total_pages > 1 {
+        let prev_resp = ui.add_sized(
+            [10.0, 14.0],
+            egui::Button::new(
+                egui::RichText::new("‹")
+                    .monospace()
+                    .size(9.0)
+                    .color(theme::FOG),
+            ),
+        );
+        if prev_resp.clicked() && page > 0 {
+            page -= 1;
+            ui.ctx().data_mut(|d| d.insert_temp(page_key, page));
+        }
+    }
+    let page_start = page * BANKS_PER_PAGE;
+    for i in 0..BANKS_PER_PAGE {
+        let slot = page_start + i;
+        if slot >= crate::state::MAX_BANKS {
+            break;
+        }
+        let name = slot_label(slot);
         let is_edit = slot == pattern_edit;
         let col = if is_edit { theme::CHALK } else { theme::PIT };
         let fill = if is_edit {
@@ -104,9 +173,11 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         } else {
             egui::Color32::TRANSPARENT
         };
+        // Wider cells on pages past the first so 2-digit numbers fit.
+        let cell_w = if page == 0 { 16.0 } else { 18.0 };
         let resp = ui.add_sized(
-            [16.0, 14.0],
-            egui::Button::new(egui::RichText::new(name).monospace().size(8.0).color(col))
+            [cell_w, 14.0],
+            egui::Button::new(egui::RichText::new(&name).monospace().size(8.0).color(col))
                 .fill(fill),
         );
         if resp.clicked() {
@@ -117,6 +188,27 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             let s = app.state.read().clone();
             *app.state.write() = bank_write(s, slot);
         }
+    }
+    if total_pages > 1 {
+        let next_resp = ui.add_sized(
+            [10.0, 14.0],
+            egui::Button::new(
+                egui::RichText::new("›")
+                    .monospace()
+                    .size(9.0)
+                    .color(theme::FOG),
+            ),
+        );
+        if next_resp.clicked() && page + 1 < total_pages {
+            page += 1;
+            ui.ctx().data_mut(|d| d.insert_temp(page_key, page));
+        }
+        ui.label(
+            egui::RichText::new(format!("{}/{}", page + 1, total_pages))
+                .color(theme::FOG)
+                .monospace()
+                .size(8.0),
+        );
     }
 
     ui.separator();
@@ -129,7 +221,8 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .size(8.0),
     );
     for pos in 0..8usize {
-        let label = chain.get(pos).map(|&s| SLOT_NAMES[s % 8]).unwrap_or("·");
+        let label_owned = chain.get(pos).map(|&s| slot_label(s));
+        let label: &str = label_owned.as_deref().unwrap_or("·");
         let cursor_here = chain_enabled && !chain.is_empty() && chain_pos % chain.len() == pos;
         let fill = if cursor_here {
             egui::Color32::from_gray(70)
@@ -216,7 +309,7 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .size(8.0),
     );
     let mut new_style: Option<Option<String>> = None;
-    egui::ComboBox::from_id_source("pattern_style_combo")
+    egui::ComboBox::from_id_salt("pattern_style_combo")
         .selected_text(
             egui::RichText::new(cur_label)
                 .monospace()
@@ -317,31 +410,9 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 // line inside it shows which repeat is active.  Click a bar to open a
 // popover for editing the slot's overrides.  Drag bars to reorder.
 
-const TIMELINE_BAR_W: f32 = 78.0;
+const TIMELINE_BAR_W: f32 = 20.0;
 const TIMELINE_BAR_H: f32 = 22.0;
-const TIMELINE_GAP: f32 = 3.0;
-
-/// Format a per-slot override summary line for the bar.  Returns an
-/// empty string when the slot has no overrides so the visual stays
-/// uncluttered.
-fn override_summary(ov: &crate::state::ChainSlotOverride) -> String {
-    let mut parts: Vec<String> = Vec::new();
-    if ov.repeats > 1 {
-        parts.push(format!("×{}", ov.repeats));
-    }
-    if let Some(id) = &ov.style {
-        let name = StyleCatalog::get()
-            .find_by_id(id)
-            .map(|s| s.name.clone())
-            .unwrap_or_else(|| id.clone());
-        let short = name.chars().take(6).collect::<String>();
-        parts.push(format!("s:{}", short));
-    }
-    if let Some(b) = ov.bpm {
-        parts.push(format!("{:.0}bpm", b));
-    }
-    parts.join(" ")
-}
+const TIMELINE_GAP: f32 = 2.0;
 
 pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let (chain, overrides, chain_enabled, chain_pos, repeat_count) = {
@@ -375,10 +446,11 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Drag-to-reorder bookkeeping.  `drag_src` tracks the slot the
     // pointer picked up this frame; on hover over a different slot it
     // swaps with it and follows.
-    let drag_key = egui::Id::new("song_timeline_drag_src");
-    let popover_key = egui::Id::new("song_timeline_popover");
+    let drag_key = egui::Id::unique("song_timeline_drag_src");
+    let popover_key = egui::Id::unique("song_timeline_popover");
 
     ui.horizontal(|ui| {
+        ui.add_space(2.0);
         ui.label(
             egui::RichText::new("SONG")
                 .color(theme::SMOKE)
@@ -390,7 +462,48 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let mut swap_request: Option<(usize, usize)> = None;
         let mut open_popover: Option<usize> = None;
 
-        for (pos, &bank_idx) in chain.iter().enumerate() {
+        // Windowed range — fit as many bars as the available width
+        // allows, centred on the current playhead.  For short chains
+        // this is a no-op and we render the whole thing; for the ~53-
+        // bank Bach MIDI import we slide a window with the playhead so
+        // the sequencer panel stays on-screen.  When the window is
+        // clipped, a small "…/N" hint before / after tells the user the
+        // chain extends further.  ~60 px reserved for the SONG label +
+        // any "…N" / "+N…" side hints that may appear at the edges.
+        let chain_len = chain.len();
+        let per_bar = TIMELINE_BAR_W + TIMELINE_GAP;
+        let visible_max = ((ui.available_width() - 60.0) / per_bar)
+            .floor()
+            .max(TIMELINE_VISIBLE_MIN as f32) as usize;
+        let (win_start, win_end) = if chain_len <= visible_max {
+            (0, chain_len)
+        } else {
+            let half = visible_max / 2;
+            let center = chain_pos.min(chain_len.saturating_sub(1));
+            let start = center.saturating_sub(half);
+            let end = (start + visible_max).min(chain_len);
+            // Pull start back if we hit the right edge so the window
+            // stays full-sized even near the end of the chain.
+            let start = end.saturating_sub(visible_max);
+            (start, end)
+        };
+
+        if win_start > 0 {
+            ui.label(
+                egui::RichText::new(format!("…{}", win_start))
+                    .color(theme::IRON)
+                    .monospace()
+                    .size(8.0),
+            );
+            ui.add_space(2.0);
+        }
+
+        for (pos, &bank_idx) in chain
+            .iter()
+            .enumerate()
+            .skip(win_start)
+            .take(win_end - win_start)
+        {
             let (rect, resp) = ui.allocate_exact_size(
                 egui::vec2(TIMELINE_BAR_W, TIMELINE_BAR_H),
                 egui::Sense::click_and_drag(),
@@ -412,33 +525,34 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             } else {
                 egui::Stroke::new(0.5, theme::IRON)
             };
-            let painter = ui.painter_at(rect);
-            let rounding = egui::Rounding::same(3.0);
+            // Paint on the parent layer's painter (cloned, same clip)
+            // so the 1.5 px cursor stroke isn't half-clipped by a
+            // per-rect clip rect — which reads as "the left column of
+            // pixels is missing" on the highlighted bar.
+            let painter = ui.painter().clone();
+            let rounding = egui::CornerRadius::same(3);
             painter.rect_filled(rect, rounding, fill);
-            painter.rect_stroke(rect, rounding, stroke);
+            painter.rect_stroke(rect, rounding, stroke, egui::StrokeKind::Middle);
 
-            // Pattern letter, big, top-left.
-            let letter = SLOT_NAMES.get(bank_idx.min(7)).copied().unwrap_or("?");
+            // Pattern number, centred in the narrow bar.  Font sized
+            // so up to 3 digits ("999") still fits cleanly inside
+            // TIMELINE_BAR_W (20 px); longer labels just truncate —
+            // a chain longer than 999 banks is well past MAX_BANKS
+            // so this is purely a render fallback.
+            let letter = slot_label(bank_idx);
             painter.text(
-                egui::pos2(rect.min.x + 5.0, rect.center().y),
-                egui::Align2::LEFT_CENTER,
-                letter,
-                egui::FontId::monospace(11.0),
+                rect.center(),
+                egui::Align2::CENTER_CENTER,
+                &letter,
+                egui::FontId::monospace(10.0),
                 theme::CHALK,
             );
 
-            // Override summary — repeat count + style + bpm — right-side.
+            // Override summary doesn't fit in a 20 px bar — surface
+            // it via the popover instead (click the bar to open).
+            // Re-fetch the override below for the drag / click
+            // handlers that still need it; paint nothing here.
             let ov = overrides.get(pos).cloned().unwrap_or_default();
-            let summary = override_summary(&ov);
-            if !summary.is_empty() {
-                painter.text(
-                    egui::pos2(rect.max.x - 4.0, rect.center().y),
-                    egui::Align2::RIGHT_CENTER,
-                    summary,
-                    egui::FontId::monospace(8.0),
-                    theme::FOG,
-                );
-            }
 
             // Playhead — a thin vertical line inside the currently-
             // playing slot, positioned by how many repeats have passed.
@@ -481,6 +595,16 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             }
         }
 
+        if win_end < chain_len {
+            ui.add_space(2.0);
+            ui.label(
+                egui::RichText::new(format!("+{}…", chain_len - win_end))
+                    .color(theme::IRON)
+                    .monospace()
+                    .size(8.0),
+            );
+        }
+
         if let Some((a, b)) = swap_request {
             let s = app.state.read().clone();
             *app.state.write() = swap_chain_slots(s, a, b);
@@ -504,7 +628,7 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     {
         let mut open = true;
         egui::Window::new("")
-            .id(egui::Id::new(("song_popover", pos)))
+            .id(egui::Id::unique(("song_popover", pos)))
             .title_bar(false)
             .resizable(false)
             .collapsible(false)
@@ -516,7 +640,7 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     egui::RichText::new(format!(
                         "Slot {} — pattern {}",
                         pos + 1,
-                        SLOT_NAMES.get(chain[pos].min(7)).copied().unwrap_or("?"),
+                        slot_label(chain[pos]),
                     ))
                     .color(theme::CHALK)
                     .monospace()
@@ -542,6 +666,25 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     }
                 });
 
+                // Morph bars — step-by-step crossfade on chain advance.
+                // 0 = hard cut (default); 1..=8 = N-loop morph.
+                ui.horizontal(|ui| {
+                    ui.label(
+                        egui::RichText::new("morph")
+                            .color(theme::FOG)
+                            .monospace()
+                            .size(9.0),
+                    );
+                    let mut m = cur.morph_bars as i32;
+                    if ui
+                        .add(egui::DragValue::new(&mut m).range(0..=8).speed(0.1))
+                        .changed()
+                    {
+                        let s = app.state.read().clone();
+                        *app.state.write() = set_chain_slot_morph(s, pos, m.max(0) as u8);
+                    }
+                });
+
                 // Style override
                 ui.horizontal(|ui| {
                     ui.label(
@@ -558,7 +701,7 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         None => "—".to_string(),
                     };
                     let mut pick: Option<Option<String>> = None;
-                    egui::ComboBox::from_id_source(("song_popover_style", pos))
+                    egui::ComboBox::from_id_salt(("song_popover_style", pos))
                         .selected_text(egui::RichText::new(cur_label).monospace().size(9.0))
                         .width(120.0)
                         .show_ui(ui, |ui| {

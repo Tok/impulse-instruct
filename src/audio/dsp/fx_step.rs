@@ -4,7 +4,7 @@
 // Lifted out of dsp/mod.rs to keep that file under the 1000-line cap;
 // the match arm set grows every time a new FX ships.
 
-use crate::state::{FeedbackRoute, FxStep};
+use crate::state::{FeedbackRoute, FxStep, SidechainSource};
 
 use super::DspState;
 use super::fx_math::{BitcrushState, bitcrush_step, drive_step, waveshaper_step};
@@ -13,11 +13,18 @@ use super::rev_tap::{rev_tap_len_for_quant, step_rev_tap};
 
 impl DspState {
     /// Apply one FX step to `sig` and return the result.
+    /// `sidechain` is the resolved sidechain audio sample for this step
+    /// (read from the previous-sample voice / FX cache via
+    /// `apply_fx_chain`), or `sig` itself when the step has no sidechain
+    /// route.  Most FX ignore it; only Gate / Vocoder / Compressor
+    /// (sidechain mode) consume it.
     /// Must not hold any borrow on `self.fx_plan` when called.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_fx_step(
         &mut self,
         step: FxStep,
         sig: f32,
+        sidechain: f32,
         p: &AudioParams,
         delay_samples: usize,
         sr: f32,
@@ -103,6 +110,80 @@ impl DspState {
                 self.phaser
                     .process(sig, p.phaser_rate, p.phaser_depth, p.phaser_mix, sr)
             }
+            FxStep::Flanger => self.flanger.process(
+                sig,
+                p.flanger_rate,
+                p.flanger_depth,
+                p.flanger_feedback,
+                p.flanger_mix,
+                sr,
+            ),
+            FxStep::Limiter => self.limiter.process(
+                sig,
+                p.limiter_threshold,
+                p.limiter_ceiling,
+                p.limiter_release,
+                p.limiter_lookahead,
+                sr,
+            ),
+            FxStep::Filter => self.svf.process(
+                sig,
+                p.svf_cutoff,
+                p.svf_resonance,
+                p.svf_drive,
+                super::fx_extras::SvfMode::from_u8(p.svf_mode),
+                p.svf_mix,
+                sr,
+            ),
+            FxStep::Comb => self.comb.process(
+                sig,
+                p.comb_pitch,
+                p.comb_feedback,
+                p.comb_damp,
+                p.comb_mix,
+                sr,
+            ),
+            FxStep::Tilt => self
+                .tilt
+                .process(sig, p.tilt_tilt, p.tilt_pivot, p.tilt_mix),
+            FxStep::Transient => self.transient.process(
+                sig,
+                p.transient_attack,
+                p.transient_sustain,
+                p.transient_mix,
+                sr,
+            ),
+            FxStep::Exciter => {
+                self.exciter
+                    .process(sig, p.exciter_amount, p.exciter_freq, p.exciter_mix, sr)
+            }
+            FxStep::Multitap => self.multitap.process(
+                sig,
+                p.multitap_time,
+                p.multitap_spread,
+                p.multitap_feedback,
+                p.multitap_mix,
+                sr,
+            ),
+            FxStep::RevDelay => self.rev_delay.process(
+                sig,
+                p.revdelay_time,
+                p.revdelay_feedback,
+                p.revdelay_mix,
+                sr,
+            ),
+            FxStep::TapeStop => self
+                .tape_stop
+                .process(sig, p.tapestop_mix, p.tapestop_time, sr),
+            FxStep::Stutter => self.stutter.process(
+                sig,
+                p.stutter_rate,
+                p.stutter_slice,
+                p.stutter_mix,
+                p.sequencer_bpm,
+                sr,
+            ),
+            FxStep::Freeze => self.freeze.process(sig, p.freeze_mix, sr),
             FxStep::RingMod => {
                 if p.ring_mod_mix > 0.001 {
                     let freq_hz = 50.0 + p.ring_mod_freq * 450.0;
@@ -120,15 +201,28 @@ impl DspState {
             FxStep::Eq => self
                 .eq
                 .process(sig, p.eq_low_gain, p.eq_mid_gain, p.eq_hi_gain),
-            FxStep::Compressor => self.compressor.process(
-                sig,
-                p.compressor_threshold,
-                p.compressor_ratio,
-                p.compressor_mix,
-                p.compressor_multiband,
-                p.compressor_reverse,
-                sr,
-            ),
+            FxStep::Compressor => {
+                // In sidechain mode the level detector reads `sidechain`
+                // (the cable-fed signal) but the gain reduction still
+                // applies to `sig`.  Compressor::process takes a single
+                // input + handles internal envelope state — we feed it
+                // the right detector via `process_with_detector`.
+                let detector = if p.compressor_sidechain {
+                    sidechain
+                } else {
+                    sig
+                };
+                self.compressor.process_with_detector(
+                    sig,
+                    detector,
+                    p.compressor_threshold,
+                    p.compressor_ratio,
+                    p.compressor_mix,
+                    p.compressor_multiband,
+                    p.compressor_reverse,
+                    sr,
+                )
+            }
             FxStep::TapeSat => {
                 self.tape_sat
                     .process(sig, p.tape_drive, p.tape_mix, p.tape_flutter, sr)
@@ -152,6 +246,179 @@ impl DspState {
                 self.fx_pan_side = sig * pan_mult * 0.5;
                 sig
             }
+            FxStep::ConvReverb => self.conv_reverb.process(
+                sig,
+                p.conv_reverb_mix,
+                p.conv_reverb_predelay,
+                p.conv_reverb_damp,
+                p.conv_reverb_lowcut,
+                p.conv_reverb_size,
+                p.conv_reverb_width,
+                p.conv_reverb_shimmer,
+                sr,
+            ),
+            FxStep::ParamEq => {
+                // M/S mode: skip the chain cascade and latch a flag so
+                // the master stage runs separate cascades on the
+                // decoded mid + side channels.  Passthrough here
+                // because there's no L/R available in the mono chain.
+                if p.param_eq_ms_mode {
+                    self.param_eq_ms_active = true;
+                    sig
+                } else {
+                    self.param_eq.process(sig, &p.param_eq_bands, sr)
+                }
+            }
+            FxStep::PitchShift => self.pitch_shift.process(
+                sig,
+                p.pitch_shift_semi,
+                p.pitch_shift_fine,
+                p.pitch_shift_mix,
+                p.pitch_shift_fbk,
+            ),
+            FxStep::Gate => self.gate.process(
+                sig,
+                sidechain,
+                p.gate_threshold,
+                p.gate_attack,
+                p.gate_release,
+                p.gate_depth,
+                p.gate_mix,
+                sr,
+            ),
+            FxStep::Vocoder => self.vocoder.process(
+                sig,
+                sidechain,
+                p.vocoder_bands,
+                p.vocoder_carrier_mix,
+                p.vocoder_sense,
+                p.vocoder_mix,
+                sr,
+            ),
+            FxStep::Widen => {
+                // Passthrough that latches the active widen knobs so
+                // the master stage applies Haas + side scaling on the
+                // final L/R after the per-voice pan side has already
+                // been computed.  Same idiom as FxStep::Pan.
+                if p.widen_mix > 0.001 {
+                    self.fx_widen_active = true;
+                    self.fx_widen_haas_amt = p.widen_haas;
+                    self.fx_widen_side_amt = p.widen_side;
+                    self.fx_widen_mix_amt = p.widen_mix;
+                }
+                sig
+            }
+            FxStep::FreqShift => self.freq_shift.process(
+                sig,
+                p.freq_shift_amount,
+                p.freq_shift_feedback,
+                p.freq_shift_mix,
+                sr,
+            ),
+            FxStep::Vinyl => self.vinyl.process(
+                sig,
+                p.vinyl_noise,
+                p.vinyl_wear,
+                p.vinyl_mix,
+                p.vinyl_transient,
+            ),
+            FxStep::DjFilter => self.dj_filter.process(
+                sig,
+                p.dj_filter_morph,
+                p.dj_filter_resonance,
+                p.dj_filter_mix,
+                sr,
+            ),
+            FxStep::Tremolo => self.tremolo.process(
+                sig,
+                p.tremolo_rate,
+                p.tremolo_depth,
+                p.tremolo_shape,
+                p.tremolo_mix,
+                sr,
+            ),
+            FxStep::Vibrato => self.vibrato.process(
+                sig,
+                p.vibrato_rate,
+                p.vibrato_depth,
+                p.vibrato_shape,
+                p.vibrato_mix,
+                sr,
+            ),
+            FxStep::IsoEq => self
+                .iso_eq
+                .process(sig, p.iso_low, p.iso_mid, p.iso_high, p.iso_mix, sr),
+            FxStep::DeEsser => self.deesser.process(
+                sig,
+                p.deess_freq,
+                p.deess_threshold,
+                p.deess_amount,
+                p.deess_mix,
+                sr,
+            ),
+            FxStep::ResBank => self.resbank.process(
+                sig,
+                p.resbank_root,
+                p.resbank_chord,
+                p.resbank_resonance,
+                p.resbank_mix,
+                sr,
+            ),
+            FxStep::TapeEcho => self.tape_echo.process(
+                sig,
+                p.tape_echo_time,
+                p.tape_echo_feedback,
+                p.tape_echo_age,
+                p.tape_echo_mix,
+                sr,
+            ),
+            FxStep::MultibandComp => self.mb_comp.process(
+                sig,
+                p.mb_low_thresh,
+                p.mb_mid_thresh,
+                p.mb_high_thresh,
+                p.mb_mix,
+                sr,
+            ),
+            FxStep::GrainDelay => self.grain_delay.process(
+                sig,
+                p.grain_delay,
+                p.grain_size,
+                p.grain_scatter,
+                p.grain_mix,
+                sr,
+            ),
+            FxStep::SpectralGate => self.spectral_gate.process(
+                sig,
+                p.spec_stft,
+                p.spec_thresh,
+                p.spec_release,
+                p.spec_tilt,
+                p.spec_mix,
+                sr,
+            ),
+            FxStep::Plate => self.plate.process(
+                sig,
+                p.plate_size,
+                p.plate_damping,
+                p.plate_diffusion,
+                p.plate_mix,
+                sr,
+            ),
+            FxStep::TranceGate => self.trance_gate.process(
+                sig,
+                p.tg_pattern,
+                p.tg_rate,
+                p.tg_smooth,
+                p.tg_mix,
+                p.sequencer_current_step,
+                p.sequencer_bpm,
+                sr,
+            ),
+            FxStep::WaveFolder => {
+                self.wavefolder
+                    .process(sig, p.wf_drive, p.wf_bias, p.wf_symmetry, p.wf_mix)
+            }
         }
     }
 
@@ -166,6 +433,7 @@ impl DspState {
         sig: f32,
         snap: &super::VoiceSendsSnap,
         feedback_routes: &[FeedbackRoute],
+        sidechain_snap: &super::fx_sidechain::SidechainSnap,
         p: &AudioParams,
         delay_samples: usize,
         sr: f32,
@@ -181,6 +449,7 @@ impl DspState {
                 sig * snap.gains[i],
                 chain,
                 feedback_routes,
+                sidechain_snap,
                 p,
                 delay_samples,
                 sr,
@@ -201,12 +470,21 @@ impl DspState {
     /// algebraically well-defined — no instantaneous cycles — so the
     /// graph can't blow up numerically.  The compile-time clamp to
     /// `FEEDBACK_GAIN_MAX` (0.95) preserves the stability margin.
+    ///
+    /// `sidechain_snap` resolves the per-step sidechain signal: for steps
+    /// with a `SidechainSource::Voice(kind)` route, it pulls from the
+    /// per-sample voice cache; for `SidechainSource::Fx(step)`, it pulls
+    /// from `prev_fx_output` (one-sample delay, same machinery as
+    /// feedback edges).  Steps with no sidechain route get `sig` itself
+    /// — keeps unconnected gate / vocoder / compressor sane (gate
+    /// becomes a noise gate, etc.).
     #[allow(clippy::too_many_arguments)]
     pub(super) fn apply_fx_chain(
         &mut self,
         mut sig: f32,
         chain: &[FxStep],
         feedback_routes: &[FeedbackRoute],
+        sidechain_snap: &super::fx_sidechain::SidechainSnap,
         p: &AudioParams,
         delay_samples: usize,
         sr: f32,
@@ -218,8 +496,41 @@ impl DspState {
                     sig += self.prev_fx_output[fr.source.idx()] * fr.gain;
                 }
             }
-            sig = self.apply_fx_step(step, sig, p, delay_samples, sr, gate_env);
+            // Resolve sidechain source for this step.  The lookup walks
+            // the small (≤MAX_SIDECHAIN) snapshot array — linear scan is
+            // faster than a HashMap probe for typical sizes (0–4
+            // entries).
+            let mut sidechain = sig;
+            for i in 0..sidechain_snap.count {
+                if sidechain_snap.targets[i] == step {
+                    sidechain = match sidechain_snap.sources[i] {
+                        SidechainSource::Voice(_) => sidechain_snap.voice_signals[i],
+                        SidechainSource::Fx(src) => self.prev_fx_output[src.idx()],
+                    };
+                    break;
+                }
+            }
+            let pre = sig;
+            sig = self.apply_fx_step(step, sig, sidechain, p, delay_samples, sr, gate_env);
             self.prev_fx_output[step.idx()] = sig;
+            // Capture momentary gain reduction for the GrHistory viz —
+            // ratio of post / pre |amplitude| for dynamics steps,
+            // tracked as the most-attenuating ratio across the chain.
+            // Decays toward unity (no GR) so a transient peak is held
+            // briefly enough for the UI to sample at 60 Hz.
+            if matches!(
+                step,
+                FxStep::Compressor | FxStep::Limiter | FxStep::MultibandComp
+            ) {
+                let pre_abs = pre.abs();
+                if pre_abs > 1e-4 {
+                    let ratio = (sig.abs() / pre_abs).clamp(0.0, 1.0);
+                    if ratio < self.gr_env {
+                        // Snap down — capture the most attenuating sample.
+                        self.gr_env = ratio;
+                    }
+                }
+            }
         }
         sig
     }

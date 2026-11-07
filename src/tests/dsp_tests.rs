@@ -143,6 +143,32 @@ mod granular_llm_tests {
         assert!((s.granular.density - 0.8).abs() < 1e-4);
         assert!((s.granular.position - 0.3).abs() < 1e-4);
     }
+
+    #[test]
+    fn granular_pitch_mappable_default_off() {
+        let s = AppState::default();
+        assert!(!s.granular.pitch_mappable);
+    }
+
+    #[test]
+    fn granular_pitch_mappable_round_trip() {
+        let s = AppState::default();
+        let update = serde_json::json!({ "granular": { "pitch_mappable": true } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!(s.granular.pitch_mappable);
+        let update = serde_json::json!({ "granular": { "pitch_mappable": false } });
+        let s = apply_llm_update(s, &update, &[]);
+        assert!(!s.granular.pitch_mappable);
+    }
+
+    #[test]
+    fn granular_pitch_mappable_respects_lock() {
+        let s = AppState::default();
+        // Lock the field then try to enable via LLM update — must stay off.
+        let update = serde_json::json!({ "granular": { "pitch_mappable": true } });
+        let s = apply_llm_update(s, &update, &["granular.pitch_mappable".to_string()]);
+        assert!(!s.granular.pitch_mappable);
+    }
 }
 
 #[cfg(test)]
@@ -276,6 +302,102 @@ mod chain_transport_tests {
         let loaded = loaded_slot(140.0, 0.4, true);
         let out = chain_advance_transport(loaded, 120.0, 0.0, false);
         assert!(!out.running, "running mirrors prior regardless of apply");
+    }
+}
+
+#[cfg(test)]
+mod chain_preserve_non_bass_tests {
+    use crate::state::{
+        DrumVoice, SequencerState, Step, TB303Step, chain_advance_preserve_non_bass,
+    };
+
+    fn bank_with_bass_only() -> SequencerState {
+        // A "freshly imported" bank: carries the bass line, leaves
+        // drums/hoover/an1x empty (MIDI importer writes bass patterns
+        // only).
+        let mut s = SequencerState::default();
+        s.bass_pattern[0] = TB303Step {
+            active: true,
+            note: 60,
+            accent: 0.0,
+            slide: 0.0,
+            gate: 0.5,
+            pan: 0.0,
+            cond: 0,
+        };
+        s.pattern_bpm_apply = true;
+        s.bpm = 180.0;
+        s
+    }
+
+    fn prior_with_drums() -> SequencerState {
+        // An "outgoing" sequencer where a KIT agent wrote drum hits
+        // during the last 4-second bank play.  Also carries non-default
+        // hoover/an1x to prove they survive.
+        let mut s = SequencerState::default();
+        if let Some(pat) = s.drum_patterns.get_mut(&DrumVoice::Kick808) {
+            pat[0] = Step {
+                active: true,
+                velocity: 1.0,
+                probability: 1.0,
+                ratchet: 1,
+                slice: 0,
+                cond: 0,
+            };
+            pat[4] = pat[0];
+            pat[8] = pat[0];
+            pat[12] = pat[0];
+        }
+        s.hoover_pattern[0].active = true;
+        s.an1x_pattern[2].active = true;
+        s.swing = 0.25;
+        s.time_sig_num = 7; // unusual time sig — proves it carries through
+        s
+    }
+
+    #[test]
+    fn carries_drums_hoover_an1x_across_swap() {
+        let loaded = bank_with_bass_only();
+        let prior = prior_with_drums();
+        let out = chain_advance_preserve_non_bass(loaded, &prior, true);
+        // Drums: all four kicks survive the bank swap.
+        let kick = out.drum_patterns.get(&DrumVoice::Kick808).unwrap();
+        assert!(kick[0].active && kick[4].active && kick[8].active && kick[12].active);
+        // Hoover + an1x hits survive.
+        assert!(out.hoover_pattern[0].active);
+        assert!(out.an1x_pattern[2].active);
+        // Time sig + swing: prior wins (musical coherence across banks).
+        assert_eq!(out.time_sig_num, 7);
+        assert!((out.swing - 0.25).abs() < 1e-4);
+    }
+
+    #[test]
+    fn keeps_loaded_bass_pattern() {
+        // Bank's bass line is the whole point of the swap — must be
+        // present after the preserve-merge.
+        let loaded = bank_with_bass_only();
+        let prior = prior_with_drums();
+        let out = chain_advance_preserve_non_bass(loaded, &prior, true);
+        assert!(out.bass_pattern[0].active);
+        assert_eq!(out.bass_pattern[0].note, 60);
+    }
+
+    #[test]
+    fn always_inherits_prior_bpm_even_when_loaded_sets_pattern_bpm_apply() {
+        // Contract: in MIDI-playback mode we WANT scripted `set_bpm`
+        // calls (e.g. the Bach demo halfstepping to 120 after importing
+        // a 240-BPM file) to survive every bank swap.  So BPM always
+        // comes from prior here, regardless of what the loaded bank
+        // pinned — pattern_bpm_apply is only honoured on the
+        // loop=true / user-composed-song path.
+        let loaded = bank_with_bass_only(); // bpm=180, pattern_bpm_apply=true
+        let prior = prior_with_drums(); // default bpm=120
+        let out = chain_advance_preserve_non_bass(loaded, &prior, true);
+        assert!(
+            (out.bpm - 120.0).abs() < 1e-4,
+            "preserve-mode should inherit prior bpm, got {}",
+            out.bpm
+        );
     }
 }
 

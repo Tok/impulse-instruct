@@ -173,8 +173,8 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             // Wrap the ADSR display in a padded frame so it has visible
             // breathing room instead of butting up against the F.ENV
             // label and the separator.
-            egui::Frame::none()
-                .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+            egui::Frame::NONE
+                .inner_margin(egui::Margin::symmetric(8, 6))
                 .show(ui, |ui| {
                     if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
                         let mut st = app.state.write();
@@ -205,8 +205,8 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     .size(7.0),
             );
             // Matching padding to the F.ENV block above.
-            egui::Frame::none()
-                .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+            egui::Frame::NONE
+                .inner_margin(egui::Margin::symmetric(8, 6))
                 .show(ui, |ui| {
                     if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
                         let mut st = app.state.write();
@@ -246,12 +246,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("F.ADSR")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "F.ADSR");
                 widgets::centered_row(ui, |ui| {
                     ak!(ui, "ATTACK", filter_attack);
                     ak!(ui, "DECAY", filter_decay);
@@ -264,12 +259,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("FILTER")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "FILTER");
                 widgets::centered_row(ui, |ui| {
                     ak!(ui, "CUTOFF", filter_cutoff);
                     ak!(ui, "RESONANCE", filter_resonance);
@@ -282,12 +272,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h2);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("AMP ADSR")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "AMP ADSR");
                 widgets::centered_row(ui, |ui| {
                     ak!(ui, "ATTACK", amp_attack);
                     ak!(ui, "DECAY", amp_decay);
@@ -328,12 +313,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h2);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("TUNE")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "TUNE");
                 widgets::centered_row(ui, |ui| {
                     ak!(ui, "DETUNE", osc2_detune);
                     let oct = app.state.read().an1x.osc2_octave;
@@ -397,12 +377,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h2);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("PITCH ENV")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "PITCH ENV");
                 widgets::centered_row(ui, |ui| {
                     ak!(ui, "ATTACK", pitch_env_attack);
                     ak!(ui, "DECAY", pitch_env_decay);
@@ -412,12 +387,7 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             widgets::glass_group_fill(ui, gw, gw, |ui| {
                 ui.set_min_height(group_h2);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("LEVELS")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "LEVELS");
                 widgets::centered_row(ui, |ui| {
                     ak!(ui, "O1", osc1_level);
                     ak!(ui, "O2", osc2_level);

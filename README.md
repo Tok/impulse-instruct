@@ -42,7 +42,7 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 
 ---
 
-## v0.7.7 — Pre-release
+## v0.7.8 — Pre-release
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. The UI is functional but visually unpolished in places.
 
@@ -82,7 +82,7 @@ The release zip ships without model files. You need at least **Gemma 4 E4B Q4_K_
 4. Done — launch the app.
 
 Optional extras, same process:
-- **NeuTTS Air Q8** (~803 MB) — neural voice cloning for MC/DJ modules: [neuphonic/neutts-air-q8-gguf](https://huggingface.co/neuphonic/neutts-air-q8-gguf) → rename `neutts-air-Q8_0.gguf` to `neutts-air-q8.gguf`. The Q4 quant (~527 MB, [neuphonic/neutts-air-q4-gguf](https://huggingface.co/neuphonic/neutts-air-q4-gguf)) is also accepted as a smaller fallback.
+- **Qwen3-TTS** — neural voice cloning for MC/DJ modules. It runs in a Python venv rather than as a GGUF, so use the script: `./download-models.sh tts` (Windows: `download-models.bat tts`) creates `.tts-venv/`, installs `qwen-tts` and fetches [Qwen/Qwen3-TTS-12Hz-1.7B-Base](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base) (~4.3 GB, no Hugging Face login needed). Needs Python 3.10+.
 
 **Option B — Script (if you already have `hf`/`huggingface-cli`/`curl`):**
 
@@ -92,14 +92,14 @@ Linux:
 ./download-models.sh gemma-26b      # optional: Gemma 4 26B-A4B IQ4_XS (~13.4 GB, needs 16 GB GPU)
 ./download-models.sh gemma-26b-q3   # optional: Gemma 4 26B-A4B Q3_K_M  (~12.5 GB)
 ./download-models.sh gemma-26b-iq2  # optional: Gemma 4 26B-A4B IQ2_XXS (~9.9 GB)
-./download-models.sh neutts         # optional: NeuTTS Air
+./download-models.sh tts            # optional: Qwen3-TTS voice cloning
 ```
 
 Windows:
 ```
 download-models.bat
 download-models.bat gemma-26b
-download-models.bat neutts
+download-models.bat tts
 ```
 
 The scripts will offer manual-download instructions if no CLI tool is found; nothing needs to be installed.
@@ -112,7 +112,7 @@ Impulse Instruct doesn't bundle audio samples. Two modules benefit from user-dro
   [archive.org/details/amen-breaks](https://archive.org/details/amen-breaks) or
   [amen-breaks-compilation](https://archive.org/details/amen-breaks-compilation)
   and extract `.wav` files into `samples/amen/`. The module's GET button opens the page in your browser.
-- **Voice references** for the NeuTTS MC / DJ module — a 3–15s clean mono WAV of one speaker, plus a matching `.txt` transcript. [LibriVox audiobooks on the Internet Archive](https://archive.org/details/librivoxaudio) are the easiest clean source. Drop `voices/myvoice.wav` + `voices/myvoice.txt`.
+- **Voice references** for the Qwen3-TTS MC / DJ module — a 3–15s clean mono WAV of one speaker, plus a matching `.txt` transcript. [LibriVox audiobooks on the Internet Archive](https://archive.org/details/librivoxaudio) are the easiest clean source. Drop `voices/myvoice.wav` + `voices/myvoice.txt` — [voices/README.md](voices/README.md) walks through picking, trimming and transcribing a clip.
 
 Both directories exist in the release zip with a README pointing at the same links.
 
@@ -139,7 +139,7 @@ The app auto-detects models in `models/` and connects. The startup wizard detect
 | **Gemma 4 26B-A4B UD-IQ4_XS** | ~13.4 GB | ~14 GB | Optional. MoE (4B active / 26B total) — same speed as E4B, much more knowledge. Needs a 16 GB+ GPU. |
 | **Gemma 4 26B-A4B UD-Q3_K_M** | ~12.5 GB | ~13 GB | Optional. Smaller quant of the MoE for tighter VRAM budgets. |
 | **Gemma 4 26B-A4B UD-IQ2_XXS** | ~9.9 GB | ~10 GB | Optional. Smallest 26B-A4B quant. |
-| **NeuTTS Air Q8** | ~803 MB | CPU | Neural TTS voice cloning for MC/DJ modules. Q4 (~527 MB) also supported as a smaller fallback. NeuTTS License. |
+| **Qwen3-TTS 1.7B Base** | ~4.3 GB | ~4.5 GB | Neural TTS voice cloning for MC/DJ modules, 10 languages. Set `TTS_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base` for a lighter model. Apache-2.0. |
 
 Each agent can run a different model. A `LlamaServerPool` manages server processes — agents sharing the same model share a single server (ref-counted).  Same-model agents share VRAM, so a 5-agent Crew of Gemmas costs the same ~6 GB as a single Gemma. Typical multi-agent VRAM budgets:
 
@@ -198,7 +198,7 @@ Each agent can run a different model. A `LlamaServerPool` manages server process
 - Agent memory and style learning across sessions
 
 **TTS / MC mode**
-- NeuTTS Air voice cloning (local GGUF, ~527MB model)
+- Qwen3-TTS voice cloning (local, 1.7B or 0.6B Base model; multilingual)
 - Per-module settings: voice reference, temperature, top-k, pitch snap
 - Wired via rack control cables from agents
 
@@ -321,7 +321,7 @@ The LLM understands musical intent well. When a style doesn't land, the cause is
 
 ## Test Suites
 
-1374 unit tests plus 3 LLM integration suites that run against a real model:
+2410 unit tests plus 3 LLM integration suites that run against a real model:
 
 | Suite | What it tests |
 |-------|--------------|
@@ -351,13 +351,13 @@ Written in Rust. Key dependencies:
 
 | Component | Library |
 |-----------|---------|
-| UI | [egui](https://github.com/emilk/egui) / eframe 0.28 |
-| Audio I/O | [cpal](https://github.com/RustAudio/cpal) 0.15 |
+| UI | [egui](https://github.com/emilk/egui) / eframe 0.37 |
+| Audio I/O | [cpal](https://github.com/RustAudio/cpal) 0.18 |
 | Audio thread - DSP | [rtrb](https://github.com/mgeier/rtrb) lock-free ring buffer |
 | LLM inference | [llama-server](https://github.com/ggml-org/llama.cpp) (official) |
-| TTS voice cloning | [NeuTTS Air](https://huggingface.co/neuphonic/neutts-air) (GGUF, local) + [espeak-ng](https://github.com/espeak-ng/espeak-ng) (phonemization) |
-| HTTP/MCP API | [axum](https://github.com/tokio-rs/axum) 0.7 |
-| MIDI | [midir](https://github.com/Boddlnagg/midir) 0.9 |
+| TTS voice cloning | [Qwen3-TTS](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base) (local, via `scripts/tts-server.py`) |
+| HTTP/MCP API | [axum](https://github.com/tokio-rs/axum) 0.8 |
+| MIDI | [midir](https://github.com/Boddlnagg/midir) 0.11 |
 
 ---
 
@@ -366,7 +366,7 @@ Written in Rust. Key dependencies:
 MIT - see [LICENSE](LICENSE)
 
 Gemma 4 model: [Google Gemma Terms of Use](https://ai.google.dev/gemma/terms)
-NeuTTS Air model: Apache 2.0 - credit to [Neuphonic](https://huggingface.co/neuphonic/neutts-air)
+Qwen3-TTS model: Apache 2.0 - credit to [Qwen / Alibaba Cloud](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base)
 
 ---
 

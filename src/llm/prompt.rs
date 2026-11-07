@@ -255,6 +255,23 @@ pub fn build_system_prompt_full(
                 entries.join("\n")
             ));
         }
+        // Short-lived apply-layer feedback — the LLM sees what its
+        // recent output looked like from the engine's side and can
+        // correct (e.g. "your last ramp was a no-op, pick a real
+        // target").  Capped at FEEDBACK_MAX entries so the section
+        // stays under a few hundred chars even when full.
+        if !state.llm.recent_feedback.is_empty() {
+            let entries: Vec<&str> = state
+                .llm
+                .recent_feedback
+                .iter()
+                .map(|s| s.as_str())
+                .collect();
+            parts.push(format!(
+                "Recent feedback from the engine (avoid these mistakes next turn):\n{}",
+                entries.join("\n")
+            ));
+        }
         if parts.is_empty() {
             String::new()
         } else {
@@ -374,6 +391,19 @@ STEP SEQUENCER (default 32 steps = two 4/4 bars of 16th notes):
 
 FX (0.0–1.0 unless noted; at top level, never inside "sequencer"):
   fx.reverb_{{mix, size, gate_time (seconds), freeze (bool; infinite hold)}}
+  fx.conv_reverb_{{mix, size (IR truncation), predelay, damp, lowcut, width, reverse (bool)}}
+  fx.param_eq_bands[0..7]: {{kind (0=low shelf, 1=peak, 2=high shelf), freq Hz, gain dB ±18, q 0.1–10, enabled}} — 8-band parametric EQ, shelves at 0 and 7 by default
+  fx.pitch_shift_{{semi (-24..+24 st, 0=bypass), fine (-100..+100 cents), mix, fbk}} — grain-based bidirectional pitch shift (harmonies, octave doubles).  Distinct from Autotune (upward snap-to-key).
+  pluck.{{enabled, damping (decay length), brightness (output tone), volume, pan, pitch_offset_semi (-24..+24)}} — Karplus-Strong plucked-string voice.  Own sequencer lane: pluck.pluck_steps (bool array) + pluck.pluck_notes (MIDI note per step).
+  bass.lfo_target ∈ {{off,pitch,pwm,cutoff,amp,pan}} + bass.lfo_phase 0..1 — per-voice LFO + phase offset.  Two voices targeting `pan` with phases 0 and 0.5 produce an anti-phase stereo sweep without any host automation.
+  *_conds (per-step int 0-3) — fire-only-every-Nth-cycle gates: 0=always, 1=every 2nd, 2=every 3rd, 3=every 4th.  Available for bass / bass2..4 / kick_a / snare_a / hihat_a / kick_b / snare_b / clap_b / hihat_b.  Use sparingly to evolve patterns over multiple bars without stacking accents.
+  wavetable.{{enabled, position (0..1, frame scan), phase_offset, volume, pan, pitch_offset_semi}} — single-table wavetable voice (user-supplied .wav from samples/wavetables/).  Own sequencer lane: wavetable.wavetable_steps + wavetable.wavetable_notes.
+  sample.{{enabled, root_note (MIDI of source recording), volume, pan, pitch_offset_cents,
+    attack, decay, sustain, release, loop_start, loop_end, loop_enabled}} — pitched-sample
+    instrument: load a recording (e.g. a piano C4), play it across the keyboard via ratio
+    resampling.  ADSR envelope + optional loop window (loop_enabled toggles between
+    looping and one-shot).  Own sequencer lane: sample.sample_steps + sample.sample_notes.
+  fx.ms_{{mid,side}}_{{gain, tilt, sat}} — mid/side master bus; 0.5 = unity on gain + tilt, 0 = off on sat.  Side gain below 0.5 narrows the stereo image; tilt toward treble widens the air.
   fx.delay_{{time (0=0s, 1=2s; 0.375≈dotted 8th @130), feedback, mix, wow_flutter, saturation}}
   fx.distortion_{{drive, mix}}; fx.bitcrush_{{bits (1=clean, 0=1-bit), rate, mix}}
   fx.chorus_{{mix, rate, depth}}; fx.master_pitch_st (-12..+12 semitones)
@@ -381,7 +411,17 @@ FX (0.0–1.0 unless noted; at top level, never inside "sequencer"):
 LFO (4 slots): lfo[N].enabled, .waveform (Sine|Triangle|Saw|InvSaw|Square|SampleAndHold),
   .rate 0–1 (0.01=glacial, 0.5=fast), .depth 0–1, .target one of: BassCutoff, BassResonance,
   BassPitch, BassVolume, ReverbMix, DelayTime, DelayFeedback, ChorusMix, ChorusRate,
-  Kick808Pitch, PhaserRate, PhaserDepth, DistortionDrive, MasterVolume, An1xCutoff, An1xPitch.
+  Kick808Pitch, PhaserRate, PhaserDepth, FlangerRate, FlangerDepth, FlangerFeedback, FlangerMix,
+  LimiterThreshold, LimiterCeiling, LimiterRelease, LimiterLookahead,
+  SvfCutoff, SvfResonance, SvfDrive, SvfMix,
+  CombPitch, CombFeedback, CombDamp, CombMix,
+  TiltTilt, TiltPivot, TiltMix,
+  TransientAttack, TransientSustain, TransientMix,
+  ExciterAmount, ExciterFreq, ExciterMix,
+  MultitapTime, MultitapSpread, MultitapFeedback, MultitapMix,
+  RevDelayTime, RevDelayFeedback, RevDelayMix,
+  TapeStopMix, StutterRate, StutterSlice, StutterMix, FreezeMix,
+  DistortionDrive, MasterVolume, An1xCutoff, An1xPitch.
 
 FREE EG: free_eg.{{enabled, values: [8 levels 0–1], period 0–1, depth 0–1 (0.5=neutral),
   target (same list as LFO), loop_mode: bool}}. Use for glacial sweeps.
@@ -391,6 +431,12 @@ EUCLIDEAN: `{{"euclidean": {{"voice":"kick_a","pulses":4,"steps":16}}}}` — Bjo
 
 RAMPS: `{{"ramp":{{"param":"fx.reverb_mix","to":0.6,"bars":4}}}}` or `"ramps":[…]` for
   multiple. Bar-based preferred. Params from fx.*, bass.*, sequencer.bpm/swing.
+  DURATION: prefer `bars`: 2, 4, 8, or 16 — these are the musical lengths that
+  read as an evolving arc in the event stream.  1-bar ramps finish faster
+  than a listener registers them and collapse into step-jumps; anything
+  above 16 bars rarely finishes before the next ask re-targets the param.
+  Default to `bars: 4` when unsure; use 8 or 16 for slow FX sweeps / BPM
+  transitions; use 2 only when a fast but still-smooth snap is called for.
 
 BEHAVIOUR: `{{"behaviour": "build|drop|breakdown|tension|euphoric"}}` — pre-built mood
   templates, scaled by current heat.
@@ -563,7 +609,9 @@ RACK (only when user asks to add/wire/remove modules): `{{"rack": {{"add":["808"
 "to":"bass","slot":0,"depth":0.5,"targets":["BassCutoff"]}}],
 "pad":[{{"kind":"reverb","expanded":true,"pair":1}}]}}}}`. Module names:
 bass, 808, 909, hoover, an1x, amen, noise, granular, bitcrush, reverb, delay,
-chorus, phaser, drive, eq, compressor, tapesat, waveshaper, ringmod, lfo, tts, master.
+chorus, phaser, flanger, filter, comb, tilt, transient, exciter, limiter,
+multitap, revdelay, tapestop, stutter, freeze,
+drive, eq, compressor, gate, vocoder, widen, freqshift, tapesat, waveshaper, ringmod, lfo, tts, master.
 `pad` expands an FX card to reveal its XY pad and (for 3-knob FX) picks which
 pair drives the pad — pair 0 = A/B, 1 = A/C, 2 = B/C from the knob row order.
 
@@ -571,9 +619,12 @@ XY PAD SHORTCUTS — every FX effect accepts a `<name>_xy: [x, y]` path under
 `fx` that writes both knobs of the canonical Pair-0 pad in one go: e.g.
 `{{"fx":{{"reverb_xy":[0.7, 0.4]}}}}` is equivalent to setting
 `reverb_size` to 0.7 and `reverb_damp` to 0.4.  Available shortcuts:
-`reverb_xy`, `delay_xy`, `chorus_xy`, `phaser_xy`, `ring_mod_xy`,
+`reverb_xy`, `delay_xy`, `chorus_xy`, `phaser_xy`, `flanger_xy`,
+`limiter_xy`, `svf_xy`, `comb_xy`, `tilt_xy`, `transient_xy`, `exciter_xy`,
+`multitap_xy`, `revdelay_xy`, `stutter_xy`,
+`ring_mod_xy`,
 `waveshaper_xy`, `bitcrush_xy`, `eq_xy`, `compressor_xy`, `tape_xy`,
-`distortion_xy`, `autotune_xy`, `fx_pan_xy`.  Use pad-space when thinking
+`distortion_xy`, `autotune_xy`, `fx_pan_xy`, `gate_xy`, `vocoder_xy`, `widen_xy`, `freq_shift_xy`.  Use pad-space when thinking
 about intensity/character sweeps; use individual knob paths for Pair-1
 or Pair-2 combinations.
 

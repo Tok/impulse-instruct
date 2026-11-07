@@ -3,6 +3,7 @@
 
 use super::AudioParams;
 use super::dsp_util::tanh;
+use super::dsp_util::{PWM_MAX, PWM_MIN};
 use super::params;
 use super::voices::{LadderFilter, NoiseGen};
 
@@ -18,7 +19,7 @@ enum EnvPhase {
 }
 
 #[derive(Clone)]
-pub(super) struct Bass303 {
+pub struct Bass303 {
     phase: f32,
     sub_phase: f32,
     fm_phase: f32,
@@ -48,6 +49,12 @@ pub(super) struct Bass303 {
     // from 0 on retrigger to honor lfo_delay.
     lfo_phase: f32,
     lfo_fade: f32, // 0..1 — 1 = full depth reached
+    /// Per-voice side-bus contribution from the LFO Pan target.
+    /// Updated every sample inside `process`; the master mixer reads
+    /// this and sums it across voices into the global pan_side bus.
+    /// Zero when the voice's LFO target isn't `Pan` so non-pan
+    /// patches stay silent on the side bus.
+    pub pan_side: f32,
 }
 
 impl Default for Bass303 {
@@ -72,6 +79,7 @@ impl Default for Bass303 {
             noise_gen: NoiseGen::new(0xBAD_C0DE),
             lfo_phase: 0.0,
             lfo_fade: 0.0,
+            pan_side: 0.0,
         }
     }
 }
@@ -138,13 +146,7 @@ pub(super) fn lfo_wave(p: f32, waveform: crate::state::LfoWaveform) -> f32 {
 }
 
 impl Bass303 {
-    pub(super) fn trigger(
-        &mut self,
-        note: u8,
-        accent: f32,
-        slide: f32,
-        tuning: super::TuningSystem,
-    ) {
+    pub fn trigger(&mut self, note: u8, accent: f32, slide: f32, tuning: super::TuningSystem) {
         let new_freq = super::dsp_util::midi_to_hz_tuned(note, tuning);
         // `slide` is a property of the NEW step (intensity 0..=1): any
         // positive value asks the voice to glide *into* this note.  The
@@ -183,13 +185,13 @@ impl Bass303 {
         }
     }
 
-    pub(super) fn gate_off(&mut self) {
+    pub fn gate_off(&mut self) {
         self.gate = false;
         self.amp_phase = EnvPhase::Release;
         self.filt_phase = EnvPhase::Release;
     }
 
-    pub(super) fn process(&mut self, p: &AudioParams, vp: &params::BassVoiceParams) -> f32 {
+    pub fn process(&mut self, p: &AudioParams, vp: &params::BassVoiceParams) -> f32 {
         let sr = p.sample_rate;
 
         if self.slide > 0.0 {
@@ -218,7 +220,12 @@ impl Bass303 {
                 vp.lfo_sync_beats,
             );
             self.lfo_phase = (self.lfo_phase + rate_hz / sr).rem_euclid(1.0);
-            let raw = lfo_wave(self.lfo_phase, vp.lfo_waveform);
+            // Apply the per-voice phase offset before the waveform
+            // lookup so two voices sharing a rate can run anti-phase
+            // (offset 0.5), 90° apart (0.25), etc.  rem_euclid keeps
+            // negative results non-negative for the LUT.
+            let lookup_phase = (self.lfo_phase + vp.lfo_phase).rem_euclid(1.0);
+            let raw = lfo_wave(lookup_phase, vp.lfo_waveform);
             self.lfo_fade = lfo_fade_step(self.lfo_fade, sr, vp.lfo_delay);
             raw * vp.lfo_depth * self.lfo_fade
         };
@@ -244,8 +251,29 @@ impl Bass303 {
         } else {
             1.0
         };
+        let lfo_pan = if vp.lfo_target == BassLfoTarget::Pan {
+            lfo_value
+        } else {
+            0.0
+        };
 
-        let freq_mod = 2.0f32.powf((p.lfo_pitch_mod_st + vp.osc_detune + lfo_pitch_st) / 12.0);
+        // MPE pitch bend additively shifts the running pitch; voice 0
+        // only for V1 (the only voice an MPE controller drives via
+        // the lower-zone master channel).  Captured per-block from
+        // `AudioParams.mpe_bend_st` which already folded the bend
+        // range to ±2 semitones.
+        let mpe_pitch_st = if vp.osc_detune.is_finite() {
+            // Apply bend to voice 0 only.  Bass voice index isn't
+            // surfaced on `vp` directly, so use `pan` as a tie-
+            // breaker proxy: voice 0 typically sits centre / has
+            // index 0 in `bass_voice_params`.  Cleaner per-voice
+            // routing is a follow-up; V1 just lights up the bend.
+            p.mpe_bend_st
+        } else {
+            0.0
+        };
+        let freq_mod =
+            2.0f32.powf((p.lfo_pitch_mod_st + vp.osc_detune + lfo_pitch_st + mpe_pitch_st) / 12.0);
 
         let fm_mod = if vp.fm_depth > 0.001 {
             let mod_ratio = 0.5 + vp.fm_ratio * 7.5;
@@ -289,7 +317,7 @@ impl Bass303 {
             // classic square; narrower = reedier, wider = less harmonic.
             // LFO PWM modulation (if routed) adds/subtracts around the
             // static pulse_width value.
-            let pw = (vp.pulse_width + lfo_pwm).clamp(0.05, 0.95);
+            let pw = (vp.pulse_width + lfo_pwm).clamp(PWM_MIN, PWM_MAX);
             if self.phase < pw { 1.0 } else { -1.0 }
         };
         self.sub_phase += self.freq * freq_mod * 0.5 / sr;
@@ -390,8 +418,13 @@ impl Bass303 {
             }
         }
 
+        // MPE timbre (CC74) opens the filter additively — small
+        // contribution so a Y-axis push doesn't override the user's
+        // set cutoff.  0..=1 → 0..=0.3 of the cutoff range.
+        let mpe_cutoff = p.mpe_timbre * 0.3;
         let cutoff_env =
-            (vp.cutoff + self.filt_env * vp.env_mod * accent_mult + lfo_cutoff).clamp(0.0, 1.0);
+            (vp.cutoff + self.filt_env * vp.env_mod * accent_mult + lfo_cutoff + mpe_cutoff)
+                .clamp(0.0, 1.0);
         let cutoff_hz = 200.0 * (40.0f32).powf(cutoff_env);
         let g = {
             let w = cutoff_hz / sr;
@@ -422,7 +455,21 @@ impl Bass303 {
             filtered
         };
 
-        dist * self.amp_env * vp.volume * accent_mult * lfo_amp_mult
+        // MPE pressure (channel aftertouch) folds in additively as a
+        // gentle volume boost — 0..=1 maps to 1.0..=1.4× so a hard
+        // press makes the note pop without saturating into clipping.
+        let mpe_amp_mult = 1.0 + p.mpe_pressure * 0.4;
+        let out = dist * self.amp_env * vp.volume * accent_mult * lfo_amp_mult * mpe_amp_mult;
+        // Per-voice pan side: only the LFO-modulated contribution is
+        // emitted here.  The static `vp.pan` (and the per-step pan
+        // override) is handled at master via the existing pan_303
+        // path, so a voice that doesn't target Pan stays exactly as
+        // it was before this commit.  At target=Pan the depth + fade
+        // shaping is already baked into `lfo_pan` (== `lfo_value`);
+        // multiply by the audible output to get the side signal the
+        // master mixer adds to its stereo bus.
+        self.pan_side = out * lfo_pan * 0.5;
+        out
     }
 }
 

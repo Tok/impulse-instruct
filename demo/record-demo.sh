@@ -143,10 +143,13 @@ VERSION=$(grep '^version' "$PROJECT_DIR/Cargo.toml" | head -1 | sed 's/.*"\(.*\)
 BASENAME="v${VERSION}-${SCENARIO}"
 
 if [ "$RESUME" -eq 1 ]; then
-    # Pick the newest timestamped batch dir (YYYYMMDD_HHMMSS). Lexical sort
-    # matches chronological order for that format, so `sort | tail -1` wins.
+    # Pick the newest timestamped batch dir.  The scenario suffix is
+    # optional in the regex so this keeps working with pre-suffix
+    # batch dirs (old recordings) and the new `YYYYMMDD_HHMMSS_<scenario>`
+    # layout alike.  Lexical sort matches chronological order because
+    # the timestamp prefix is fixed-width.
     LAST_BATCH=$(find "$OUTPUT_DIR" -maxdepth 1 -mindepth 1 -type d \
-        -regextype posix-extended -regex '.*/[0-9]{8}_[0-9]{6}$' 2>/dev/null \
+        -regextype posix-extended -regex '.*/[0-9]{8}_[0-9]{6}(_[^/]*)?$' 2>/dev/null \
         | sort | tail -1)
     if [ -z "$LAST_BATCH" ] || [ ! -d "$LAST_BATCH" ]; then
         echo "ERROR: --resume: no previous batch directory found in $OUTPUT_DIR" >&2
@@ -157,7 +160,12 @@ if [ "$RESUME" -eq 1 ]; then
     echo "  [--resume] Reusing batch: $BATCH_DIR"
 else
     TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-    BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}"
+    # Tag the batch dir with the scenario name so `ls output/` at a
+    # glance identifies which recording produced each mp4/srt/log,
+    # rather than forcing the user to open each dir to check its
+    # contents.  Filesystem-safe: scenario names are already
+    # `a-z0-9-_` (they're filename stems under demo/scenarios/).
+    BATCH_DIR="$OUTPUT_DIR/${TIMESTAMP}_${SCENARIO}"
 fi
 mkdir -p "$BATCH_DIR"
 # TTS clip cache location — per-batch by default so each recording owns its
@@ -192,7 +200,7 @@ echo ""
 #
 # Ordering rationale: Build → launch app (background) → pre-gen TTS.
 # Launching the app before TTS generation lets llama-server load Gemma 4 onto
-# the GPU while NeuTTS is still busy synthesising clips on CPU + GPU.  By the
+# the GPU while Qwen3-TTS is still busy synthesising clips on CPU + GPU.  By the
 # time the scenario runs and adds an agent, the model pool already has a warm
 # server — no 60-120s cold-start stall.
 
@@ -240,8 +248,8 @@ cleanup() {
     # Drop doesn't run on SIGKILL, and even SIGTERM can race — sweep
     # any orphaned llama-server spawned by our app. Match on --model so
     # we don't touch unrelated llama-server instances the user may run.
-    pkill -KILL -f 'llama-server .* --model' 2>/dev/null
-    stop_neutts_server 2>/dev/null
+    pkill -KILL -f 'llama-server.* --model' 2>/dev/null
+    stop_tts_server 2>/dev/null
     # Clean up virtual recording sink
     destroy_recording_sink 2>/dev/null
     rm -f "$NARRATION_LIST"
@@ -289,7 +297,7 @@ fi
 echo ""
 echo "[3/6] Pre-generating TTS clips..."
 if [ "$NO_TTS" -eq 0 ]; then
-    start_neutts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
+    start_tts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
 fi
 if [ "$NO_TTS" -eq 0 ]; then
     clip_id=""
@@ -334,12 +342,13 @@ if [ "$NO_TTS" -eq 0 ]; then
         echo "  Missing clips (all retries exhausted):"
         printf "%b" "$tts_failed_ids" | sed 's/^/    /'
     fi
-    # IMPORTANT: don't stop the NeuTTS server here.  The in-app TTS
+    # IMPORTANT: don't stop the Qwen3-TTS server here.  The in-app TTS
     # module (used for runtime mc_line synthesis when an MC agent is
     # spawned during the scenario) shares the same Python server on
     # port 8770 — stopping it would make scenario-time MC lines fail
-    # silently.  Memory is fine: NeuTTS Air is ~800 MB (Q8) and Gemma
-    # ~5 GB, comfortably under most GPU budgets.  The cleanup trap
+    # silently.  Memory: Qwen3-TTS 1.7B is ~4.5 GB (bf16) and Gemma E4B
+    # ~6 GB — ~11 GB together; use TTS_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base
+    # on smaller GPUs.  The cleanup trap
     # stops the server after the scenario finishes.
 
     # Pre-generate SRT from scenario + actual clip durations. Timings are

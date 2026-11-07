@@ -13,7 +13,7 @@ Build instructions, architecture notes, HTTP API reference, and contributor setu
 | **OS** | Linux (Ubuntu 22.04+); Windows cross-compile via cargo-xwin |
 | **Rust** | 1.85+ (edition 2024) |
 | **C++ toolchain** | `build-essential cmake ninja-build` for llama-server builds |
-| **TTS** (optional) | `apt install espeak-ng` for MC mode |
+| **TTS** (optional) | Python 3.10+ (`apt install python3-venv`), then `./scripts/download-models.sh tts` for MC mode; `espeak-ng` only to regenerate the default voice references |
 | **MP3 export** (optional) | `apt install ffmpeg` |
 | **Terminal font** | JetBrains Mono, Fira Code, or any Nerd Font for the graphical banner |
 
@@ -236,10 +236,11 @@ All models use `.llama-official-build/bin/llama-server` (standard llama.cpp), bu
 
 | Crate | Version | Purpose |
 |-------|---------|---------|
-| egui / eframe | 0.28 | UI |
-| cpal | 0.15 | Audio I/O |
-| axum | 0.7 | HTTP API |
-| midir | 0.9 | MIDI |
-| rtrb | 0.3 | Lock-free audio ring buffer |
-| parking_lot | latest | RwLock for AppState |
+| egui / eframe | 0.37 | UI |
+| cpal | 0.18 | Audio I/O |
+| axum | 0.8 | HTTP API |
+| ureq | 3 | HTTP client (llama-server, TTS server) |
+| midir | 0.11 | MIDI |
+| rtrb | 0.4 | Lock-free audio ring buffer |
+| parking_lot | 0.13 | RwLock for AppState |
 | crossbeam-channel | latest | Thread communication |

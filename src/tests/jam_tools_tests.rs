@@ -214,6 +214,66 @@ fn parse_ramp_bars_creates_bar_based_ramp() {
 }
 
 #[test]
+fn parse_ramp_noop_target_drops_ramp_and_pushes_error_feedback() {
+    // A ramp from a param's current value back to itself (|delta| <
+    // 0.001) is a no-op.  The apply layer drops it AND pushes an
+    // ERROR-level feedback line onto `state.llm.recent_feedback` so
+    // the LLM sees the mistake on its next prompt.
+    let mut state = AppState::default();
+    state.fx.reverb_mix = 0.40;
+    let obj = serde_json::from_str::<serde_json::Value>(
+        r#"{ "param": "fx.reverb_mix", "to": 0.40, "bars": 4 }"#,
+    )
+    .unwrap();
+    let out = parse_and_schedule_ramp(state, obj.as_object().unwrap());
+    assert!(
+        out.llm.active_ramps.is_empty(),
+        "no-op ramp must not be scheduled"
+    );
+    assert!(!out.llm.recent_feedback.is_empty(), "should emit feedback");
+    let msg = out.llm.recent_feedback.back().unwrap();
+    assert!(msg.starts_with("ramp ERROR"), "got {msg:?}");
+    assert!(msg.contains("no-op"), "got {msg:?}");
+}
+
+#[test]
+fn parse_ramp_tiny_delta_still_schedules_but_warns() {
+    // 0.001 ≤ |delta| < 0.05 is the "barely audible" band — the
+    // apply layer schedules the ramp (partial motion is still
+    // motion) but pushes a WARN feedback line so the LLM can pick a
+    // bigger target next turn.
+    let mut state = AppState::default();
+    state.fx.reverb_mix = 0.40;
+    let obj = serde_json::from_str::<serde_json::Value>(
+        r#"{ "param": "fx.reverb_mix", "to": 0.42, "bars": 4 }"#,
+    )
+    .unwrap();
+    let out = parse_and_schedule_ramp(state, obj.as_object().unwrap());
+    assert_eq!(out.llm.active_ramps.len(), 1, "tiny ramp still schedules");
+    let msg = out.llm.recent_feedback.back().unwrap();
+    assert!(msg.starts_with("ramp WARN"), "got {msg:?}");
+    assert!(msg.contains("barely audible"), "got {msg:?}");
+}
+
+#[test]
+fn parse_ramp_normal_delta_does_not_push_feedback() {
+    // |delta| ≥ 0.05 — a musically meaningful move.  No feedback
+    // pushed; the ramp schedules silently.
+    let mut state = AppState::default();
+    state.fx.reverb_mix = 0.40;
+    let obj = serde_json::from_str::<serde_json::Value>(
+        r#"{ "param": "fx.reverb_mix", "to": 0.65, "bars": 4 }"#,
+    )
+    .unwrap();
+    let out = parse_and_schedule_ramp(state, obj.as_object().unwrap());
+    assert_eq!(out.llm.active_ramps.len(), 1);
+    assert!(
+        out.llm.recent_feedback.is_empty(),
+        "healthy ramps must not trip feedback"
+    );
+}
+
+#[test]
 fn parse_ramp_missing_param_is_noop() {
     let state = AppState::default();
     let obj = serde_json::from_str::<serde_json::Value>(r#"{ "to": 0.6, "cycles": 4 }"#).unwrap();

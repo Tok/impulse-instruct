@@ -100,7 +100,7 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .and_then(|n| n.to_str())
                 .unwrap_or("(pick sample)")
                 .to_string();
-            egui::ComboBox::from_id_source("granular_sample_picker")
+            egui::ComboBox::from_id_salt("granular_sample_picker")
                 .width((ui.available_width() - 70.0).max(60.0))
                 .selected_text(egui::RichText::new(current_name).monospace().size(8.0))
                 .show_ui(ui, |ui| {
@@ -146,7 +146,7 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Auto-reload if the path changed from outside (API, LLM, style).  A
     // simple equality check against a ctx-cached "last loaded" avoids
     // hammering the disk on every frame.
-    let mem_id = egui::Id::new("granular_last_loaded_path");
+    let mem_id = egui::Id::unique("granular_last_loaded_path");
     let last_loaded: String = ui
         .ctx()
         .data(|d| d.get_temp::<String>(mem_id))
@@ -157,16 +157,10 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     }
 
     // ── Live master-output ring buffer + CAPTURE button ─────────────────────
-    // Drain any samples the audio thread has produced since the last frame
-    // into our local ring (granular_tap / granular_tap_head).  Then render
-    // a compact min/max strip with a moving "head" cursor so the user can
-    // see what's currently in the buffer before clicking CAPTURE.
+    // The drain into `granular_tap` runs centrally (in app_update.rs) so
+    // the amen panel's REC→CHOP button can also read it.  Here we only
+    // render the visualisation + handle the CAPTURE button.
     let tap_len = app.granular_tap.len();
-    while let Ok(s) = app.granular_capture_rx.pop() {
-        let h = app.granular_tap_head;
-        app.granular_tap[h] = s;
-        app.granular_tap_head = (h + 1) % tap_len;
-    }
     // Bigger waveform strip (66 px — matches the amen panel) so the
     // ring buffer is actually legible.  Same dark-rect styling +
     // 0.5 stroke so the look is consistent with the amen display.
@@ -177,13 +171,14 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let painter = ui.painter_at(rect);
     painter.rect_filled(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         egui::Color32::from_gray(10),
     );
     painter.rect_stroke(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         egui::Stroke::new(0.5, egui::Color32::from_gray(30)),
+        egui::StrokeKind::Middle,
     );
     // Column-wise min/max over the ring buffer, starting at the oldest
     // sample (head) so the display scrolls left→right in chronological
@@ -329,5 +324,27 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             ("granular.pitch_scatter", pitch),
             ("granular.spray", spray),
         ]);
+    }
+
+    // ── Pitch-mappable toggle ────────────────────────────────────────────────
+    // When on, MIDI NoteOn (and `GranularPitch` sequencer triggers)
+    // transpose the grain rate so the texture tracks the keyboard —
+    // melodic mode for bird-call solos, sample-instrument fills, etc.
+    let mut pitch_map = app.state.read().granular.pitch_mappable;
+    if ui
+        .checkbox(
+            &mut pitch_map,
+            egui::RichText::new("PITCH MAP").monospace().size(8.0),
+        )
+        .on_hover_text(
+            "Pitch-tracking mode.  Played notes (MIDI in / sequencer\n\
+             trigger) transpose the granular voice — every grain inherits\n\
+             the played pitch.  C4 = no transpose; higher notes raise\n\
+             grain rate, lower notes drop it.",
+        )
+        .changed()
+    {
+        app.state.write().granular.pitch_mappable = pitch_map;
+        app.push_audio_params();
     }
 }

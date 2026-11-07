@@ -6,7 +6,7 @@
 use crate::state::{FreeEg, LfoSlot, LfoTarget, LfoWaveform};
 use crate::ui::{ImpulseApp, theme, widgets};
 
-const TARGET_LABELS: &[(&str, LfoTarget)] = &[
+pub(crate) const TARGET_LABELS: &[(&str, LfoTarget)] = &[
     ("NONE", LfoTarget::None),
     ("CUTOFF", LfoTarget::BassCutoff),
     ("RESONANCE", LfoTarget::BassResonance),
@@ -20,13 +20,43 @@ const TARGET_LABELS: &[(&str, LfoTarget)] = &[
     ("808.KICK.PITCH", LfoTarget::Kick808Pitch),
     ("PHASER.RATE", LfoTarget::PhaserRate),
     ("PHASER.DEPTH", LfoTarget::PhaserDepth),
+    ("FLANGER.RATE", LfoTarget::FlangerRate),
+    ("FLANGER.DEPTH", LfoTarget::FlangerDepth),
+    ("FLANGER.FBK", LfoTarget::FlangerFeedback),
+    ("FILTER.CUTOFF", LfoTarget::SvfCutoff),
+    ("FILTER.RES", LfoTarget::SvfResonance),
+    ("COMB.PITCH", LfoTarget::CombPitch),
+    ("COMB.FBK", LfoTarget::CombFeedback),
+    ("TILT", LfoTarget::TiltTilt),
+    ("TRANS.ATTACK", LfoTarget::TransientAttack),
+    ("EXCITER.AMT", LfoTarget::ExciterAmount),
+    ("MULTITAP.TIME", LfoTarget::MultitapTime),
+    ("MULTITAP.FBK", LfoTarget::MultitapFeedback),
+    ("REVDLY.TIME", LfoTarget::RevDelayTime),
+    ("REVDLY.FBK", LfoTarget::RevDelayFeedback),
+    ("TAPESTOP", LfoTarget::TapeStopMix),
+    ("STUTTER.RATE", LfoTarget::StutterRate),
+    ("STUTTER.SLICE", LfoTarget::StutterSlice),
+    ("FREEZE", LfoTarget::FreezeMix),
+    ("GATE.THR", LfoTarget::GateThreshold),
+    ("GATE.DEPTH", LfoTarget::GateDepth),
+    ("VOCODE.BANDS", LfoTarget::VocoderBands),
+    ("VOCODE.MIX", LfoTarget::VocoderMix),
+    ("WIDEN.HAAS", LfoTarget::WidenHaas),
+    ("WIDEN.SIDE", LfoTarget::WidenSide),
+    ("WIDEN.MIX", LfoTarget::WidenMix),
+    ("FREQSH.AMT", LfoTarget::FreqShiftAmount),
+    ("FREQSH.FBK", LfoTarget::FreqShiftFeedback),
+    ("SAMP.VOL", LfoTarget::SampleVolume),
+    ("SAMP.CUT", LfoTarget::SampleCutoff),
+    ("SAMP.PIT", LfoTarget::SamplePitch),
     ("DRIVE", LfoTarget::DistortionDrive),
     ("MASTER", LfoTarget::MasterVolume),
     ("AN1X.CUTOFF", LfoTarget::An1xCutoff),
     ("AN1X.PITCH", LfoTarget::An1xPitch),
 ];
 
-fn target_label(t: &LfoTarget) -> &'static str {
+pub(crate) fn target_label(t: &LfoTarget) -> &'static str {
     TARGET_LABELS
         .iter()
         .find(|(_, v)| v == t)
@@ -34,7 +64,7 @@ fn target_label(t: &LfoTarget) -> &'static str {
         .unwrap_or("NONE")
 }
 
-fn next_target(t: &LfoTarget) -> LfoTarget {
+pub(crate) fn next_target(t: &LfoTarget) -> LfoTarget {
     let idx = TARGET_LABELS.iter().position(|(_, v)| v == t).unwrap_or(0);
     TARGET_LABELS[(idx + 1) % TARGET_LABELS.len()].1
 }
@@ -402,14 +432,15 @@ fn draw_free_eg(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     egui::Color32::from_gray(40)
                 };
                 ui.painter()
-                    .rect_filled(bar_rect, egui::Rounding::ZERO, col);
+                    .rect_filled(bar_rect, egui::CornerRadius::ZERO, col);
                 ui.painter().rect_stroke(
                     egui::Rect::from_min_size(
                         egui::pos2(rect.min.x + 1.0, rect.max.y - 4.0 - bar_max_h),
                         egui::vec2(bar_w - 2.0, bar_max_h),
                     ),
-                    egui::Rounding::ZERO,
+                    egui::CornerRadius::ZERO,
                     egui::Stroke::new(1.0, egui::Color32::from_gray(30)),
+                    egui::StrokeKind::Middle,
                 );
             }
             if resp.dragged() {

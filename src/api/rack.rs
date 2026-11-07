@@ -61,6 +61,21 @@ pub struct RackRemoveRequest {
 }
 
 #[derive(Deserialize)]
+pub struct RackEnableRequest {
+    /// Module kind to toggle (e.g. "bitcrush", "FxBitcrush", "reverb").
+    /// Routed through `parse_module_kind` so the same aliases that
+    /// work elsewhere (`/api/rack/add`, scenario helpers) work here.
+    #[serde(default)]
+    pub kind: Option<String>,
+    /// Module id to toggle (exact match).  Wins over `kind` when both
+    /// are supplied.
+    #[serde(default)]
+    pub id: Option<u32>,
+    /// Desired state.
+    pub enabled: bool,
+}
+
+#[derive(Deserialize)]
 pub struct RackCableGainRequest {
     pub from: u32,
     pub to: u32,
@@ -104,12 +119,32 @@ pub async fn post_rack_add(
         );
     }
     // Create per-module state for TTS modules.
-    if kind == crate::state::ModuleKind::NeuTts {
+    if kind == crate::state::ModuleKind::Tts {
         s.tts_modules.push(crate::state::TtsModuleState::new(id));
+    }
+    // Auto-pick a random amen sample when the AmenSampler module is added
+    // with no sample loaded.  Without this, freshly-added amen modules look
+    // fine in the UI but are silent — the voice triggers on schedule but
+    // its source buffer is empty until the user manually clicks LOAD or
+    // RAND in the panel.  The amen panel's path-watcher picks up the
+    // assignment on its next frame and runs the full decode + audio-thread
+    // push (same path /api/amen takes).
+    let auto_amen_path = if kind == crate::state::ModuleKind::AmenSampler && s.amen.path.is_empty()
+    {
+        crate::ui::panels::amen::pick_random_sample()
+    } else {
+        None
+    };
+    if let Some(ref p) = auto_amen_path {
+        s.amen.path = p.clone();
+        s.amen.slice_positions.clear();
     }
     // Auto-scroll to the new module so it's visible.
     s.scroll_target = Some(req.kind.clone());
     drop(s);
+    if let Some(p) = auto_amen_path {
+        api_log(&api, format!("[API] amen: auto-loaded {}", p));
+    }
     api_log(&api, format!("[API] rack: added {:?} (id={})", kind, id));
     Ok(Json(serde_json::json!({ "ok": true, "id": id })))
 }
@@ -161,7 +196,7 @@ pub async fn post_rack_agent(
         }
         if req.tts == Some(true) {
             // Add a TTS module and wire a control cable from this agent.
-            let tts_id = s.rack.add_module(crate::state::ModuleKind::NeuTts);
+            let tts_id = s.rack.add_module(crate::state::ModuleKind::Tts);
             s.tts_modules
                 .push(crate::state::TtsModuleState::new(tts_id));
             s.rack.connect_control(id, tts_id);
@@ -324,5 +359,44 @@ pub async fn post_rack_remove(
     Json(OkResponse {
         ok: true,
         message: Some(format!("removed {}", req.id)),
+    })
+}
+
+/// Toggle a module's `enabled` flag.  Counterpart to `add`/`remove` —
+/// lets scenarios / external controllers switch an FX in or out of
+/// signal without re-cabling.  Useful because FX modules are added
+/// DISABLED by default (so freshly-added effects don't click the
+/// signal at their default wet mix); the scenario calls this when
+/// it's time to bring the effect online.  When `id` is provided it
+/// wins over `kind`; otherwise every module matching `kind` flips.
+pub async fn post_rack_enable(
+    AxumState(api): AxumState<ApiState>,
+    Json(req): Json<RackEnableRequest>,
+) -> Json<OkResponse> {
+    let mut s = api.app_state.write();
+    let mut touched = 0usize;
+    if let Some(id) = req.id {
+        if let Some(m) = s.rack.modules.iter_mut().find(|m| m.id == id) {
+            m.enabled = req.enabled;
+            touched += 1;
+        }
+    } else if let Some(kind_str) = req.kind.as_deref()
+        && let Some(kind) = parse_module_kind(kind_str)
+    {
+        for m in s.rack.modules.iter_mut().filter(|m| m.kind == kind) {
+            m.enabled = req.enabled;
+            touched += 1;
+        }
+    }
+    drop(s);
+    let msg = format!(
+        "[API] rack: {} {} module(s)",
+        if req.enabled { "enabled" } else { "disabled" },
+        touched
+    );
+    api_log(&api, msg.clone());
+    Json(OkResponse {
+        ok: touched > 0,
+        message: Some(msg),
     })
 }

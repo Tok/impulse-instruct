@@ -15,6 +15,9 @@ mod knob;
 use knob::draw_arc;
 pub use knob::knob;
 
+pub mod param_eq_curve;
+pub use param_eq_curve::param_eq_curve;
+
 use egui::{Color32, Painter, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use std::f32::consts::TAU;
 
@@ -33,7 +36,7 @@ const PHI: f32 = 1.618;
 /// Returns `None` when the user is in normal (drag) mode.
 pub(crate) fn touch_mode(ui: &Ui) -> Option<ParamMode> {
     ui.ctx()
-        .data(|d| d.get_temp::<Option<ParamMode>>(egui::Id::new("touch_mode")))
+        .data(|d| d.get_temp::<Option<ParamMode>>(egui::Id::unique("touch_mode")))
         .flatten()
 }
 
@@ -45,7 +48,7 @@ pub(crate) fn touch_mode(ui: &Ui) -> Option<ParamMode> {
 pub(crate) fn ctrl_effective(ctx: &egui::Context) -> bool {
     let key = ctx.input(|i| i.modifiers.ctrl || i.modifiers.command);
     let locked = ctx
-        .data(|d| d.get_temp::<bool>(egui::Id::new("ctrl_locked")))
+        .data(|d| d.get_temp::<bool>(egui::Id::unique("ctrl_locked")))
         .unwrap_or(false);
     key || locked
 }
@@ -53,7 +56,7 @@ pub(crate) fn ctrl_effective(ctx: &egui::Context) -> bool {
 pub(crate) fn dir_key_down(ui: &Ui, arrow: egui::Key, wasd: egui::Key) -> bool {
     let wasd_on = ui
         .ctx()
-        .data(|d| d.get_temp::<bool>(egui::Id::new("wasd_as_arrows")))
+        .data(|d| d.get_temp::<bool>(egui::Id::unique("wasd_as_arrows")))
         .unwrap_or(false);
     ui.input(|i| i.key_down(arrow) || (wasd_on && i.key_down(wasd)))
 }
@@ -347,6 +350,7 @@ mod waveform_viz;
 pub use waveform_viz::{lfo_preview, waveform_icon};
 
 mod event_stream;
+mod event_stream_heatmap;
 pub use event_stream::event_stream;
 
 mod llm_cycle;
@@ -372,6 +376,21 @@ pub const GLASS_ROUNDING: f32 = 5.0;
 /// panels with a heavier header (hoover).
 pub fn glass_group_height(ctrl: ControlPrefs, extra: f32) -> f32 {
     ctrl.knob_size * 2.0 + extra
+}
+
+/// Standard glass-group header label — FOG-coloured, monospace, size 9.5.
+/// Replaces the 5-line `RichText::new(...).color(theme::FOG).monospace().size(9.5)`
+/// boilerplate that recurred at every glass-group call site.  Use this for
+/// the in-panel TONE / MIX / SCAN / etc. labels that sit above a row of
+/// knobs; the rarer 9.0 / 8.0 size variants (sequencer rows, gauges) keep
+/// their explicit RichText so the helper stays single-purpose.
+pub fn group_header(ui: &mut Ui, text: &str) {
+    ui.label(
+        egui::RichText::new(text)
+            .color(theme::FOG)
+            .monospace()
+            .size(9.5),
+    );
 }
 
 /// Compute the per-group width for an evenly-distributed row of `n` glass panels.
@@ -419,11 +438,11 @@ pub fn glass_group_fill<R>(
     max_width: f32,
     content: impl FnOnce(&mut Ui) -> R,
 ) -> egui::InnerResponse<R> {
-    egui::Frame::none()
+    egui::Frame::NONE
         .fill(Color32::from_gray(15))
         .stroke(Stroke::new(1.0, theme::PIT))
-        .inner_margin(egui::Margin::symmetric(6.0, 8.0))
-        .rounding(egui::Rounding::same(GLASS_ROUNDING))
+        .inner_margin(egui::Margin::symmetric(6, 8))
+        .corner_radius(egui::CornerRadius::from(GLASS_ROUNDING))
         .show(ui, |ui| {
             ui.set_min_width(min_width - 14.0); // subtract inner margin × 2
             ui.set_max_width(max_width - 14.0);

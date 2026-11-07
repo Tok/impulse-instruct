@@ -24,7 +24,7 @@ pub fn draw_stereo_meter(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let painter = ui.painter_at(rect);
         painter.rect_filled(
             rect,
-            egui::Rounding::same(2.0),
+            egui::CornerRadius::same(2),
             egui::Color32::from_gray(10),
         );
 
@@ -67,7 +67,11 @@ pub fn draw_stereo_meter(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         };
         // Brightness: bright when correlated (good), dim when out of phase (bad)
         let g = (80.0 + (corr + 1.0) * 60.0) as u8;
-        painter.rect_filled(bar_rect, egui::Rounding::ZERO, egui::Color32::from_gray(g));
+        painter.rect_filled(
+            bar_rect,
+            egui::CornerRadius::ZERO,
+            egui::Color32::from_gray(g),
+        );
 
         // Labels
         painter.text(
@@ -111,7 +115,7 @@ pub fn draw_stereo_meter(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let painter = ui.painter_at(bal_rect);
         painter.rect_filled(
             bal_rect,
-            egui::Rounding::same(2.0),
+            egui::CornerRadius::same(2),
             egui::Color32::from_gray(10),
         );
 
@@ -141,7 +145,7 @@ pub fn draw_stereo_meter(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         };
         painter.rect_filled(
             indicator,
-            egui::Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             egui::Color32::from_gray(120),
         );
 

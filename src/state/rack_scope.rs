@@ -40,9 +40,19 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         ModuleKind::DrumKit808 => Some("kit_a".to_string()),
         ModuleKind::DrumKit909 => Some("kit_b".to_string()),
         ModuleKind::HooverLead => Some("hoover".to_string()),
+        ModuleKind::PluckString => Some("pluck".to_string()),
+        ModuleKind::WavetableVoice => Some("wavetable".to_string()),
+        ModuleKind::SampleInstrument => Some("sample".to_string()),
         ModuleKind::An1xVoice => Some("an1x".to_string()),
         ModuleKind::AmenSampler => Some("amen".to_string()),
         ModuleKind::NoiseVoice => Some("noise".to_string()),
+        ModuleKind::Theremin => Some("theremin".to_string()),
+        ModuleKind::Pendulum => Some("pendulum".to_string()),
+        ModuleKind::FmOpsVoice => Some("fm_ops".to_string()),
+        ModuleKind::AdditiveVoice => Some("additive".to_string()),
+        ModuleKind::ModalVoice => Some("modal".to_string()),
+        ModuleKind::ChiptuneVoice => Some("chiptune".to_string()),
+        ModuleKind::VocalVoice => Some("vocal".to_string()),
         ModuleKind::GranularTexture => Some("granular".to_string()),
         ModuleKind::GabberKick => Some("gabber_kick".to_string()),
         ModuleKind::StepSequencer => Some("sequencer".to_string()),
@@ -50,15 +60,55 @@ fn kind_to_scope_name(kind: ModuleKind) -> Option<String> {
         | ModuleKind::FxDelay
         | ModuleKind::FxChorus
         | ModuleKind::FxPhaser
+        | ModuleKind::FxFlanger
+        | ModuleKind::FxLimiter
+        | ModuleKind::FxFilter
+        | ModuleKind::FxComb
+        | ModuleKind::FxTilt
+        | ModuleKind::FxTransient
+        | ModuleKind::FxExciter
+        | ModuleKind::FxMultitap
+        | ModuleKind::FxRevDelay
+        | ModuleKind::FxTapeStop
+        | ModuleKind::FxStutter
+        | ModuleKind::FxFreeze
         | ModuleKind::FxRingMod
         | ModuleKind::FxWaveshaper
         | ModuleKind::FxBitcrush
         | ModuleKind::FxEq
         | ModuleKind::FxCompressor
+        | ModuleKind::FxGate
+        | ModuleKind::FxVocoder
         | ModuleKind::FxTapeSat
         | ModuleKind::FxDrive
-        | ModuleKind::FxAutotune => Some("fx".to_string()),
+        | ModuleKind::FxAutotune
+        | ModuleKind::FxWiden
+        | ModuleKind::FxFreqShift
+        | ModuleKind::FxVinyl
+        | ModuleKind::FxDjFilter
+        | ModuleKind::FxTremolo
+        | ModuleKind::FxVibrato
+        | ModuleKind::FxIsoEq
+        | ModuleKind::FxDeEsser
+        | ModuleKind::FxResBank
+        | ModuleKind::FxTapeEcho
+        | ModuleKind::FxMultibandComp
+        | ModuleKind::FxGrainDelay
+        | ModuleKind::FxSpectralGate
+        | ModuleKind::FxPlate
+        | ModuleKind::FxTranceGate
+        | ModuleKind::FxWaveFolder => Some("fx".to_string()),
         ModuleKind::LfoModule => Some("lfo".to_string()),
+        ModuleKind::CvSequencer => Some("cv_seq".to_string()),
+        ModuleKind::Slew => Some("slew".to_string()),
+        ModuleKind::Quantizer => Some("quantizer".to_string()),
+        ModuleKind::Comparator => Some("comparator".to_string()),
+        ModuleKind::SampleHold => Some("sample_hold".to_string()),
+        ModuleKind::Math => Some("math".to_string()),
+        ModuleKind::TriggerDiv => Some("trigger_div".to_string()),
+        ModuleKind::LogicGate => Some("logic_gate".to_string()),
+        ModuleKind::FunctionGen => Some("function_gen".to_string()),
+        ModuleKind::Crossfader => Some("crossfader".to_string()),
         _ => None,
     }
 }
@@ -76,17 +126,46 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "drumkit808" | "808" | "kita" | "druma" | "drumsa" => Some(DrumKit808),
         "drumkit909" | "909" | "kitb" | "drumb" | "drumsb" => Some(DrumKit909),
         "hooverlead" | "hoover" | "lead" => Some(HooverLead),
+        "pluckstring" | "pluck" | "karplus" | "string" | "kstring" => Some(PluckString),
+        "wavetable" | "wavetablevoice" | "wt" | "wave_table" => Some(WavetableVoice),
+        "sample" | "sampleinstrument" | "instrument" | "keyboard" => Some(SampleInstrument),
         "an1xvoice" | "an1x" | "an-1x" | "pad" | "synth" => Some(An1xVoice),
         "amensampler" | "amen" | "sampler" | "break" => Some(AmenSampler),
         "noisevoice" | "noise" => Some(NoiseVoice),
+        "theremin" => Some(Theremin),
+        "pendulum" => Some(Pendulum),
+        "fmopsvoice" | "fm_ops" | "fmops" | "fm" | "dx7" | "operator" => Some(FmOpsVoice),
+        "additivevoice" | "additive" | "harmonic" | "partials" | "drawbar" | "organ" => {
+            Some(AdditiveVoice)
+        }
+        "modalvoice" | "modal" | "physical" | "physicalmodel" | "bell" | "marimba" | "tubular"
+        | "glass" | "struck" => Some(ModalVoice),
+        "chiptunevoice" | "chiptune" | "sid" | "c64" | "8bit" | "8-bit" | "tracker" => {
+            Some(ChiptuneVoice)
+        }
+        "vocalvoice" | "vocal" | "vowel" | "formant" | "choir" => Some(VocalVoice),
         "granulartexture" | "granular" | "grain" | "texture" => Some(GranularTexture),
         "gabberkick" | "gabber" | "hardcorekick" | "rotterdam" => Some(GabberKick),
         "fxreverb" | "reverb" | "verb" => Some(FxReverb),
         "fxdelay" | "delay" | "echo" => Some(FxDelay),
         "fxchorus" | "chorus" | "ensemble" => Some(FxChorus),
         "fxphaser" | "phaser" | "phase" => Some(FxPhaser),
+        "fxflanger" | "flanger" | "flange" => Some(FxFlanger),
+        "fxlimiter" | "limiter" | "brickwall" | "brick" => Some(FxLimiter),
+        "fxfilter" | "filter" | "svf" | "vcf" => Some(FxFilter),
+        "fxcomb" | "comb" | "resonator" => Some(FxComb),
+        "fxtilt" | "tilt" | "tilteq" => Some(FxTilt),
+        "fxtransient" | "transient" | "transients" | "envshape" => Some(FxTransient),
+        "fxexciter" | "exciter" | "aural" | "shimmer" => Some(FxExciter),
+        "fxmultitap" | "multitap" | "tappeddelay" | "pingpong" => Some(FxMultitap),
+        "fxrevdelay" | "revdelay" | "reversedelay" | "reverseecho" => Some(FxRevDelay),
+        "fxtapestop" | "tapestop" | "halt" | "stop" => Some(FxTapeStop),
+        "fxstutter" | "stutter" | "repeater" | "glitch" => Some(FxStutter),
+        "fxfreeze" | "freeze" | "spectralfreeze" | "drone" => Some(FxFreeze),
         "fxeq" | "eq" | "equalizer" | "equaliser" => Some(FxEq),
         "fxcompressor" | "compressor" | "comp" => Some(FxCompressor),
+        "fxgate" | "gate" | "noisegate" | "ducker" | "ducking" => Some(FxGate),
+        "fxvocoder" | "vocoder" | "talkbox" | "vocode" => Some(FxVocoder),
         "fxtapesat" | "tapesat" | "tape" | "saturation" => Some(FxTapeSat),
         "fxdrive" | "drive" | "overdrive" | "distortion" => Some(FxDrive),
         "fxautotune" | "autotune" | "pitchcorrect" | "tune" => Some(FxAutotune),
@@ -94,11 +173,69 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "fxbitcrush" | "bitcrush" | "lofi" => Some(FxBitcrush),
         "fxringmod" | "ringmod" | "ring" => Some(FxRingMod),
         "fxpan" | "pan" | "autopan" => Some(FxPan),
+        "fxwiden" | "widen" | "widener" | "stereowidth" | "haas" => Some(FxWiden),
+        "fxfreqshift" | "freqshift" | "frequencyshifter" | "ssbshift" | "bode" => Some(FxFreqShift),
+        "fxvinyl" | "vinyl" | "cassette" | "tapevinyl" => Some(FxVinyl),
+        "fxdjfilter" | "djfilter" | "dj" | "morphfilter" | "djkill" => Some(FxDjFilter),
+        "fxtremolo" | "tremolo" | "trem" | "amplmod" | "ampmod" => Some(FxTremolo),
+        "fxvibrato" | "vibrato" | "vib" | "pitchmod" | "pitchwobble" => Some(FxVibrato),
+        "fxisoeq" | "isoeq" | "iso" | "killeq" | "kill" | "3band" | "threeband" => Some(FxIsoEq),
+        "fxdeesser" | "deesser" | "deess" | "sibilance" | "sibilant" => Some(FxDeEsser),
+        "fxresbank" | "resbank" | "resonatorbank" | "resonators" | "chordres"
+        | "chordresonator" => Some(FxResBank),
+        "fxtapeecho" | "tapeecho" | "dubecho" | "spaceecho" | "echotape" => Some(FxTapeEcho),
+        "fxmultibandcomp" | "multiband" | "mbcomp" | "mastercomp" | "mastercompressor" => {
+            Some(FxMultibandComp)
+        }
+        "fxgraindelay" | "graindelay" | "grain_delay" | "granulardelay" | "graincloud" => {
+            Some(FxGrainDelay)
+        }
+        "fxspectralgate" | "spectralgate" | "specgate" | "spectral_gate" | "specgte" => {
+            Some(FxSpectralGate)
+        }
+        "fxplate" | "plate" | "platereverb" | "plate_reverb" | "emt" | "lexicon" => Some(FxPlate),
+        "fxtrancegate" | "trancegate" | "trance_gate" | "trance" | "patterngate" | "stepgate" => {
+            Some(FxTranceGate)
+        }
+        "fxwavefolder" | "wavefolder" | "wave_folder" | "fold" | "westcoast" | "buchla"
+        | "serge" => Some(FxWaveFolder),
+        "voicemeterstrip" | "voicemeter" | "voice_meter" | "voicemeters" | "voicelevels"
+        | "voice_levels" | "levels" => Some(VoiceMeterStrip),
+        "grhistory" | "gr_history" | "gainreduction" | "gain_reduction" | "gr" | "grscope" => {
+            Some(GrHistory)
+        }
         "lfomodule" | "lfo" => Some(LfoModule),
+        "cvsequencer" | "cvseq" | "cv_seq" | "stepcv" | "cv" => Some(CvSequencer),
+        "slew" | "glide" | "portacv" | "lag" => Some(Slew),
+        "quantizer" | "quant" | "quantize" | "scalesnap" => Some(Quantizer),
+        "comparator" | "compare" | "thresh" | "threshold" => Some(Comparator),
+        "samplehold" | "sample_hold" | "sandh" | "s&h" | "snh" => Some(SampleHold),
+        "math" | "mathmodule" | "mathcv" | "cvmath" => Some(Math),
+        "triggerdiv" | "trigger_div" | "trigdiv" | "trigger_divider" | "clockdivider"
+        | "clockdiv" | "divider" => Some(TriggerDiv),
+        "logicgate" | "logic_gate" | "logic" | "boolean" | "andorxor" => Some(LogicGate),
+        "functiongen" | "function_gen" | "funcgen" | "function" | "ar" | "ad" | "envelope"
+        | "transientenv" | "maths" => Some(FunctionGen),
+        "crossfader" | "xfade" | "xfader" | "ablend" | "abblend" | "ab" => Some(Crossfader),
         "spectrumanalyzer" | "spectrum" | "analyser" | "analyzer" => Some(SpectrumAnalyzer),
         "stereometer" | "stereo" | "correlation" | "meter" => Some(StereoMeter),
         "activitytimeline" | "timeline" | "activity" | "log" => Some(ActivityTimeline),
-        "neutts" | "tts" | "voice" | "mc" => Some(NeuTts),
+        "stereovectorscope" | "vectorscope" | "goniometer" | "lissajous" => Some(StereoVectorscope),
+        "lfoscope" => Some(LfoScope),
+        "cvseqscope" | "cvscope" | "cvseqviz" | "cv_scope" => Some(CvSeqScope),
+        "pitchtracker" | "tuner" | "pitchdetect" => Some(PitchTracker),
+        "chorddisplay" | "chord" | "key" => Some(ChordDisplay),
+        "spectrogram" | "waterfall" => Some(Spectrogram),
+        "loudnessmeter" | "lufs" | "loudness" => Some(LoudnessMeter),
+        "phasewheel" | "transport" | "beatwheel" | "bar" => Some(PhaseWheel),
+        "patternheatmap" | "patternmap" | "heatmap" | "patterndensity" | "patterns" => {
+            Some(PatternHeatmap)
+        }
+        "onsetgrid" | "onset_grid" | "onsetoverlay" | "groove" | "groovecheck" | "onsets" => {
+            Some(OnsetGrid)
+        }
+        // "neutts" kept as a legacy alias for saved prompts / API callers.
+        "tts" | "neutts" | "voice" | "mc" => Some(Tts),
         _ => None,
     }
 }
@@ -115,6 +252,18 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::FxDelay => matches!(n.as_str(), "delay" | "echo" | "fx"),
         ModuleKind::FxChorus => matches!(n.as_str(), "chorus" | "ensemble" | "fx"),
         ModuleKind::FxPhaser => matches!(n.as_str(), "phaser" | "phase" | "fx"),
+        ModuleKind::FxFlanger => matches!(n.as_str(), "flanger" | "flange" | "fx"),
+        ModuleKind::FxLimiter => matches!(n.as_str(), "limiter" | "brickwall" | "brick" | "fx"),
+        ModuleKind::FxFilter => matches!(n.as_str(), "filter" | "svf" | "vcf" | "fx"),
+        ModuleKind::FxComb => matches!(n.as_str(), "comb" | "resonator" | "fx"),
+        ModuleKind::FxTilt => matches!(n.as_str(), "tilt" | "tilteq" | "fx"),
+        ModuleKind::FxTransient => matches!(n.as_str(), "transient" | "transients" | "fx"),
+        ModuleKind::FxExciter => matches!(n.as_str(), "exciter" | "aural" | "shimmer" | "fx"),
+        ModuleKind::FxMultitap => matches!(n.as_str(), "multitap" | "pingpong" | "fx"),
+        ModuleKind::FxRevDelay => matches!(n.as_str(), "revdelay" | "reverse" | "rev" | "fx"),
+        ModuleKind::FxTapeStop => matches!(n.as_str(), "tapestop" | "halt" | "stop" | "fx"),
+        ModuleKind::FxStutter => matches!(n.as_str(), "stutter" | "repeater" | "glitch" | "fx"),
+        ModuleKind::FxFreeze => matches!(n.as_str(), "freeze" | "spectralfreeze" | "drone" | "fx"),
         ModuleKind::FxRingMod => {
             matches!(
                 n.as_str(),
@@ -126,6 +275,14 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         }
         ModuleKind::FxEq => matches!(n.as_str(), "eq" | "equalizer" | "equaliser" | "fx"),
         ModuleKind::FxCompressor => matches!(n.as_str(), "compressor" | "comp" | "fx"),
+        ModuleKind::FxGate => matches!(
+            n.as_str(),
+            "gate" | "noisegate" | "noise_gate" | "ducker" | "ducking" | "fx"
+        ),
+        ModuleKind::FxVocoder => matches!(
+            n.as_str(),
+            "vocoder" | "vocode" | "talkbox" | "talk_box" | "fx"
+        ),
         ModuleKind::FxTapeSat => matches!(
             n.as_str(),
             "tapesat" | "tape_sat" | "tape sat" | "tape" | "saturation" | "fx"
@@ -138,14 +295,178 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
             "autotune" | "auto_tune" | "pitch_correct" | "tune" | "fx"
         ),
         ModuleKind::FxPan => matches!(n.as_str(), "pan" | "autopan" | "fx"),
+        ModuleKind::FxWiden => matches!(
+            n.as_str(),
+            "widen" | "widener" | "haas" | "stereowidth" | "fx"
+        ),
+        ModuleKind::FxFreqShift => matches!(
+            n.as_str(),
+            "freqshift" | "freq_shift" | "frequencyshifter" | "ssb" | "bode" | "fx"
+        ),
+        ModuleKind::FxVinyl => matches!(n.as_str(), "vinyl" | "cassette" | "tape" | "fx"),
+        ModuleKind::FxDjFilter => matches!(
+            n.as_str(),
+            "djfilter" | "dj_filter" | "dj filter" | "dj" | "morphfilter" | "fx"
+        ),
+        ModuleKind::FxTremolo => matches!(
+            n.as_str(),
+            "tremolo" | "trem" | "ampmod" | "ampl_mod" | "fx"
+        ),
+        ModuleKind::FxVibrato => matches!(
+            n.as_str(),
+            "vibrato" | "vib" | "pitchmod" | "pitch_mod" | "fx"
+        ),
+        ModuleKind::FxIsoEq => matches!(
+            n.as_str(),
+            "iso" | "isoeq" | "iso_eq" | "killeq" | "kill" | "3band" | "fx"
+        ),
+        ModuleKind::FxDeEsser => matches!(
+            n.as_str(),
+            "deesser" | "de-esser" | "deess" | "sibilance" | "sibilant" | "fx"
+        ),
+        ModuleKind::FxResBank => matches!(
+            n.as_str(),
+            "resbank" | "res_bank" | "resonatorbank" | "resonator_bank" | "chordres" | "fx"
+        ),
+        ModuleKind::FxTapeEcho => matches!(
+            n.as_str(),
+            "tapeecho" | "tape_echo" | "tape echo" | "dubecho" | "spaceecho" | "fx"
+        ),
+        ModuleKind::FxMultibandComp => matches!(
+            n.as_str(),
+            "multiband" | "mbcomp" | "mb_comp" | "mb comp" | "mastercomp" | "fx"
+        ),
+        ModuleKind::FxGrainDelay => matches!(
+            n.as_str(),
+            "graindelay" | "grain_delay" | "grain delay" | "granulardelay" | "graincloud" | "fx"
+        ),
+        ModuleKind::FxSpectralGate => matches!(
+            n.as_str(),
+            "spectralgate" | "spectral_gate" | "spectral gate" | "specgate" | "fx"
+        ),
+        ModuleKind::FxPlate => matches!(
+            n.as_str(),
+            "plate" | "platereverb" | "plate_reverb" | "plate reverb" | "emt" | "lexicon" | "fx"
+        ),
+        ModuleKind::FxTranceGate => matches!(
+            n.as_str(),
+            "trancegate"
+                | "trance_gate"
+                | "trance gate"
+                | "trance"
+                | "patterngate"
+                | "stepgate"
+                | "fx"
+        ),
+        ModuleKind::FxWaveFolder => matches!(
+            n.as_str(),
+            "wavefolder"
+                | "wave_folder"
+                | "wave folder"
+                | "fold"
+                | "westcoast"
+                | "buchla"
+                | "serge"
+                | "fx"
+        ),
+        ModuleKind::VoiceMeterStrip => matches!(
+            n.as_str(),
+            "voicemeterstrip" | "voicemeter" | "voice_meter" | "voice meter" | "levels"
+        ),
+        ModuleKind::GrHistory => matches!(
+            n.as_str(),
+            "grhistory" | "gr_history" | "gr history" | "gainreduction" | "gr"
+        ),
+        ModuleKind::FxConvReverb => matches!(
+            n.as_str(),
+            "convreverb" | "conv_reverb" | "conv reverb" | "convolution" | "ir" | "fx"
+        ),
+        ModuleKind::FxParamEq => matches!(
+            n.as_str(),
+            "parameq"
+                | "param_eq"
+                | "param eq"
+                | "parametric"
+                | "parametric_eq"
+                | "curve_eq"
+                | "fx"
+        ),
+        ModuleKind::FxPitchShift => matches!(
+            n.as_str(),
+            "pitch" | "pitch_shift" | "pitchshift" | "pitch shift" | "shifter" | "harmony" | "fx"
+        ),
         ModuleKind::LfoModule => matches!(n.as_str(), "lfo"),
+        ModuleKind::CvSequencer => matches!(n.as_str(), "cvseq" | "cv_seq" | "cv seq" | "cv"),
+        ModuleKind::Slew => matches!(n.as_str(), "slew" | "glide" | "lag"),
+        ModuleKind::Quantizer => matches!(n.as_str(), "quantizer" | "quant" | "scalesnap"),
+        ModuleKind::Comparator => matches!(n.as_str(), "comparator" | "compare" | "threshold"),
+        ModuleKind::SampleHold => matches!(n.as_str(), "samplehold" | "sample_hold" | "snh"),
+        ModuleKind::Math => matches!(n.as_str(), "math" | "mathmodule" | "cvmath"),
+        ModuleKind::TriggerDiv => matches!(
+            n.as_str(),
+            "triggerdiv"
+                | "trigger_div"
+                | "trigger div"
+                | "trigdiv"
+                | "clockdivider"
+                | "clockdiv"
+                | "divider"
+        ),
+        ModuleKind::LogicGate => matches!(
+            n.as_str(),
+            "logicgate" | "logic_gate" | "logic gate" | "logic" | "boolean" | "andorxor"
+        ),
+        ModuleKind::FunctionGen => matches!(
+            n.as_str(),
+            "functiongen"
+                | "function_gen"
+                | "function gen"
+                | "funcgen"
+                | "ar"
+                | "ad"
+                | "envelope"
+                | "maths"
+        ),
+        ModuleKind::Crossfader => matches!(
+            n.as_str(),
+            "crossfader" | "xfade" | "xfader" | "ablend" | "abblend" | "ab"
+        ),
         ModuleKind::AcidBass => matches!(n.as_str(), "bass" | "acid" | "303"),
         ModuleKind::DrumKit808 => matches!(n.as_str(), "808" | "kit_a" | "drum_a" | "drums_a"),
         ModuleKind::DrumKit909 => matches!(n.as_str(), "909" | "kit_b" | "drum_b" | "drums_b"),
         ModuleKind::HooverLead => matches!(n.as_str(), "hoover" | "lead"),
+        ModuleKind::PluckString => matches!(
+            n.as_str(),
+            "pluck" | "pluckstring" | "pluck_string" | "karplus" | "string" | "kstring"
+        ),
+        ModuleKind::WavetableVoice => matches!(
+            n.as_str(),
+            "wavetable" | "wavetablevoice" | "wave_table" | "wt"
+        ),
+        ModuleKind::SampleInstrument => matches!(
+            n.as_str(),
+            "sample" | "sampleinstrument" | "instrument" | "keyboard"
+        ),
         ModuleKind::An1xVoice => matches!(n.as_str(), "an1x" | "an-1x" | "pad" | "synth"),
         ModuleKind::AmenSampler => matches!(n.as_str(), "amen" | "sampler" | "break"),
         ModuleKind::NoiseVoice => matches!(n.as_str(), "noise"),
+        ModuleKind::Theremin => matches!(n.as_str(), "theremin"),
+        ModuleKind::Pendulum => matches!(n.as_str(), "pendulum"),
+        ModuleKind::FmOpsVoice => {
+            matches!(n.as_str(), "fm_ops" | "fmops" | "fm" | "dx7" | "operator")
+        }
+        ModuleKind::AdditiveVoice => matches!(
+            n.as_str(),
+            "additive" | "harmonic" | "partials" | "drawbar" | "organ"
+        ),
+        ModuleKind::ModalVoice => matches!(
+            n.as_str(),
+            "modal" | "physical" | "bell" | "marimba" | "tubular" | "glass" | "struck"
+        ),
+        ModuleKind::ChiptuneVoice => {
+            matches!(n.as_str(), "chiptune" | "sid" | "c64" | "8bit" | "tracker")
+        }
+        ModuleKind::VocalVoice => matches!(n.as_str(), "vocal" | "vowel" | "formant" | "choir"),
         ModuleKind::GranularTexture => matches!(n.as_str(), "granular" | "grain" | "texture"),
         ModuleKind::GabberKick => {
             matches!(
@@ -153,8 +474,8 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
                 "gabber" | "gabber_kick" | "hardcore" | "rotterdam"
             )
         }
-        ModuleKind::NeuTts => {
-            matches!(n.as_str(), "neutts" | "tts" | "mc" | "voice")
+        ModuleKind::Tts => {
+            matches!(n.as_str(), "tts" | "neutts" | "mc" | "voice")
         }
         ModuleKind::MasterOutput => {
             matches!(n.as_str(), "master" | "master_out" | "out" | "output")
@@ -165,5 +486,31 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
         ModuleKind::SpectrumAnalyzer => matches!(n.as_str(), "spectrum" | "analyser" | "analyzer"),
         ModuleKind::StereoMeter => matches!(n.as_str(), "stereo" | "correlation" | "meter"),
         ModuleKind::ActivityTimeline => matches!(n.as_str(), "timeline" | "activity" | "log"),
+        ModuleKind::BarOscilloscope => {
+            matches!(n.as_str(), "scope" | "oscilloscope" | "waveform")
+        }
+        ModuleKind::StereoVectorscope => matches!(
+            n.as_str(),
+            "vectorscope" | "goniometer" | "lissajous" | "stereoscope"
+        ),
+        ModuleKind::LfoScope => matches!(n.as_str(), "lfoscope" | "lfo_scope"),
+        ModuleKind::CvSeqScope => matches!(
+            n.as_str(),
+            "cvseqscope" | "cv_seq_scope" | "cvscope" | "cv_scope"
+        ),
+        ModuleKind::PitchTracker => matches!(n.as_str(), "tuner" | "pitch" | "pitchtracker"),
+        ModuleKind::ChordDisplay => matches!(n.as_str(), "chord" | "key" | "chords"),
+        ModuleKind::Spectrogram => matches!(n.as_str(), "spectrogram" | "waterfall"),
+        ModuleKind::LoudnessMeter => matches!(n.as_str(), "lufs" | "loudness" | "loudnessmeter"),
+        ModuleKind::PhaseWheel => matches!(n.as_str(), "phasewheel" | "phase" | "transport"),
+        ModuleKind::EventStream => matches!(n.as_str(), "events" | "stream" | "notes"),
+        ModuleKind::PatternHeatmap => matches!(
+            n.as_str(),
+            "patternheatmap" | "patternmap" | "heatmap" | "patterndensity" | "patterns"
+        ),
+        ModuleKind::OnsetGrid => matches!(
+            n.as_str(),
+            "onsetgrid" | "onset_grid" | "groove" | "groovecheck" | "onsets"
+        ),
     }
 }

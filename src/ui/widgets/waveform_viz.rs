@@ -18,11 +18,12 @@ pub fn waveform_icon(ui: &mut Ui, kind: u8, width: f32, height: f32) {
     let painter = ui.painter();
 
     // Background
-    painter.rect_filled(rect, egui::Rounding::same(2.0), Color32::from_gray(10));
+    painter.rect_filled(rect, egui::CornerRadius::same(2), Color32::from_gray(10));
     painter.rect_stroke(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         Stroke::new(1.0, Color32::from_gray(30)),
+        egui::StrokeKind::Middle,
     );
 
     let pad = 2.0_f32;
@@ -123,11 +124,12 @@ pub fn lfo_preview(
     let painter = ui.painter();
 
     // Background
-    painter.rect_filled(rect, egui::Rounding::same(2.0), Color32::from_gray(10));
+    painter.rect_filled(rect, egui::CornerRadius::same(2), Color32::from_gray(10));
     painter.rect_stroke(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         Stroke::new(1.0, Color32::from_gray(30)),
+        egui::StrokeKind::Middle,
     );
 
     let pad = 2.0_f32;

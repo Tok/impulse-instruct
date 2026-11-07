@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use super::fx_types::{FeedbackRoute, VoiceSend};
+use super::fx_types::{FeedbackRoute, SidechainSource, VoiceSend};
 use super::rack::FEEDBACK_GAIN_MAX;
 use super::{FxPlan, FxStep, ModuleKind, PortKind, RackState};
 
@@ -16,6 +16,18 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxBitcrush => Some(FxStep::Bitcrush),
         ModuleKind::FxChorus => Some(FxStep::Chorus),
         ModuleKind::FxPhaser => Some(FxStep::Phaser),
+        ModuleKind::FxFlanger => Some(FxStep::Flanger),
+        ModuleKind::FxLimiter => Some(FxStep::Limiter),
+        ModuleKind::FxFilter => Some(FxStep::Filter),
+        ModuleKind::FxComb => Some(FxStep::Comb),
+        ModuleKind::FxTilt => Some(FxStep::Tilt),
+        ModuleKind::FxTransient => Some(FxStep::Transient),
+        ModuleKind::FxExciter => Some(FxStep::Exciter),
+        ModuleKind::FxMultitap => Some(FxStep::Multitap),
+        ModuleKind::FxRevDelay => Some(FxStep::RevDelay),
+        ModuleKind::FxTapeStop => Some(FxStep::TapeStop),
+        ModuleKind::FxStutter => Some(FxStep::Stutter),
+        ModuleKind::FxFreeze => Some(FxStep::Freeze),
         ModuleKind::FxRingMod => Some(FxStep::RingMod),
         ModuleKind::FxEq => Some(FxStep::Eq),
         ModuleKind::FxCompressor => Some(FxStep::Compressor),
@@ -23,6 +35,27 @@ pub(crate) fn kind_to_fx_step(kind: ModuleKind) -> Option<FxStep> {
         ModuleKind::FxDrive => Some(FxStep::Drive),
         ModuleKind::FxAutotune => Some(FxStep::Autotune),
         ModuleKind::FxPan => Some(FxStep::Pan),
+        ModuleKind::FxGate => Some(FxStep::Gate),
+        ModuleKind::FxVocoder => Some(FxStep::Vocoder),
+        ModuleKind::FxWiden => Some(FxStep::Widen),
+        ModuleKind::FxFreqShift => Some(FxStep::FreqShift),
+        ModuleKind::FxConvReverb => Some(FxStep::ConvReverb),
+        ModuleKind::FxParamEq => Some(FxStep::ParamEq),
+        ModuleKind::FxPitchShift => Some(FxStep::PitchShift),
+        ModuleKind::FxVinyl => Some(FxStep::Vinyl),
+        ModuleKind::FxDjFilter => Some(FxStep::DjFilter),
+        ModuleKind::FxTremolo => Some(FxStep::Tremolo),
+        ModuleKind::FxVibrato => Some(FxStep::Vibrato),
+        ModuleKind::FxIsoEq => Some(FxStep::IsoEq),
+        ModuleKind::FxDeEsser => Some(FxStep::DeEsser),
+        ModuleKind::FxResBank => Some(FxStep::ResBank),
+        ModuleKind::FxTapeEcho => Some(FxStep::TapeEcho),
+        ModuleKind::FxMultibandComp => Some(FxStep::MultibandComp),
+        ModuleKind::FxGrainDelay => Some(FxStep::GrainDelay),
+        ModuleKind::FxSpectralGate => Some(FxStep::SpectralGate),
+        ModuleKind::FxPlate => Some(FxStep::Plate),
+        ModuleKind::FxTranceGate => Some(FxStep::TranceGate),
+        ModuleKind::FxWaveFolder => Some(FxStep::WaveFolder),
         _ => None,
     }
 }
@@ -95,8 +128,17 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
     let mut connected_fx: HashSet<u32> = HashSet::new();
     let mut feedback_edges: Vec<(u32, u32, f32)> = Vec::new();
 
+    // Sidechain cables (`to.kind == PortKind::SidechainIn`) are
+    // collected separately — they don't participate in the forward FX
+    // chain, they just register a tap that's resolved later when we
+    // build `sidechain_routes`.
+    let mut sidechain_cables: Vec<(u32, u32)> = Vec::new();
     for cable in &rack.cables {
         if cable.from.kind != PortKind::Audio {
+            continue;
+        }
+        if cable.to.kind == PortKind::SidechainIn {
+            sidechain_cables.push((cable.from.module_id, cable.to.module_id));
             continue;
         }
         let from_fx = fx_map.contains_key(&cable.from.module_id);
@@ -182,7 +224,7 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         ModuleKind::AmenSampler,
         ModuleKind::NoiseVoice,
         ModuleKind::GranularTexture,
-        ModuleKind::NeuTts,
+        ModuleKind::Tts,
     ];
 
     // Map voice module id → kind for quick lookup.
@@ -202,6 +244,14 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
 
     for cable in &rack.cables {
         if cable.from.kind != PortKind::Audio {
+            continue;
+        }
+        // Sidechain edges are taps, not sends — they live in
+        // `sidechain_routes` (built below).  Skipping them here keeps
+        // them out of `voice_routes` so the voice signal isn't routed
+        // through the sidechain target as if it were a regular wet
+        // chain.
+        if cable.to.kind == PortKind::SidechainIn {
             continue;
         }
         let voice_kind = match voice_id_map.get(&cable.from.module_id) {
@@ -271,9 +321,38 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         })
         .collect();
 
+    // Resolve sidechain cables into FxStep → SidechainSource entries.  A
+    // sidechain edge whose target isn't a sidechain-capable FX (or
+    // whose source isn't a known voice / FX) is dropped silently —
+    // hand-edited project files might point at modules that no longer
+    // exist, but the audio thread doesn't need to care.  When the same
+    // target receives multiple sidechain cables, the last one wins;
+    // the UI prevents this by replacing on connect.
+    //
+    // Voice kinds enumerated below mirror VOICE_KINDS to keep the
+    // detector source list aligned with what the audio thread can
+    // resolve from `prev_voice_output`.
+    let mut sidechain_routes: HashMap<FxStep, SidechainSource> = HashMap::new();
+    for (from_id, to_id) in sidechain_cables {
+        let target_step = fx_map.get(&to_id).and_then(|&k| kind_to_fx_step(k));
+        let target_step = match target_step {
+            Some(s) => s,
+            None => continue,
+        };
+        // Source can be either a voice or another FX.
+        if let Some(&voice_kind) = voice_id_map.get(&from_id) {
+            sidechain_routes.insert(target_step, SidechainSource::Voice(voice_kind));
+        } else if let Some(&fx_kind) = fx_map.get(&from_id)
+            && let Some(src_step) = kind_to_fx_step(fx_kind)
+        {
+            sidechain_routes.insert(target_step, SidechainSource::Fx(src_step));
+        }
+    }
+
     FxPlan {
         steps: ordered,
         voice_routes,
         feedback_routes,
+        sidechain_routes,
     }
 }

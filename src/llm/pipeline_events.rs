@@ -97,6 +97,26 @@ pub fn handle_pipeline_event(
                 p.lanes_done = p.lanes_done.saturating_add(1);
                 p.current_lane = None;
             });
+            // Writeback diff log — push this lane's update onto the
+            // capped recent-applies queue so the UI can render a
+            // "what changed" panel.  Filter has already narrowed the
+            // payload to keys the lane actually wrote, so each row
+            // doubles as the diff for that turn.
+            {
+                let cycle = state.read().llm.jam_cycle_count;
+                let mut s = state.write();
+                if s.llm.recent_lane_applies.len() >= crate::state::LANE_APPLY_LOG_MAX {
+                    s.llm.recent_lane_applies.pop_front();
+                }
+                s.llm
+                    .recent_lane_applies
+                    .push_back(crate::state::LaneApplyRecord {
+                        lane_label: lane.label().to_string(),
+                        update: update.clone(),
+                        ms,
+                        cycle,
+                    });
+            }
             // Mirror the monolithic path's per-inference output: send an
             // LlmOutput carrying the lane's JSON as `param_update` so
             // `drain_llm_outputs` renders a `"<persona>: …"` line in the
@@ -122,6 +142,20 @@ pub fn handle_pipeline_event(
                 crate::llm::lane_eval::evaluate_lane(&s, lane)
             };
             crate::llm::lane_eval::record_lane_score(&mut state.write().llm, lane, score);
+            // Lane-score auto-tuner: append to the long-term per-
+            // (style, lane) running average so future jam-cycle
+            // dynamism can bias toward historically high-scoring
+            // lanes.  Skip when no style is active (we'd be
+            // accumulating into a nameless bucket that never gets
+            // read back).
+            {
+                let mut s = state.write();
+                if let Some(style) = s.llm.active_style.clone() {
+                    let key = crate::state::lane_avg_key(&style, lane.label());
+                    let entry = s.llm.lane_avg_per_style.entry(key).or_default();
+                    entry.update(score);
+                }
+            }
             // Lane fade-in: dip the voice's volume and ramp back up over
             // ~1 bar so the new pattern swells in instead of snapping on.
             // No-op for kits/fx/settings/mod (no single-channel volume)

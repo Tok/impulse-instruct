@@ -69,7 +69,7 @@ pub fn draw_spectrum(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     if ui.is_rect_visible(rect) {
         let painter = ui.painter_at(rect);
         // Dark background
-        painter.rect_filled(rect, egui::Rounding::same(2.0), theme::VOID);
+        painter.rect_filled(rect, egui::CornerRadius::same(2), theme::VOID);
 
         let bar_w = rect.width() / NUM_BANDS as f32;
         let db_range = DB_CEIL - DB_FLOOR;
@@ -87,7 +87,11 @@ pub fn draw_spectrum(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             );
             // Brightness ramps with amplitude: quiet = dim, loud = bright
             let g = (40.0 + norm * 160.0) as u8;
-            painter.rect_filled(bar_rect, egui::Rounding::ZERO, egui::Color32::from_gray(g));
+            painter.rect_filled(
+                bar_rect,
+                egui::CornerRadius::ZERO,
+                egui::Color32::from_gray(g),
+            );
         }
 
         // Peak-hold markers

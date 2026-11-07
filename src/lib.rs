@@ -1,4 +1,4 @@
-#![recursion_limit = "256"]
+#![recursion_limit = "1024"]
 // ─── lib.rs ───────────────────────────────────────────────────────────────���───
 // Library crate root — re-exports all modules so both the main binary and
 // auxiliary binaries (model_eval, etc.) can share the same code.
@@ -23,6 +23,7 @@ pub mod music_api;
 pub mod osc;
 pub mod sequencer;
 pub mod state;
+pub mod sync;
 pub mod sysinfo;
 #[cfg(test)]
 pub mod tests;

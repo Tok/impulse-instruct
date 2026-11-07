@@ -257,7 +257,7 @@ mod special_range_clamps {
     }
 
     #[test]
-    fn neutts_volume_clamps_at_1_5_and_at_zero() {
+    fn tts_volume_clamps_at_1_5_and_at_zero() {
         let mut p = fresh();
         p.tts_voice_volume = 1.0;
         apply_mod_target(&mut p, 72, 5.0);

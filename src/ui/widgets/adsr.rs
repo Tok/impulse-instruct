@@ -71,11 +71,12 @@ pub fn adsr_display(
         let painter = ui.painter();
 
         // Background
-        painter.rect_filled(rect, egui::Rounding::same(2.0), Color32::from_gray(10));
+        painter.rect_filled(rect, egui::CornerRadius::same(2), Color32::from_gray(10));
         painter.rect_stroke(
             rect,
-            egui::Rounding::same(2.0),
+            egui::CornerRadius::same(2),
             Stroke::new(1.0, Color32::from_gray(30)),
+            egui::StrokeKind::Middle,
         );
         // Top sheen
         painter.line_segment(
@@ -216,11 +217,12 @@ pub fn decay_display(ui: &mut Ui, decay: &mut f32, env_mod: f32, width: f32, hei
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
 
-        painter.rect_filled(rect, egui::Rounding::same(2.0), Color32::from_gray(10));
+        painter.rect_filled(rect, egui::CornerRadius::same(2), Color32::from_gray(10));
         painter.rect_stroke(
             rect,
-            egui::Rounding::same(2.0),
+            egui::CornerRadius::same(2),
             Stroke::new(1.0, Color32::from_gray(30)),
+            egui::StrokeKind::Middle,
         );
         painter.line_segment(
             [
@@ -309,11 +311,12 @@ pub fn filter_response(
     let painter = ui.painter();
 
     // Background
-    painter.rect_filled(rect, egui::Rounding::same(2.0), Color32::from_gray(10));
+    painter.rect_filled(rect, egui::CornerRadius::same(2), Color32::from_gray(10));
     painter.rect_stroke(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         Stroke::new(1.0, Color32::from_gray(30)),
+        egui::StrokeKind::Middle,
     );
     painter.line_segment(
         [
@@ -381,7 +384,7 @@ pub fn filter_response(
             FilterMode::Lowpass => mag_lp,
         };
 
-        let db = 20.0 * mag.max(0.001).log10();
+        let db = crate::audio::dsp::lin_to_db(mag.max(0.001));
         let db_norm = ((db + 48.0) / 60.0).clamp(0.0, 1.0);
 
         let x = rect.min.x + pad + t * inner_w;

@@ -96,16 +96,20 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 } else {
                     0.30
                 };
-                // Foreground layer so the LED halo lands on top of the
-                // persona TextEdit + model combo, but clipped to the
-                // CentralPanel's rect so the halo can't escape upward
-                // into the header log panel when the agent card scrolls
-                // past the rack's top edge.
-                let mut overlay = ui.ctx().layer_painter(egui::LayerId::new(
-                    egui::Order::Foreground,
-                    ui.id().with("agent_led").with(module_id),
-                ));
-                overlay.set_clip_rect(ui.ctx().available_rect());
+                // LED halo painted on the parent panel's natural layer
+                // with an expanded clip so the halo can bleed past the
+                // tiny 12 px LED rect onto the persona field beside
+                // it — but NOT above opened windows (Preferences etc.)
+                // or later-drawn panels (piano when it scrolls up
+                // over the rack), which is what Order::Foreground used
+                // to do.  Clip to the CentralPanel so a halo on the
+                // bottom row of the agent card still can't escape
+                // upward into the header log when the rack scrolls.
+                let halo_reach = 30.0_f32;
+                let clip = led_rect
+                    .expand(halo_reach)
+                    .intersect(crate::ui::util::central_rect(ui.ctx()));
+                let overlay = ui.painter_at(clip);
                 theme::led(
                     &overlay,
                     led_rect.center(),
@@ -138,8 +142,8 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                             .to_string(),
                         None => "(Def)".to_string(),
                     };
-                    let combo_id = ui.id().with("agent_model").with(module_id);
-                    egui::ComboBox::from_id_source(combo_id)
+                    let combo_id = ui.scope_id().with("agent_model").with(module_id);
+                    egui::ComboBox::from_id_salt(combo_id)
                         .selected_text(
                             egui::RichText::new(&display_name)
                                 .color(theme::SMOKE)
@@ -510,8 +514,8 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 .map(|e| e.name.to_string())
                 .unwrap_or_else(|| s.clone()),
         };
-        let combo_id = ui.id().with("agent_style").with(module_id);
-        egui::ComboBox::from_id_source(combo_id)
+        let combo_id = ui.scope_id().with("agent_style").with(module_id);
+        egui::ComboBox::from_id_salt(combo_id)
             .selected_text(
                 egui::RichText::new(&display)
                     .color(theme::SMOKE)
@@ -578,12 +582,145 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
     if instr_resp.changed() {
         app.state.write().llm_agents[idx].user_instructions = user_instructions;
     }
-    ui.label(
-        egui::RichText::new(format!("{:.1} t/s  #{}", tps, cycles))
-            .color(theme::ASH)
+    let (total_in, total_out, completed_n, sleeping) = {
+        let s = app.state.read();
+        let a = &s.llm_agents[idx];
+        (
+            a.total_prompt_tokens,
+            a.total_completion_tokens,
+            a.completed_cycles,
+            a.sleeping,
+        )
+    };
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(format!("{:.1} t/s  #{}", tps, cycles))
+                .color(theme::ASH)
+                .monospace()
+                .size(7.5),
+        );
+        // Per-agent token budget — running total + per-cycle average.
+        let avg = if completed_n > 0 {
+            (total_in + total_out) / completed_n as u64
+        } else {
+            0
+        };
+        ui.label(
+            egui::RichText::new(format!(
+                "tok {}+{}={} (avg {}/cycle)",
+                total_in,
+                total_out,
+                total_in + total_out,
+                avg
+            ))
+            .color(theme::IRON)
             .monospace()
             .size(7.5),
-    );
+        )
+        .on_hover_text(
+            "Cumulative prompt + completion tokens this session.\n\
+             avg = total / completed cycles.  Lets you see which\n\
+             agents dominate VRAM / throughput.",
+        );
+        // Sleep mode toggle — when on, the round-robin scheduler
+        // skips this agent.
+        let mut sleep = sleeping;
+        let resp = ui.small_button(
+            egui::RichText::new(if sleep { "💤" } else { "wake" })
+                .monospace()
+                .size(7.5)
+                .color(if sleep { theme::SMOKE } else { theme::ASH }),
+        );
+        if resp.clicked() {
+            sleep = !sleep;
+            app.state.write().llm_agents[idx].sleeping = sleep;
+            app.session_dirty = true;
+        }
+        resp.on_hover_text(if sleeping {
+            "Agent is sleeping — not picked for inference.  Click to wake."
+        } else {
+            "Click to put this agent to sleep — it'll skip its turn until woken."
+        });
+    });
+    // ── Persona presets (save / load) ──────────────────────────────────
+    // Tucked into a thin row.  Save grabs the agent's current
+    // personality knobs and writes them as
+    // `~/.impulse_instruct/personas/<slug>.json`; Load applies a
+    // selected preset onto the agent without touching scope /
+    // patterns / model overrides.
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new("preset:")
+                .color(theme::IRON)
+                .monospace()
+                .size(7.5),
+        );
+        if ui
+            .small_button(egui::RichText::new("save").monospace().size(7.5))
+            .on_hover_text(
+                "Save this agent's persona / instructions / prompt /\n\
+                 conv mode / temperature as a reusable preset under\n\
+                 ~/.impulse_instruct/personas/<slug>.json",
+            )
+            .clicked()
+        {
+            let agent = app.state.read().llm_agents[idx].clone();
+            let preset = crate::state::PersonaPreset::from_agent(&agent);
+            match crate::state::save_preset(&preset) {
+                Ok(p) => {
+                    app.log_text
+                        .push_str(&format!("[preset] saved: {}\n", p.display()));
+                }
+                Err(e) => {
+                    app.log_text
+                        .push_str(&format!("[preset] save failed: {e}\n"));
+                }
+            }
+        }
+        let presets = crate::state::list_presets();
+        let label = if presets.is_empty() {
+            "(none saved)".to_string()
+        } else {
+            "load…".to_string()
+        };
+        let mut load_path: Option<std::path::PathBuf> = None;
+        egui::ComboBox::from_id_salt(("persona_preset_combo", module_id))
+            .width(140.0)
+            .selected_text(egui::RichText::new(label).monospace().size(7.5))
+            .show_ui(ui, |ui| {
+                for p in &presets {
+                    let name = p
+                        .file_stem()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("?")
+                        .to_string();
+                    if ui
+                        .selectable_label(false, egui::RichText::new(name).monospace().size(7.5))
+                        .clicked()
+                    {
+                        load_path = Some(p.clone());
+                    }
+                }
+            });
+        if let Some(p) = load_path {
+            match crate::state::load_preset_from_path(&p) {
+                Ok(preset) => {
+                    let mut s = app.state.write();
+                    if let Some(a) = s.llm_agents.get_mut(idx) {
+                        preset.apply_to(a);
+                    }
+                    app.log_text
+                        .push_str(&format!("[preset] loaded: {}\n", p.display()));
+                    app.session_dirty = true;
+                }
+                Err(e) => {
+                    app.log_text
+                        .push_str(&format!("[preset] load failed: {e}\n"));
+                }
+            }
+        }
+    });
+
     // ── System prompt override ──────────────────────────────────────────
     let has_override = !prompt_override.is_empty();
     let ovr_header = if has_override {
@@ -596,14 +733,14 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
     } else {
         theme::IRON
     };
-    let collapse_id = ui.id().with("prompt_ovr").with(module_id);
+    let collapse_id = ui.scope_id().with("prompt_ovr").with(module_id);
     egui::CollapsingHeader::new(
         egui::RichText::new(ovr_header)
             .monospace()
             .size(7.5)
             .color(header_col),
     )
-    .id_source(collapse_id)
+    .id_salt(collapse_id)
     .default_open(false)
     .show(ui, |ui| {
         let ovr_resp = ui.add(

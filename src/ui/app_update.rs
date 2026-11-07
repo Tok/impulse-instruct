@@ -1,18 +1,18 @@
 // ─── ui/app_update.rs ────────────────────────────────────────────────────────
-// `impl eframe::App for ImpulseApp` — the per-frame `update` hook plus
+// `impl eframe::App for ImpulseApp` — the per-frame `ui` hook plus
 // the session-save `save` hook.  Lifted out of ui/mod.rs to keep the
 // entry module under the 1000-line cap; mod.rs now holds the struct
 // definition + its inherent `impl ImpulseApp` block, while all frame-
 // driven drawing / input / message-draining lives here.
 //
-// Keeps the full `update` body in one file so debugging a frame-loop
+// Keeps the full `ui` body in one file so debugging a frame-loop
 // issue doesn't need a hunt across sub-modules.
 
-use egui::{CentralPanel, Frame, TopBottomPanel};
+use egui::{CentralPanel, Frame, Panel};
 
 use super::{
-    DRUM_LOG_CAP, DrumLogEntry, ImpulseApp, MELODIC_LOG_CAP, MelodicLogEntry, panels, rack_canvas,
-    scope_footer, theme, util,
+    DRUM_LOG_CAP, DrumLogEntry, ImpulseApp, MELODIC_LOG_CAP, MelodicLogEntry, MelodicVoice, panels,
+    rack_canvas, scope_footer, theme, util,
 };
 
 impl eframe::App for ImpulseApp {
@@ -23,7 +23,10 @@ impl eframe::App for ImpulseApp {
         }
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // egui 0.37: panels attach to the root `Ui`; windows, areas and
+        // input still go through the `Context`.
+        let ctx = &root.ctx().clone();
         // Capture the system's native pixels_per_point on the first real frame,
         // after the window is shown and DPI is known.
         if self.native_ppp <= 0.0 {
@@ -51,23 +54,48 @@ impl eframe::App for ImpulseApp {
 
         // Publish touch_mode + WASD flag so widgets can read them without signature changes.
         ctx.data_mut(|d| {
-            d.insert_temp(egui::Id::new("touch_mode"), self.touch_mode);
+            d.insert_temp(egui::Id::unique("touch_mode"), self.touch_mode);
             d.insert_temp(
-                egui::Id::new("wasd_as_arrows"),
+                egui::Id::unique("wasd_as_arrows"),
                 self.state.read().ui_prefs.wasd_as_arrows,
             );
-            d.insert_temp(egui::Id::new("ctrl_locked"), self.ctrl_locked);
+            d.insert_temp(egui::Id::unique("ctrl_locked"), self.ctrl_locked);
         });
 
         self.drain_llm_outputs();
         self.drain_api_log();
         self.drain_midi_events();
+        self.tick_link_sync();
+        self.tick_patch_morph();
         // Poll API params_dirty flag — push audio params when API changed state
         if self
             .api_params_dirty
             .swap(false, std::sync::atomic::Ordering::Relaxed)
         {
             self.push_audio_params();
+        }
+
+        // ── Sample-loader heartbeat ──────────────────────────────────────────
+        // The amen and sample-instrument loaders used to live inside
+        // `draw_amen` / `draw_sample_instrument`, which means the WAV
+        // decode + audio-thread push only fired on frames where the
+        // card was actually painted.  An API caller that adds an amen
+        // module and then immediately scrolls to a different module
+        // could leave the amen card scrolled off-screen before its
+        // panel ever ran — the path was set in state but the buffer
+        // never reached the audio thread, so the voice triggered on
+        // schedule but produced silence.  Polling here, every frame,
+        // is panel-render-independent and catches API-driven sample
+        // changes the same frame they land in state.
+        {
+            let amen_path = self.state.read().amen.path.clone();
+            if !amen_path.is_empty() && self.amen_ui.wave_cache.0 != amen_path {
+                panels::amen::load_and_cache(self, &amen_path);
+            }
+            let sample_path = self.state.read().sample_instrument.sample_path.clone();
+            if !sample_path.is_empty() && self.last_sample_instrument_path != sample_path {
+                panels::sample_instrument::load_sample_instrument_path(self, &sample_path);
+            }
         }
 
         // ── Auto-save: write session.json if the state changed ──────────────
@@ -106,10 +134,17 @@ impl eframe::App for ImpulseApp {
                 if cooldown_left.is_zero() {
                     let next = {
                         let s = self.state.read();
+                        // Sleeping agents are skipped — they save VRAM
+                        // by parking until explicitly woken.  Disabled
+                        // rack modules have always been excluded; sleep
+                        // is the in-app analogue.
                         let enabled: Vec<u32> = s
                             .llm_agents
                             .iter()
-                            .filter(|a| s.rack.modules.iter().any(|m| m.id == a.id && m.enabled))
+                            .filter(|a| {
+                                !a.sleeping
+                                    && s.rack.modules.iter().any(|m| m.id == a.id && m.enabled)
+                            })
                             .map(|a| a.id)
                             .collect();
                         if enabled.is_empty() {
@@ -213,11 +248,44 @@ impl eframe::App for ImpulseApp {
         {
             self.toggle_rack_flip();
         }
+        // Take the flag in its own statement: `mark_wizard_done` reads the
+        // state lock, so the write guard must be gone first.
+        let wizard_dismiss = self.state.write().wizard_dismiss_requested.take();
+        if let Some(persist) = wizard_dismiss
+            && self.show_wizard
+        {
+            self.show_wizard = false;
+            if persist {
+                self.mark_wizard_done();
+            }
+        }
         if ctx.input_mut(|i| {
             i.consume_key(egui::Modifiers::SHIFT, egui::Key::Slash) // Shift+/ = ?
                 || i.consume_key(egui::Modifiers::NONE, egui::Key::F1)
         }) {
             self.show_shortcuts = !self.show_shortcuts;
+        }
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F2)) {
+            let mut s = self.state.write();
+            s.ui_prefs.performance_mode = !s.ui_prefs.performance_mode;
+            self.session_dirty = true;
+        }
+        // Pattern snapshot slots — Shift+1..=4 instantly load pattern
+        // bank slots 0..=3 without saving the current edits, so a
+        // live performer can flip A/B/C/D at any time.  Right-click
+        // on the bank strip cells (or the bank-write API) is still
+        // the way to capture into a slot.
+        for (key, slot) in [
+            (egui::Key::Num1, 0usize),
+            (egui::Key::Num2, 1),
+            (egui::Key::Num3, 2),
+            (egui::Key::Num4, 3),
+        ] {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, key)) {
+                let s = self.state.read().clone();
+                *self.state.write() = crate::state::bank_load(s, slot, true);
+                self.push_audio_params();
+            }
         }
 
         // ── Startup hook — auto-prompt after wizard closes ──────────────────
@@ -322,6 +390,21 @@ impl eframe::App for ImpulseApp {
             self.stereo_corr = self.stereo_corr * 0.8 + c * 0.2;
             self.stereo_balance = self.stereo_balance * 0.8 + b * 0.2;
         }
+        // Spectrogram history — push the latest FFT magnitudes (already
+        // computed by `update_spectrum`) so the Spectrogram viz module
+        // can render a scrolling waterfall.  Cap at the history length
+        // so memory usage stays bounded across long sessions.
+        if !self.spectrum_magnitudes.is_empty() {
+            self.spectrogram_history
+                .push_back(self.spectrum_magnitudes.clone());
+            while self.spectrogram_history.len() > crate::audio::analysis::SPECTROGRAM_HISTORY_LEN {
+                self.spectrogram_history.pop_front();
+            }
+        }
+        // LUFS — push the same scope buffer through the K-weighting
+        // filters.  The meter integrates internally; we just feed it
+        // the latest block.
+        self.lufs_meter.process_block(&self.scope_buf);
         while let Ok(load) = self.dsp_load_rx.pop() {
             self.dsp_load_buf.push(load);
         }
@@ -342,15 +425,17 @@ impl eframe::App for ImpulseApp {
                 self.last_step_global = s.global_step_count;
                 let fired_at = s.global_step_count;
                 let seq = &s.sequencer;
-                let mut push = |note: u8, gate: f32, accent: f32, slide: f32| {
-                    self.melodic_log.push_back(MelodicLogEntry {
-                        fired_at,
-                        note,
-                        gate,
-                        accent,
-                        slide,
-                    });
-                };
+                let mut push =
+                    |voice: MelodicVoice, note: u8, gate: f32, accent: f32, slide: f32| {
+                        self.melodic_log.push_back(MelodicLogEntry {
+                            fired_at,
+                            note,
+                            gate,
+                            accent,
+                            slide,
+                            voice,
+                        });
+                    };
                 // Bass voices (multi-voice) — voice 0 mirrors bass_pattern.
                 for (vi, voice) in s.bass_voices.iter().enumerate() {
                     if !voice.enabled {
@@ -372,7 +457,13 @@ impl eframe::App for ImpulseApp {
                     if let Some(st) = pattern.get(step % voice_steps)
                         && st.active
                     {
-                        push(st.note, st.gate, st.accent, st.slide);
+                        push(
+                            MelodicVoice::Bass(vi as u8),
+                            st.note,
+                            st.gate,
+                            st.accent,
+                            st.slide,
+                        );
                     }
                 }
                 // AN1X
@@ -381,7 +472,7 @@ impl eframe::App for ImpulseApp {
                     if let Some(st) = seq.an1x_pattern.get(step % n)
                         && st.active
                     {
-                        push(st.note, st.gate, st.accent, st.slide);
+                        push(MelodicVoice::An1x, st.note, st.gate, st.accent, st.slide);
                     }
                 }
                 // Hoover
@@ -390,7 +481,7 @@ impl eframe::App for ImpulseApp {
                     if let Some(st) = seq.hoover_pattern.get(step % n)
                         && st.active
                     {
-                        push(st.note, st.gate, st.accent, st.slide);
+                        push(MelodicVoice::Hoover, st.note, st.gate, st.accent, st.slide);
                     }
                 }
                 while self.melodic_log.len() > MELODIC_LOG_CAP {
@@ -420,16 +511,31 @@ impl eframe::App for ImpulseApp {
         }
         self.update_audio_analysis(ctx);
         self.tick_ramps();
+        // Drain the master-output capture ring buffer into the shared
+        // tap so any panel (granular OR amen rec-chop) can read the
+        // most recent few seconds without competing for the rtrb
+        // consumer.  Was previously inline in the granular panel,
+        // which meant the tap went stale whenever the user wasn't
+        // looking at granular — so a "record into amen" button had no
+        // recent audio to slice.
+        let tap_len = self.granular_tap.len();
+        if tap_len > 0 {
+            while let Ok(s) = self.granular_capture_rx.pop() {
+                let h = self.granular_tap_head;
+                self.granular_tap[h] = s;
+                self.granular_tap_head = (h + 1) % tap_len;
+            }
+        }
         self.draw_windows(ctx);
-        self.draw_menu_and_header(ctx);
-        TopBottomPanel::bottom("footer")
+        self.draw_menu_and_header(root);
+        Panel::bottom("footer")
             .frame(
-                Frame::none()
+                Frame::NONE
                     .fill(theme::VOID)
-                    .inner_margin(egui::Margin::symmetric(6.0, 2.0)),
+                    .inner_margin(egui::Margin::symmetric(6, 2)),
             )
-            .exact_height(18.0)
-            .show(ctx, |ui| {
+            .exact_size(18.0)
+            .show(root, |ui| {
                 let (nm, na, nc) = {
                     let s = self.state.read();
                     (
@@ -439,12 +545,15 @@ impl eframe::App for ImpulseApp {
                     )
                 };
                 let was_flipped = self.rack_flipped;
+                let mut perf = self.state.read().ui_prefs.performance_mode;
+                let was_perf = perf;
                 scope_footer::draw_footer_status(
                     ui,
                     &self.midi_port,
                     &self.dsp_load_buf,
                     &mut self.rack_flipped,
                     &mut self.ctrl_locked,
+                    &mut perf,
                     scope_footer::FooterStats {
                         n_modules: nm,
                         n_agents: na,
@@ -457,29 +566,39 @@ impl eframe::App for ImpulseApp {
                     self.rack_flipped = was_flipped;
                     self.toggle_rack_flip();
                 }
+                if perf != was_perf {
+                    self.state.write().ui_prefs.performance_mode = perf;
+                    self.session_dirty = true;
+                }
             });
 
-        TopBottomPanel::bottom("piano")
-            .frame(
-                Frame::none()
-                    .fill(theme::VOID)
-                    .inner_margin(egui::Margin::symmetric(0.0, 0.0)),
-            )
-            .exact_height(80.0)
-            .show(ctx, |ui| {
-                panels::draw_piano(self, ui, ctx);
-            });
+        // Performance mode hides the piano panel to free up vertical
+        // space for the rack canvas.  Re-enabled when the user toggles
+        // performance mode off in the header view menu.
+        if !self.state.read().ui_prefs.performance_mode {
+            Panel::bottom("piano")
+                .frame(
+                    Frame::NONE
+                        .fill(theme::VOID)
+                        .inner_margin(egui::Margin::symmetric(0, 0)),
+                )
+                .exact_size(80.0)
+                .show(root, |ui| {
+                    panels::draw_piano(self, ui, ctx);
+                });
+        }
 
         // ── Rack canvas (replaces tab panels) ────────────────────────────────
         // When the startup wizard is visible, show an empty central panel
         // so the rack doesn't load and nothing plays in the background.
         CentralPanel::default()
             .frame(
-                Frame::none()
+                Frame::NONE
                     .fill(theme::VOID)
-                    .inner_margin(egui::Margin::same(4.0)),
+                    .inner_margin(egui::Margin::same(4)),
             )
-            .show(ctx, |ui| {
+            .show(root, |ui| {
+                util::publish_central_rect(ctx, ui.max_rect());
                 if !self.show_wizard {
                     rack_canvas::draw_rack(self, ctx, ui);
                 }

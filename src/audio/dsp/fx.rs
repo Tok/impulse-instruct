@@ -1,3 +1,4 @@
+use super::dsp_util::{MIX_BYPASS_THRESHOLD, db_to_lin, lin_to_db, nyquist_guard};
 // ─── FX DSP structs ───────────────────────────────────────────────────────────
 // Pure numeric DSP — no allocations inside process().
 
@@ -5,6 +6,10 @@ pub(super) const MAX_DELAY_SAMPLES: usize = 96_000; // 2s @ 48kHz
 pub(super) const REVERB_COMBS: usize = 8;
 pub(super) const REVERB_ALLPASS: usize = 4;
 pub(super) const MAX_CHORUS_SIZE: usize = 4096; // ~85ms @ 48kHz
+/// Flanger ring — must be longer than the maximum sweep delay
+/// (~10 ms @ 48 kHz = 480 samples) plus headroom for fractional
+/// interpolation.  Power of two so wrap is a mask, not a modulo.
+pub(super) const MAX_FLANGER_SIZE: usize = 1024;
 
 /// Reverb feedback bounds.  `room_size = 0` → `REVERB_FB_MIN` (tight,
 /// short decay); `room_size = 1` → `REVERB_FB_MIN + REVERB_FB_SCALE`
@@ -221,7 +226,7 @@ impl Chorus {
     /// Two-voice BBD-style chorus: base ±10ms modulated by two phase-offset LFOs.
     /// `rate`: 0–1 → 0.1–8 Hz, `depth`: 0–1 → 0–10ms, `mix`: 0–1 wet/dry.
     pub(crate) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         self.buf[self.write] = input;
@@ -418,7 +423,7 @@ pub(crate) struct Compressor {
 }
 
 impl Compressor {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             env: 0.0,
             band_env: [0.0; 3],
@@ -456,20 +461,73 @@ impl Compressor {
         } else {
             *env * rel + level * (1.0 - rel)
         };
-        let env_db = 20.0 * env.max(1e-9).log10();
+        let env_db = lin_to_db(env.max(1e-9));
         let gain_db = if env_db > thresh_db {
             (env_db - thresh_db) * (1.0 - 1.0 / ratio_val)
         } else {
             0.0
         };
-        input * 10.0f32.powf(-gain_db / 20.0)
+        input * db_to_lin(-gain_db)
+    }
+
+    /// Sidechain-aware variant of `process` — the level detector reads
+    /// `detector` instead of `input`.  When the detector and input are
+    /// the same signal the behaviour is identical to `process`.  Used
+    /// when `FxState.compressor_sidechain` is on and a sidechain cable
+    /// drives the compressor's detector port.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn process_with_detector(
+        &mut self,
+        input: f32,
+        detector: f32,
+        threshold: f32,
+        ratio: f32,
+        mix: f32,
+        multiband: f32,
+        reverse: bool,
+        sr: f32,
+    ) -> f32 {
+        if mix < MIX_BYPASS_THRESHOLD {
+            return input;
+        }
+        // Single-band path: track detector envelope, derive gain
+        // reduction in dB from `detector`'s level vs threshold, apply to
+        // `input`.  Simpler than the general 3-band path which still
+        // self-detects (multiband sidechain is not in scope here).
+        if multiband < 0.001 {
+            let thresh_db = -40.0 * (1.0 - threshold);
+            let ratio_val = 1.0 + ratio * 19.0;
+            let level = detector.abs();
+            let fast = (-1.0 / (sr * 0.001)).exp();
+            let slow = (-1.0 / (sr * 0.08)).exp();
+            let (att, rel) = if reverse { (slow, fast) } else { (fast, slow) };
+            self.env = if level > self.env {
+                self.env * att + level * (1.0 - att)
+            } else {
+                self.env * rel + level * (1.0 - rel)
+            };
+            let env_db = lin_to_db(self.env.max(1e-9));
+            let gain_db = if env_db > thresh_db {
+                (env_db - thresh_db) * (1.0 - 1.0 / ratio_val)
+            } else {
+                0.0
+            };
+            let compressed = input * db_to_lin(-gain_db);
+            return input * (1.0 - mix) + compressed * mix;
+        }
+        // Multiband path: fall back to non-sidechain processing — adding
+        // sidechain to the per-band detectors is a bigger design (each
+        // band needs its own detector signal split).  Out of scope for
+        // the sidechain V1 — the user can disable multiband when they
+        // turn on sidechain.
+        self.process(input, threshold, ratio, mix, multiband, reverse, sr)
     }
 
     /// `threshold`: 0–1 → −40..0 dB. `ratio`: 0–1 → 1:1..20:1. `mix`: 0–1 wet/dry.
     /// `multiband`: 0 = single band, >0 = 3-band split (low/mid/high).
     /// `reverse`: swap attack/release constants for swell-into-hit feel.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn process(
+    pub(crate) fn process(
         &mut self,
         input: f32,
         threshold: f32,
@@ -479,7 +537,7 @@ impl Compressor {
         reverse: bool,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 
@@ -539,7 +597,7 @@ impl TapeSat {
         flutter: f32,
         sr: f32,
     ) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
         // Wow/flutter: ±4% amplitude modulation at ~2.5 Hz
@@ -580,7 +638,7 @@ impl Phaser {
     /// `depth`: 0–1 sweep width (0 = narrow, 1 = full 300–4000 Hz sweep).
     /// `mix`: 0–1 wet/dry.
     pub(crate) fn process(&mut self, input: f32, rate: f32, depth: f32, mix: f32, sr: f32) -> f32 {
-        if mix < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD {
             return input;
         }
 
@@ -593,7 +651,7 @@ impl Phaser {
         let lfo = (self.lfo_phase * std::f32::consts::TAU).sin();
 
         // LFO sweeps center frequency: 300–4000 Hz
-        let fc = (1150.0 + lfo * depth * 1850.0).clamp(50.0, sr * 0.45);
+        let fc = (1150.0 + lfo * depth * 1850.0).clamp(50.0, nyquist_guard(sr));
 
         // First-order all-pass coefficient: d = (tan(π·fc/sr) − 1) / (tan(π·fc/sr) + 1)
         let t = (std::f32::consts::PI * fc / sr).tan().clamp(0.001, 999.0);
@@ -645,7 +703,7 @@ impl Autotune {
 
     /// Process one sample.  `amount`: 0–1.  `mix`: 0–1 wet/dry.
     pub(crate) fn process(&mut self, input: f32, amount: f32, mix: f32) -> f32 {
-        if mix < 0.001 || amount < 0.001 {
+        if mix < MIX_BYPASS_THRESHOLD || amount < 0.001 {
             return input;
         }
 

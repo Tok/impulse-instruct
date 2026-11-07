@@ -29,12 +29,15 @@ use crate::ui::theme;
 ///   `dot_color` inside the cell, above the dot. Ignored for drum rows.
 /// `size_px` comes from `UiPrefs.pad_size.px()`.
 /// `probability` — 0.0–1.0, shown as a dim ring when < 1.0 to indicate uncertainty.
+/// `cond` — 0=always; 1/2/3 fire every 2nd/3rd/4th cycle and render a small
+///   "2"/"3"/"4" digit in the top-left corner.
 pub fn step_button(
     ui: &mut Ui,
     active: bool,
     current: bool,
     vel: f32,
     probability: f32,
+    cond: u8,
     dot_color: Option<Color32>,
     note_label: Option<&str>,
     size_px: f32,
@@ -46,7 +49,7 @@ pub fn step_button(
     // this frame.  The key is a single global `Id` because only one
     // pointer can be mid-drag at a time — two grids can coexist because
     // the pointer can only be hovering over one cell per frame.
-    let paint_key = egui::Id::new("step_paint_dir");
+    let paint_key = egui::Id::unique("step_paint_dir");
     let mut action: Option<bool> = None;
 
     // Plain click (including touch-tap) → toggle.
@@ -80,19 +83,22 @@ pub fn step_button(
 
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        // Foreground-layer painter for the LED halo + current-step bloom.
-        // Keeps the glow from being covered by the next step's chrome or
-        // clipped at the widget's allocation edge — mirror of the fix
-        // agent_card.rs applied to its status LED.  Scoped per-widget
-        // via the rect position so stacking stays deterministic.
-        let glow_id = egui::Id::new("step_glow")
-            .with(rect.min.x.to_bits())
-            .with(rect.min.y.to_bits());
-        let glow = ui
-            .ctx()
-            .layer_painter(egui::LayerId::new(egui::Order::Foreground, glow_id));
+        // LED halo + current-step bloom use the SAME painter as the
+        // step chrome.  Previously this was a foreground-layer
+        // painter (Order::Foreground), then a `painter_at(rect.expand(…))`
+        // with a wider clip — both variants caused the sequencer grid
+        // to disappear in some recording geometries (expanded clip
+        // replaced the parent's clip, which in a nested ScrollArea
+        // sometimes culled the step chrome itself).  Using
+        // `painter.clone()` keeps the glow on the parent layer with
+        // the parent's clip, so rendering stays inside the panel no
+        // matter what the scroll position is.  The halo will be
+        // clipped at the step rect's boundary rather than extending
+        // into the gap, which is fine — the bloom falls off fast and
+        // the step's own chrome was covering the bleed anyway.
+        let glow = painter.clone();
         // Generous rounding — no hard square corners visible
-        let r = egui::Rounding::same((size_px * 0.22).max(4.0));
+        let r = egui::CornerRadius::from((size_px * 0.22).max(4.0));
         let inner = rect.shrink(1.5);
 
         if active {
@@ -100,9 +106,19 @@ pub fn step_button(
             // Dark inset shadow frame, slightly brighter outer ring, deep inner well.
             painter.rect_filled(inner, r, theme::DEEP);
             // Bright bottom-right rim (light bounces off raised surround)
-            painter.rect_stroke(inner.shrink(0.5), r, Stroke::new(1.0, theme::IRON));
+            painter.rect_stroke(
+                inner.shrink(0.5),
+                r,
+                Stroke::new(1.0, theme::IRON),
+                egui::StrokeKind::Middle,
+            );
             // Dark top-left rim (pressed inward — shadow side)
-            painter.rect_stroke(inner, r, Stroke::new(1.0, theme::VOID));
+            painter.rect_stroke(
+                inner,
+                r,
+                Stroke::new(1.0, theme::VOID),
+                egui::StrokeKind::Middle,
+            );
             // Inset well
             let inset = inner.shrink(2.5);
             painter.rect_filled(inset, r, Color32::from_gray(22));
@@ -129,7 +145,7 @@ pub fn step_button(
                 // Velocity heat fill — brighter = louder
                 let dim = 0.35_f32 + vel * 0.65;
                 let g = (200.0 * dim) as u8;
-                painter.rect_filled(inset, r, Color32::from_rgba_unmultiplied(g, g, g, 70));
+                painter.rect_filled(inset, r, crate::ui::theme::rgba_unmultiplied(g, g, g, 70));
             }
             // Probability indicator: small corner dot when < 100%
             if probability < 0.99 {
@@ -143,12 +159,18 @@ pub fn step_button(
             // Bright top-left rim, dark bottom-right — classic emboss.
             painter.rect_filled(inner, r, Color32::from_gray(32));
             // Top-left highlight
-            painter.rect_stroke(inner, r, Stroke::new(1.0, Color32::from_gray(58)));
+            painter.rect_stroke(
+                inner,
+                r,
+                Stroke::new(1.0, Color32::from_gray(58)),
+                egui::StrokeKind::Middle,
+            );
             // Bottom-right shadow (slightly inset to overlay only bottom/right)
             painter.rect_stroke(
                 inner.shrink(0.5),
                 r,
                 Stroke::new(1.0, Color32::from_gray(10)),
+                egui::StrokeKind::Middle,
             );
 
             if let Some(col) = dot_color {
@@ -159,10 +181,33 @@ pub fn step_button(
             }
         }
 
+        // Cond marker: tiny digit in the top-left when this step fires
+        // every Nth cycle.  cond=1→"2", cond=2→"3", cond=3→"4".
+        if cond > 0 && size_px >= 18.0 {
+            let n = cond + 1;
+            let font_sz = (size_px * 0.26).clamp(8.0, 11.0);
+            let text_pos = Pos2::new(rect.min.x + font_sz * 0.55, rect.min.y + font_sz * 0.55);
+            let col = if active {
+                Color32::from_gray(210)
+            } else {
+                Color32::from_gray(120)
+            };
+            painter.text(
+                text_pos,
+                egui::Align2::CENTER_CENTER,
+                format!("{n}"),
+                egui::FontId::monospace(font_sz),
+                col,
+            );
+        }
+
         // Current-step cursor: outer bloom glow + bright border + inner ring.
-        // Bloom paints on the foreground layer so it extends past the
-        // widget rect into neighbouring cells without being covered by
-        // their chrome (draw-order fix, not a clip fix).
+        // Bloom paints on `glow` (expanded-clip painter on the parent
+        // panel layer — see `halo_reach` above) so the three bloom
+        // rings extend past this step's rect.  Neighbouring steps
+        // drawn later in the same pass will cover the portion of the
+        // bloom that falls inside their rect; the remaining bleed is
+        // the visible bloom signature.
         if current {
             // Outer bloom halos
             for i in 1..=3u8 {
@@ -171,16 +216,22 @@ pub fn step_button(
                 glow.rect_filled(
                     rect.expand(expand),
                     r,
-                    Color32::from_rgba_unmultiplied(220, 220, 220, alpha),
+                    crate::ui::theme::rgba_unmultiplied(220, 220, 220, alpha),
                 );
             }
             // Bright outer border
-            painter.rect_stroke(rect.shrink(0.5), r, Stroke::new(1.5, theme::CHALK));
+            painter.rect_stroke(
+                rect.shrink(0.5),
+                r,
+                Stroke::new(1.5, theme::CHALK),
+                egui::StrokeKind::Middle,
+            );
             // Subtle inner ring — reinforces the "lit up" face
             painter.rect_stroke(
                 inner.shrink(1.5),
                 r,
-                Stroke::new(1.0, Color32::from_rgba_unmultiplied(200, 200, 200, 45)),
+                Stroke::new(1.0, crate::ui::theme::rgba_unmultiplied(200, 200, 200, 45)),
+                egui::StrokeKind::Middle,
             );
         }
     }

@@ -24,6 +24,7 @@ pub(super) fn draw_drum_rows(
     current_step: usize,
     sub_rows: usize,
     time_sig_num: usize,
+    step_division: usize,
 ) {
     if !voices.is_empty() {
         ui.add_space(2.0);
@@ -81,14 +82,15 @@ pub(super) fn draw_drum_rows(
     // Helper: beat division spacing (same as sequencer.rs).
     // `local_i` is the position within the sub-row (no leading spacer);
     // `abs_i` is the absolute step index for beat-position calculation.
+    let steps_per_beat = step_division.max(1);
+    let steps_per_bar = (time_sig_num * steps_per_beat).max(1);
     let beat_div = |ui: &mut egui::Ui, local_i: usize, abs_i: usize| {
         if local_i == 0 {
             return;
         }
-        let beat_pos = abs_i % time_sig_num;
-        if beat_pos == 0 {
+        if abs_i.is_multiple_of(steps_per_bar) {
             ui.add_space(4.0);
-        } else if abs_i.is_multiple_of(4) {
+        } else if abs_i.is_multiple_of(steps_per_beat) {
             ui.add_space(2.0);
         }
     };
@@ -167,8 +169,9 @@ pub(super) fn draw_drum_rows(
                         let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
                         ui.add_enabled_ui(abs < voice_steps, |ui| {
                             let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
+                            let cond = pattern.get(i).map(|s| s.cond).unwrap_or(0);
                             if let Some(new_active) = widgets::step_button(
-                                ui, is_active, is_current, vel, prob, None, None, pad_px,
+                                ui, is_active, is_current, vel, prob, cond, None, None, pad_px,
                             ) {
                                 // Remember intended state so only the last
                                 // paint-target per row toggles — matches v1
@@ -269,7 +272,7 @@ pub(super) fn draw_drum_rows(
                             .cloned()
                             .unwrap_or_default();
                         app.drum_clipboard = Some((*voice, pattern));
-                        ui.close_menu();
+                        ui.close();
                     }
                     let can_paste = app.drum_clipboard.is_some();
                     if ui
@@ -283,7 +286,7 @@ pub(super) fn draw_drum_rows(
                                 p[..copy_len].clone_from_slice(&steps[..copy_len]);
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("Clear pattern").clicked() {
                         let mut s = app.state.write();
@@ -292,7 +295,7 @@ pub(super) fn draw_drum_rows(
                                 *step = Step::default();
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -352,8 +355,9 @@ pub(super) fn draw_drum_rows(
                     let vel = pattern.get(i).map(|s| s.velocity).unwrap_or(0.0);
                     ui.add_enabled_ui(abs < voice_steps, |ui| {
                         let prob = pattern.get(i).map(|s| s.probability).unwrap_or(1.0);
+                        let cond = pattern.get(i).map(|s| s.cond).unwrap_or(0);
                         if let Some(new_active) = widgets::step_button(
-                            ui, is_active, is_current, vel, prob, None, None, pad_px,
+                            ui, is_active, is_current, vel, prob, cond, None, None, pad_px,
                         ) {
                             toggled = Some((abs, new_active));
                         }
@@ -416,7 +420,7 @@ pub(super) fn draw_drum_rows(
                                 egui::pos2(x, vy + vel_h * (1.0 - vel)),
                                 egui::vec2(w, vel_h * vel),
                             ),
-                            egui::Rounding::ZERO,
+                            egui::CornerRadius::ZERO,
                             egui::Color32::from_gray(vcol),
                         );
                         // Probability bar (middle)
@@ -427,7 +431,7 @@ pub(super) fn draw_drum_rows(
                                 egui::pos2(x, py + prob_h * (1.0 - prob)),
                                 egui::vec2(w, prob_h * prob),
                             ),
-                            egui::Rounding::ZERO,
+                            egui::CornerRadius::ZERO,
                             egui::Color32::from_gray(pcol),
                         );
                         // Ratchet ticks (bottom)
@@ -447,7 +451,7 @@ pub(super) fn draw_drum_rows(
                                     egui::pos2(x + t as f32 * tick_w, ry),
                                     egui::vec2((tick_w - 1.0).max(1.0), ratch_h),
                                 ),
-                                egui::Rounding::ZERO,
+                                egui::CornerRadius::ZERO,
                                 egui::Color32::from_gray(col),
                             );
                         }

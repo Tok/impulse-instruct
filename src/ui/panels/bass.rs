@@ -175,6 +175,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         mut lfo_target,
         mut lfo_rate,
         mut lfo_depth,
+        mut lfo_phase,
         mut lfo_waveform,
         mut lfo_bpm_sync,
         mut lfo_sync_beats,
@@ -203,6 +204,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             b.lfo_target,
             b.lfo_rate,
             b.lfo_depth,
+            b.lfo_phase,
             b.lfo_waveform,
             b.lfo_bpm_sync,
             b.lfo_sync_beats,
@@ -237,12 +239,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("FILTER")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "FILTER");
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
@@ -304,12 +301,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             widgets::glass_group_fill(ui, gw_main, gw_main, |ui| {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("CHARACTER")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "CHARACTER");
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
@@ -371,12 +363,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             widgets::glass_group_fill(ui, gw_mod, gw_mod, |ui| {
                 ui.set_min_height(group_h);
                 ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
-                ui.label(
-                    egui::RichText::new("MOD")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "MOD");
                 widgets::centered_row(ui, |ui| {
                     let (ch, cy) = widgets::param_control(
                         ui,
@@ -452,12 +439,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         widgets::glass_group_fill(ui, ui.available_width(), ui.available_width(), |ui| {
             ui.spacing_mut().item_spacing.x = super::KNOB_SPACING;
             ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("LFO")
-                        .color(theme::FOG)
-                        .monospace()
-                        .size(9.5),
-                );
+                widgets::group_header(ui, "LFO");
                 // TARGET cycle button
                 let target_label = lfo_target.label();
                 if ui
@@ -536,6 +518,12 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 if widgets::param_control(ui, "DEPTH", &mut lfo_depth, ParamMode::Free, ctrl_sm).0 {
                     changed = true;
                 }
+                // PHASE — per-voice offset (0..1).  Set voice 0 to 0
+                // and voice 1 to 0.5 for an anti-phase pan sweep when
+                // both are targeting Pan.
+                if widgets::param_control(ui, "PHASE", &mut lfo_phase, ParamMode::Free, ctrl_sm).0 {
+                    changed = true;
+                }
             });
         });
     }
@@ -564,6 +552,7 @@ pub fn draw_bass(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             snap.bass_voices[av].synth.lfo_target = lfo_target;
             snap.bass_voices[av].synth.lfo_rate = lfo_rate;
             snap.bass_voices[av].synth.lfo_depth = lfo_depth;
+            snap.bass_voices[av].synth.lfo_phase = lfo_phase;
             snap.bass_voices[av].synth.lfo_waveform = lfo_waveform;
             snap.bass_voices[av].synth.lfo_bpm_sync = lfo_bpm_sync;
             snap.bass_voices[av].synth.lfo_sync_beats = lfo_sync_beats;

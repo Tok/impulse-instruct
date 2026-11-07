@@ -105,6 +105,64 @@ mod apply_session_tests {
     }
 
     #[test]
+    fn apply_session_ui_prefs_blob_overrides_legacy_fields() {
+        // When `ui_prefs` is present it carries the full UiPrefs and
+        // wins over the individual legacy Option fields.  The
+        // canonical path for per-component Huth toggles / header viz
+        // toggles to survive a restart.
+        use crate::state::UiPrefs;
+        let mut state = AppState::default();
+        let mut prefs = UiPrefs::default();
+        prefs.huth_piano = false;
+        prefs.huth_bar_osc = true;
+        prefs.huth_ring_osc = true;
+        prefs.huth_spectrum = true;
+        prefs.show_bar_oscilloscope = true;
+        prefs.show_spectrum_bars = false;
+        prefs.ui_scale = 1.25;
+        let data = SessionData {
+            ui_prefs: Some(prefs),
+            // Legacy fields deliberately contradict the blob — the
+            // blob must win.
+            ui_scale: Some(2.5),
+            wasd_as_arrows: Some(true),
+            ..Default::default()
+        };
+        apply_session(&mut state, data);
+        assert!(!state.ui_prefs.huth_piano);
+        assert!(state.ui_prefs.huth_bar_osc);
+        assert!(state.ui_prefs.huth_ring_osc);
+        assert!(state.ui_prefs.huth_spectrum);
+        assert!(state.ui_prefs.show_bar_oscilloscope);
+        assert!(!state.ui_prefs.show_spectrum_bars);
+        assert!((state.ui_prefs.ui_scale - 1.25).abs() < 1e-4);
+        // Legacy wasd_as_arrows is ignored when the blob wins — the
+        // blob's own default (false) stays in effect.
+        assert!(!state.ui_prefs.wasd_as_arrows);
+    }
+
+    #[test]
+    fn apply_session_falls_back_to_legacy_fields_without_blob() {
+        // Pre-blob sessions only set the individual Option fields.
+        // Those must still work so nobody's ui_scale / log level
+        // silently resets on upgrade.
+        let mut state = AppState::default();
+        let data = SessionData {
+            ui_prefs: None,
+            ui_scale: Some(0.75),
+            log_level_idx: Some(3),
+            wasd_as_arrows: Some(true),
+            autosync_rack_on_start: Some(true),
+            ..Default::default()
+        };
+        apply_session(&mut state, data);
+        assert!((state.ui_prefs.ui_scale - 0.75).abs() < 1e-4);
+        assert_eq!(state.ui_prefs.log_level_idx, 3);
+        assert!(state.ui_prefs.wasd_as_arrows);
+        assert!(state.ui_prefs.autosync_rack_on_start);
+    }
+
+    #[test]
     fn apply_session_empty_model_path_not_applied() {
         let mut state = AppState::default();
         let orig_path = state.llm.model_path.clone();
@@ -437,17 +495,24 @@ mod format_display_tests {
     }
 
     #[test]
-    fn off_mode_excludes_comment() {
+    fn comment_is_shown_regardless_of_mode() {
+        // Producer commentary is on by default — a `_comment` from the
+        // agent is always surfaced, independent of conversation_mode.
+        // `_conversation_mode` only shapes the prompt (what the model
+        // writes INTO `_comment`), not the display gate.
         let update = serde_json::json!({
             "bass": { "cutoff": 0.5 },
             "_comment": "I made it acid"
         });
-        let display = format_llm_display(Some(&update), "", &ConversationMode::Off);
-        assert!(
-            !display.contains("acid"),
-            "Off mode should not show _comment"
-        );
-        assert!(display.contains("bass"));
+        for mode in [
+            ConversationMode::Off,
+            ConversationMode::Producer,
+            ConversationMode::Dj,
+            ConversationMode::Mc,
+        ] {
+            let display = format_llm_display(Some(&update), "", &mode);
+            assert_eq!(display, "I made it acid", "{mode:?} should show comment");
+        }
     }
 
     #[test]

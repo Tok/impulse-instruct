@@ -52,7 +52,7 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::GranularDensity,
     LfoTarget::GranularGrain,
     LfoTarget::GranularPos,
-    LfoTarget::NeuTtsVolume,
+    LfoTarget::TtsVolume,
     LfoTarget::ReverbMix,
     LfoTarget::ReverbSize,
     LfoTarget::ReverbDamp,
@@ -65,6 +65,43 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::PhaserRate,
     LfoTarget::PhaserDepth,
     LfoTarget::PhaserMix,
+    LfoTarget::FlangerRate,
+    LfoTarget::FlangerDepth,
+    LfoTarget::FlangerFeedback,
+    LfoTarget::FlangerMix,
+    LfoTarget::LimiterThreshold,
+    LfoTarget::LimiterCeiling,
+    LfoTarget::LimiterRelease,
+    LfoTarget::LimiterLookahead,
+    LfoTarget::SvfCutoff,
+    LfoTarget::SvfResonance,
+    LfoTarget::SvfDrive,
+    LfoTarget::SvfMix,
+    LfoTarget::CombPitch,
+    LfoTarget::CombFeedback,
+    LfoTarget::CombDamp,
+    LfoTarget::CombMix,
+    LfoTarget::TiltTilt,
+    LfoTarget::TiltPivot,
+    LfoTarget::TiltMix,
+    LfoTarget::TransientAttack,
+    LfoTarget::TransientSustain,
+    LfoTarget::TransientMix,
+    LfoTarget::ExciterAmount,
+    LfoTarget::ExciterFreq,
+    LfoTarget::ExciterMix,
+    LfoTarget::MultitapTime,
+    LfoTarget::MultitapSpread,
+    LfoTarget::MultitapFeedback,
+    LfoTarget::MultitapMix,
+    LfoTarget::RevDelayTime,
+    LfoTarget::RevDelayFeedback,
+    LfoTarget::RevDelayMix,
+    LfoTarget::TapeStopMix,
+    LfoTarget::StutterRate,
+    LfoTarget::StutterSlice,
+    LfoTarget::StutterMix,
+    LfoTarget::FreezeMix,
     LfoTarget::WaveshaperDrive,
     LfoTarget::WaveshaperMix,
     LfoTarget::DistortionDrive,
@@ -80,6 +117,25 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::CompThresh,
     LfoTarget::CompRatio,
     LfoTarget::CompMix,
+    LfoTarget::GateThreshold,
+    LfoTarget::GateAttack,
+    LfoTarget::GateRelease,
+    LfoTarget::GateDepth,
+    LfoTarget::GateMix,
+    LfoTarget::VocoderBands,
+    LfoTarget::VocoderCarrierMix,
+    LfoTarget::VocoderSense,
+    LfoTarget::VocoderMix,
+    LfoTarget::WidenHaas,
+    LfoTarget::WidenSide,
+    LfoTarget::WidenMix,
+    LfoTarget::FreqShiftAmount,
+    LfoTarget::FreqShiftFeedback,
+    LfoTarget::FreqShiftMix,
+    LfoTarget::SampleVolume,
+    LfoTarget::SamplePan,
+    LfoTarget::SamplePitch,
+    LfoTarget::SampleCutoff,
     LfoTarget::TapeDrive,
     LfoTarget::TapeMix,
     LfoTarget::TapeFlutter,
@@ -143,7 +199,7 @@ fn chip_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response
                 .small()
                 .fill(if selected { theme::IRON } else { theme::PIT })
                 .stroke(egui::Stroke::NONE)
-                .rounding(2.0),
+                .corner_radius(2.0),
         )
     })
     .inner
@@ -158,19 +214,39 @@ pub fn has_audio_in(kind: ModuleKind) -> bool {
             | FxDelay
             | FxChorus
             | FxPhaser
+            | FxFlanger
+            | FxLimiter
+            | FxFilter
+            | FxComb
+            | FxTilt
+            | FxTransient
+            | FxExciter
+            | FxMultitap
+            | FxRevDelay
+            | FxTapeStop
+            | FxStutter
+            | FxFreeze
             | FxRingMod
             | FxWaveshaper
             | FxBitcrush
             | FxEq
             | FxCompressor
+            | FxGate
+            | FxVocoder
             | FxTapeSat
             | FxDrive
             | FxAutotune
+            | FxWiden
+            | FxFreqShift
             | MasterOutput
     )
 }
 
-/// True if `kind` exposes a CV-in (gate/pitch) jack — voices.
+/// True if `kind` exposes a CV-in jack on the back panel.  Voices
+/// take a gate/pitch CV from the sequencer; `LfoScope` takes a CV-out
+/// cable from any `LfoModule` to choose which slot it visualises (V1
+/// fell back to "first enabled slot" when no cable was patched —
+/// `draw_lfo_scope` now follows the cable graph instead).
 pub fn has_cv_in(kind: ModuleKind) -> bool {
     use ModuleKind::*;
     matches!(
@@ -182,7 +258,9 @@ pub fn has_cv_in(kind: ModuleKind) -> bool {
             | An1xVoice
             | AmenSampler
             | NoiseVoice
-            | NeuTts
+            | Tts
+            | LfoScope
+            | CvSeqScope
     )
 }
 
@@ -248,7 +326,7 @@ pub fn draw_mod_input_ports(
         };
         ui.interact(
             Rect::from_center_size(pos, port_size),
-            ui.id().with(("bp_mod_in", i)),
+            ui.scope_id().with(("bp_mod_in", i)),
             Sense::hover(),
         )
         .on_hover_text(tip);
@@ -277,7 +355,7 @@ pub fn draw_mod_selector_dropdowns(
     // only the anchor; the overlay itself extends ~50–70 px below it (one
     // slider row + up to two wrapped chip rows), so we need a fatter
     // buffer to avoid the bottom-panel collision the user reported.
-    let screen_bottom = ctx.screen_rect().max.y;
+    let screen_bottom = ctx.content_rect().max.y;
     let bottom_panel_h = 105.0_f32;
     let overlay_est_h_max = 70.0_f32;
     let max_overlay_y = screen_bottom - bottom_panel_h - overlay_est_h_max;
@@ -359,20 +437,20 @@ pub fn draw_mod_selector_dropdowns(
         // further right (past the jack label) — so usable horizontal
         // budget = card_w - 16 - 36 - 4 (right margin).
         let card_w = ctx
-            .data(|d| d.get_temp::<f32>(egui::Id::new("back_card_w").with(p.port.module_id)))
+            .data(|d| d.get_temp::<f32>(egui::Id::unique("back_card_w").with(p.port.module_id)))
             .unwrap_or(180.0);
         let overlay_max_w = (card_w - 56.0).max(110.0);
         let chip_strip_w = (overlay_max_w - 8.0).max(90.0);
-        egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
+        egui::Area::new(egui::Id::unique(("mod_overlay", p.port.module_id, idx)))
             .order(egui::Order::Foreground)
             .fixed_pos(anchor)
             .show(ctx, |ui| {
                 ui.set_max_width(overlay_max_w);
-                let frame = egui::Frame::none()
+                let frame = egui::Frame::NONE
                     .fill(theme::DEEP)
                     .stroke(egui::Stroke::new(0.5, Color32::from_gray(50)))
-                    .rounding(2.0)
-                    .inner_margin(egui::Margin::symmetric(3.0, 1.0));
+                    .corner_radius(2.0)
+                    .inner_margin(egui::Margin::symmetric(3, 1));
                 frame.show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(3.0, 1.0);
                     // First row: polarity · depth slider · % readout

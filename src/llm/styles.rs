@@ -184,4 +184,27 @@ impl StyleCatalog {
     pub fn find_by_id(&self, id: &str) -> Option<&Style> {
         self.0.iter().find(|s| s.id == id)
     }
+
+    /// Resolve a free-text style identifier (typically from an LLM
+    /// `SetStyle` action) to the canonical id stored in
+    /// `LlmState.active_style`.  Lookup order:
+    /// 1. Exact id match (`"drum_and_bass"`).
+    /// 2. Case-insensitive id match (`"Drum_And_Bass"`).
+    /// 3. Case-insensitive display-name match (`"Drum and Bass"`).
+    ///
+    /// Returns `None` when the catalog has no style under any of those
+    /// keys — caller leaves `active_style` untouched.  Pure helper so
+    /// the resolver logic is unit-testable.
+    pub fn resolve_style_id(&self, query: &str) -> Option<String> {
+        // Fast path: exact id match.
+        if let Some(s) = self.find_by_id(query) {
+            return Some(s.id.clone());
+        }
+        // Fallback: case-insensitive against id OR display name.
+        let lo = query.to_lowercase();
+        self.0
+            .iter()
+            .find(|s| s.id.to_lowercase() == lo || s.name.to_lowercase() == lo)
+            .map(|s| s.id.clone())
+    }
 }

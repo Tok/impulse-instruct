@@ -8,21 +8,173 @@
 /// constants.
 pub(super) const ACCENT_LIFT: f32 = 0.3;
 
+// ─── Envelope-stage thresholds ──────────────────────────────────────────────
+//
+// Every voice's exponential ADSR uses the same one-pole coast curve
+// (`coef = exp(-1 / (t · sr))`).  An exponential approach to a target
+// never lands exactly — the state machine has to decide when the
+// approach is "close enough" to advance to the next stage.  These three
+// constants pin those decisions in one place so attack-end / sustain-
+// reach / release-off behave identically across bass / sample / fm /
+// additive / vocal / chiptune / mod-env voices.  Tightening one of
+// them in isolation would have made one voice's envelope feel different
+// from the others.
+
+/// Attack handover — when the rising envelope reaches this value it
+/// snaps to 1.0 and enters Decay.  0.999 = 0.001 below peak ≈ −60 dB
+/// from the asymptote; below the noise floor of any musical material.
+pub const ATTACK_HANDOVER_VALUE: f32 = 0.999;
+
+/// Sustain-reach threshold — when `|value - target| < this`, Decay
+/// snaps to the sustain level and enters Sustain.  1e-3 leaves a tiny
+/// tail that's well below audibility but stops the coast curve from
+/// crawling toward the target forever.
+pub const SUSTAIN_REACH_THRESHOLD: f32 = 1e-3;
+
+/// Release-off threshold — when the decaying envelope falls below
+/// this value it snaps to 0 and the slot enters Off (no further DSP
+/// cost).  1e-5 ≈ −100 dB from peak.
+pub const RELEASE_OFF_VALUE: f32 = 1e-5;
+
 /// Fast tanh approximation (used by LadderFilter, Bass303, delay saturation).
 pub(crate) fn tanh(x: f32) -> f32 {
     let x2 = x * x;
     x * (27.0 + x2) / (27.0 + 9.0 * x2)
 }
 
-/// Convert MIDI note number to frequency in Hz (12-TET, A4=440).
-pub fn midi_to_hz(note: u8) -> f32 {
-    440.0 * 2.0f32.powf((note as f32 - 69.0) / 12.0)
+/// A4 reference frequency (Hz) and its MIDI note number.  Centralised
+/// so the MIDI ↔ Hz conversions in this module + every caller go
+/// through a single source of truth.  Switching reference (e.g. A=432)
+/// would otherwise mean editing the same magic numbers in a dozen
+/// places.
+pub const A4_HZ: f32 = 440.0;
+pub const A4_MIDI: f32 = 69.0;
+
+/// Convert a fractional MIDI note number to Hz (12-TET, A=`A4_HZ`).
+/// `midi = 69` is the reference; each ±1 = ±1 semitone.  Useful when
+/// the input is already fractional (chord-bank intervals, pitch bend
+/// CV).  For integer MIDI notes the typed [`midi_to_hz`] wrapper is
+/// usually clearer.
+pub fn midi_to_hz_f32(midi: f32) -> f32 {
+    A4_HZ * 2.0f32.powf((midi - A4_MIDI) / 12.0)
 }
 
-/// Convert frequency in Hz to fractional MIDI note number (12-TET, A4=440).
-/// Inverse of `midi_to_hz`; callers round/clamp as needed.
+/// Convert MIDI note number to frequency in Hz (12-TET, A=`A4_HZ`).
+pub fn midi_to_hz(note: u8) -> f32 {
+    midi_to_hz_f32(note as f32)
+}
+
+/// Audible-range frequency bounds.  20 Hz is the conventional lower
+/// edge of human hearing (well above DC, below the lowest pitched
+/// content); 20 kHz is the upper edge.  Used together as the clamp
+/// range for log-spectrum displays, EQ band-frequency sliders, and
+/// resampler-side cutoff guards where the full audible band is the
+/// natural ceiling rather than the running sample-rate Nyquist.
+pub const AUDIBLE_HZ_MIN: f32 = 20.0;
+pub const AUDIBLE_HZ_MAX: f32 = 20_000.0;
+
+/// Fraction of the sample rate that filters use as a safe upper bound.
+/// True Nyquist is `sr / 2`; pulling back to 90 % of that (= 0.45 · sr)
+/// gives the SVF / EQ / band-split coefficients headroom against the
+/// trig identities going degenerate at the Nyquist limit and the
+/// resonance peak blowing up.  Empirically chosen — every filter in
+/// the codebase agreed on the same factor before this constant existed.
+pub const NYQUIST_GUARD_FACTOR: f32 = 0.45;
+
+/// Upper-bound frequency for filter clamps: 90 % of Nyquist.  Wraps
+/// the `sr * NYQUIST_GUARD_FACTOR` idiom that recurred at 18 call
+/// sites so changing the safety margin is a one-line edit.
+#[inline]
+pub fn nyquist_guard(sr: f32) -> f32 {
+    sr * NYQUIST_GUARD_FACTOR
+}
+
+/// FX-bypass threshold for wet/dry mix knobs.  Below this the wet
+/// path computation is skipped and `process` returns the dry input
+/// unchanged — the historical "if `mix < 0.001`" early-out idiom
+/// repeated across every FX module.  Saves the wet-path work when
+/// the user has the knob at zero and avoids tiny denormal contributions
+/// at very low mix settings.  ≈ −60 dB below unity, well under audibility.
+pub const MIX_BYPASS_THRESHOLD: f32 = 0.001;
+
+/// Minimum / maximum pulse-width (duty cycle) for square / pulse
+/// oscillators.  Clamping the duty to `[5 %, 95 %]` keeps the band-
+/// limited PWM math well-behaved — at exactly 0 % or 100 % the
+/// pulse collapses to silence (no edge transitions at all) and the
+/// PolyBLEP correction terms can divide by tiny numbers near the
+/// extremes.  Same range used by every PWM-capable voice
+/// (bass303 / chiptune / hoover) so changing it would require
+/// touching all of them at once.
+pub const PWM_MIN: f32 = 0.05;
+pub const PWM_MAX: f32 = 0.95;
+
+/// Floor for ADSR / glide stage times in seconds.  0.5 ms ≈ 24
+/// samples at 48 kHz — below this the [`one_pole_coef`] curve
+/// effectively becomes a one-sample snap, and `time_s = 0` divides
+/// by zero in the formula.  Voice envelopes clamp `attack`/`decay`/
+/// `release` against this floor so an "instant" knob still produces
+/// a sane micro-ramp rather than a click.
+pub const ADSR_TIME_MIN_S: f32 = 0.0005;
+
+/// One-pole exponential approach coefficient: per-sample multiplier
+/// that turns a value into an exponential decay toward a target over
+/// `time_s` seconds at sample rate `sr`.
+///
+/// Standard form: `coef = exp(-1 / (time_s · sr))`.  Used by every
+/// voice envelope (Attack / Decay / Release), portamento glide, and
+/// short transient ramps (spin-up / decay tails).  The state update
+/// is then `value = target + (value - target) * coef` (one-pole IIR).
+///
+/// Caller clamps `time_s` to a positive minimum (typical floors are
+/// 0.5 ms / 1 ms — `time_s = 0` would divide by zero in the formula
+/// and produce `coef = 0`, i.e. snap to target instantly).  The
+/// helper deliberately doesn't impose its own floor so existing
+/// per-voice clamps stay authoritative.
+#[inline]
+pub fn one_pole_coef(time_s: f32, sr: f32) -> f32 {
+    (-1.0 / (time_s * sr)).exp()
+}
+
+/// One-pole low-pass smoothing coefficient `alpha` from a cutoff
+/// frequency.  `alpha = 1 − exp(−2π · fc / sr)`; the per-sample
+/// state update is `y = y + alpha · (x − y)` (input `x`, state `y`).
+/// Distinct from [`one_pole_coef`] which expresses the same filter
+/// in terms of a time-constant — same family, different
+/// parametrisation.  Used by the conv-reverb damping LP, the vocal
+/// formant LP, and the click-suppression LP on the modal / pluck /
+/// noise voices.
+#[inline]
+pub fn one_pole_lp_alpha(fc: f32, sr: f32) -> f32 {
+    1.0 - (-std::f32::consts::TAU * fc / sr).exp()
+}
+
+/// Convert decibels to a linear amplitude / power-ratio multiplier
+/// via `10^(dB/20)`.  At 0 dB returns 1.0; +6 dB ≈ 2×, −6 dB ≈ 0.5×.
+/// Used by every gain stage that takes a dB input — region-volume
+/// in the SF2 path, the limiter / compressor threshold mapping, the
+/// MS-master gain knob, and the analysis-side magnitude conversion.
+#[inline]
+pub fn db_to_lin(db: f32) -> f32 {
+    10.0_f32.powf(db / 20.0)
+}
+
+/// Convert a linear amplitude into decibels via `20 · log10(lin)`.
+/// Inverse of [`db_to_lin`].  Caller is responsible for flooring
+/// the input (or the output) — at `lin = 0` this returns `-inf`,
+/// and the call sites differ on what floor / clamp they want
+/// (typically `.max(1e-9)` on the input side or `.max(-96.0)` on
+/// the output side, depending on whether the dB value or the linear
+/// value is the meaningful unit downstream).
+#[inline]
+pub fn lin_to_db(lin: f32) -> f32 {
+    20.0 * lin.log10()
+}
+
+/// Convert frequency in Hz to fractional MIDI note number (12-TET,
+/// A=`A4_HZ`).  Inverse of `midi_to_hz_f32`; callers round/clamp as
+/// needed.
 pub fn hz_to_midi(hz: f32) -> f32 {
-    69.0 + 12.0 * (hz / 440.0).log2()
+    A4_MIDI + 12.0 * (hz / A4_HZ).log2()
 }
 
 /// Tuning system used by `midi_to_hz_tuned`.  The integer discriminants

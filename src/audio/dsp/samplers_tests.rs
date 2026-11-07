@@ -1,4 +1,5 @@
 use super::*;
+use crate::audio::dsp::params::MAX_AMEN_SLICES;
 
 /// Build a ramp sample [0, 1, 2, …, n-1] as f32 so the read position
 /// is recoverable from each output value.
@@ -6,15 +7,15 @@ fn ramp_sample(n: usize) -> Arc<Vec<f32>> {
     Arc::new((0..n).map(|i| i as f32).collect())
 }
 
-fn nan16() -> [f32; 16] {
-    [f32::NAN; 16]
+fn nan16() -> [f32; MAX_AMEN_SLICES] {
+    [f32::NAN; MAX_AMEN_SLICES]
 }
 
 /// Per-slice reverse-override sentinel: every slot at `-1` means
 /// "inherit the global `reverse` flag", which preserves the legacy
 /// behaviour the existing trigger tests assert.
-fn none16() -> [i8; 16] {
-    [-1_i8; 16]
+fn none16() -> [i8; MAX_AMEN_SLICES] {
+    [-1_i8; MAX_AMEN_SLICES]
 }
 
 fn render(voice: &mut AmenVoice, n: usize) -> Vec<f32> {
@@ -30,6 +31,51 @@ fn trigger_whole_plays_full_sample_forward() {
     // Reads 0..7 with linear interp; last sample stops because
     // idx+1 hits sample length.  First five should be 0..4 exactly.
     assert_eq!(&out[..5], &[0.0, 1.0, 2.0, 3.0, 4.0]);
+}
+
+/// Simulates the sequencer's multi-step trigger pattern: with the
+/// default step.slice = 0, the sequencer maps step N to effective_slice
+/// = vstep + 1, so a 4-step pass with slice_count=4 should land on
+/// slices 0, 1, 2, 3 (not stuck on the last one).  Reproduces the
+/// shape of the user-reported "only loops the last fragment" bug.
+#[test]
+fn sequencer_pass_visits_every_slice() {
+    let mut v = AmenVoice::new();
+    v.load(ramp_sample(16)); // 4 slices × 4 samples
+    let slice_count = 4u8;
+    let mut first_samples = Vec::new();
+    for vstep in 0u8..slice_count {
+        // Mirror sequencer/mod.rs: effective_slice = vstep + 1 when
+        // step.slice == 0 (the default for a freshly-active step).
+        let effective_slice = vstep + 1;
+        v.trigger(
+            effective_slice,
+            slice_count,
+            0.0,
+            1.0,
+            false,
+            1.0,
+            0,
+            &nan16(),
+            &nan16(),
+            &nan16(),
+            &none16(),
+            false,
+            false,
+            136.0,
+            136.0,
+        );
+        // Render one sample to capture the slice's first read; the
+        // ramp buffer makes that first read equal to the slice start.
+        first_samples.push(v.process(0.0, 1.0, false));
+    }
+    // Each slice starts at vstep × 4 in the ramp, so first_samples
+    // should be [0, 4, 8, 12] — proving every slice gets its turn.
+    assert_eq!(
+        first_samples,
+        vec![0.0, 4.0, 8.0, 12.0],
+        "sequencer pass should visit every slice in order"
+    );
 }
 
 #[test]

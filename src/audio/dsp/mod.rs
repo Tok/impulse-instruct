@@ -1,61 +1,143 @@
 // ─── audio/dsp/mod.rs ── Pure DSP synthesis, no allocations in process_block()
 
+pub mod additive;
 pub mod an1x;
-mod bass303;
+pub mod bass303;
+pub mod chiptune;
+pub mod conv_reverb;
 mod dsp_util;
+pub mod fm_ops;
+pub mod formant_shifter;
 pub mod fx;
+pub mod fx_deesser;
+pub mod fx_djfilter;
+pub mod fx_extras;
+pub mod fx_freq_shift;
+pub mod fx_glitch;
+pub mod fx_grain_delay;
+pub mod fx_iso_eq;
 pub mod fx_math;
+pub mod fx_mb_comp;
+pub mod fx_plate;
+pub mod fx_resbank;
+pub mod fx_sidechain;
+pub mod fx_spectral_gate;
 mod fx_step;
+pub mod fx_tape_echo;
+pub mod fx_trance_gate;
+pub mod fx_tremolo;
+pub mod fx_vibrato;
+pub mod fx_vinyl;
+pub mod fx_wavefolder;
 pub mod gabber_kick;
 pub mod granular_voice;
+mod lfo_target_opcode;
 pub mod mod_apply;
+mod mod_compile;
+pub mod modal;
+pub mod ms_master;
+pub mod param_eq;
 mod params;
 mod params_from;
+mod params_utils;
+pub mod pendulum;
+pub mod pitch_shift;
+pub mod pluck;
+mod process_block;
+mod process_block_util;
 mod rev_tap;
+pub mod sample_instrument;
+pub mod sample_instrument_modulation;
 pub mod samplers;
+pub mod theremin;
+mod trigger_handler;
+pub mod vocal;
 pub mod voices;
+pub mod wavetable;
+use additive::AdditiveVoice;
 use an1x::An1xVoice;
 use bass303::Bass303;
+use chiptune::ChiptuneVoice;
+use conv_reverb::ConvReverb;
 use dsp_util::*;
-pub use dsp_util::{TuningSystem, hz_to_midi, midi_to_hz, midi_to_hz_tuned};
-use fx::*;
-use fx_math::{
-    free_eg_value_at, gated_reverb_envelope_step, lfo_value_at, sidechain_duck,
-    sidechain_envelope_step,
+pub use dsp_util::{
+    ADSR_TIME_MIN_S, ATTACK_HANDOVER_VALUE, AUDIBLE_HZ_MAX, AUDIBLE_HZ_MIN, MIX_BYPASS_THRESHOLD,
+    NYQUIST_GUARD_FACTOR, PWM_MAX, PWM_MIN, RELEASE_OFF_VALUE, SUSTAIN_REACH_THRESHOLD,
+    TuningSystem, db_to_lin, hz_to_midi, lin_to_db, midi_to_hz, midi_to_hz_f32, midi_to_hz_tuned,
+    nyquist_guard, one_pole_coef, one_pole_lp_alpha,
 };
+use fm_ops::FmOpsVoice;
+use fx::*;
+use fx_djfilter::DjFilter;
+use fx_extras::*;
+use fx_freq_shift::FreqShift;
+use fx_glitch::*;
+use modal::ModalVoice;
+use vocal::VocalVoice;
+// fx_math symbols (free_eg_value_at, lfo_value_at, sidechain_duck,
+// sidechain_envelope_step, gated_reverb_envelope_step) are only used
+// inside the extracted `process_block.rs`; pulled in there directly.
+use fx_deesser::DeEsserFx;
+use fx_grain_delay::GrainDelayFx;
+use fx_iso_eq::IsoEqFx;
+use fx_mb_comp::MultibandCompFx;
+use fx_plate::PlateFx;
+use fx_resbank::ResBankFx;
+use fx_sidechain::{Gate, Vocoder};
+use fx_spectral_gate::SpectralGateFx;
+use fx_tape_echo::TapeEchoFx;
+use fx_trance_gate::TranceGateFx;
+use fx_tremolo::TremoloFx;
+use fx_vibrato::VibratoFx;
+use fx_vinyl::VinylFx;
+use fx_wavefolder::WaveFolderFx;
 use gabber_kick::GabberKick;
 use granular_voice::GranularVoice;
-use mod_apply::apply_mod_target;
-pub use params::{AudioParams, MAX_MOD_ROUTES, compile_mod_routes, lfo_target_to_u8};
+pub use lfo_target_opcode::lfo_target_to_u8;
+pub use mod_compile::{
+    compile_comparator_params, compile_crossfader_params, compile_function_gen_params,
+    compile_logic_gate_params, compile_math_params, compile_mod_routes, compile_quantizer_params,
+    compile_sample_hold_params, compile_slew_params, compile_trigger_div_params,
+};
+use ms_master::MsMaster;
+use param_eq::ParamEq;
+pub use params::{
+    AudioParams, MAX_AMEN_SLICES, MAX_MOD_ROUTES, MOD_BUF_COMPARATOR_BASE, MOD_BUF_CROSSFADER_BASE,
+    MOD_BUF_CV_SEQ_BASE, MOD_BUF_FUNCTION_GEN_BASE, MOD_BUF_LFO_BASE, MOD_BUF_LOGIC_GATE_BASE,
+    MOD_BUF_MATH_BASE, MOD_BUF_QUANTIZER_BASE, MOD_BUF_SAMPLE_HOLD_BASE, MOD_BUF_SIZE,
+    MOD_BUF_SLEW_BASE, MOD_BUF_TRIGGER_DIV_BASE, MOD_UTIL_SLOTS,
+};
+use pendulum::PendulumVoice;
+use pitch_shift::PitchShift;
+use pluck::PluckVoice;
 pub use rev_tap::{FxDirection, FxRevQuant};
+use sample_instrument::{SampleInstrumentVoice, SfzRegionRuntime};
 use samplers::*;
+use theremin::ThereminVoice;
 use voices::*;
+use wavetable::WavetableVoice;
 
-use crate::sequencer::TriggerEvent;
-use crate::state::{DrumVoice, FX_STEP_COUNT, FxPlan, FxStep, ModuleKind};
+use crate::state::{FX_STEP_COUNT, FxPlan, FxStep};
 
 use rev_tap::REV_BUF_LEN;
 
-/// Max FX steps in any one chain snapshot — sized to the union of every
-/// voice's chain + the global chain.  Sends beyond this are silently
-/// truncated at snap time (shouldn't happen with the current FX count).
-const MAX_CHAIN: usize = 16;
-/// Max parallel sends per voice.  Three covers "dry + two distinct FX
-/// sends" (classic reverb + delay split) with headroom for a third
-/// colour chain.  Cables beyond this count are truncated at snap time.
-const MAX_SENDS: usize = 3;
+/// Max FX steps per chain snapshot — sized to the union of every voice's
+/// chain + the global chain.  Truncated at snap time on overflow.
+pub(super) const MAX_CHAIN: usize = 16;
+/// Max parallel sends per voice.  Three = dry + reverb + delay-style
+/// split, with headroom for a third colour chain.
+pub(super) const MAX_SENDS: usize = 3;
 
 /// Stack-friendly per-voice send snapshot — mirrors `FxPlan.voice_routes`
-/// on the audio thread without any HashMap / Vec touches inside the
-/// frame loop.  Each of the `count` active sends has its own chain
-/// (up to `MAX_CHAIN` FxSteps) and per-send gain.
+/// on the audio thread without HashMap / Vec touches in the frame loop.
 #[derive(Clone, Copy)]
-struct VoiceSendsSnap {
-    chains: [[FxStep; MAX_CHAIN]; MAX_SENDS],
-    chain_lens: [usize; MAX_SENDS],
-    gains: [f32; MAX_SENDS],
-    count: usize,
+pub(super) struct VoiceSendsSnap {
+    pub(super) chains: [[FxStep; MAX_CHAIN]; MAX_SENDS],
+    pub(super) chain_lens: [usize; MAX_SENDS],
+    pub(super) gains: [f32; MAX_SENDS],
+    pub(super) count: usize,
 }
+// `SidechainSnap` + MAX_SIDECHAIN now live in `fx_sidechain.rs`.
 
 // ─── Full DSP state ───────────────────────────────────────────────────────────
 
@@ -78,9 +160,59 @@ pub struct DspState {
     gabber_kick: GabberKick,
     // FX
     reverb: Reverb,
+    conv_reverb: ConvReverb,
+    param_eq: ParamEq,
+    pitch_shift: PitchShift,
+    ms_master: MsMaster,
     delay: DelayLine,
     chorus: Chorus,
     phaser: Phaser,
+    flanger: Flanger,
+    limiter: Limiter,
+    svf: Svf,
+    comb: CombRes,
+    tilt: Tilt,
+    transient: Transient,
+    exciter: Exciter,
+    multitap: Multitap,
+    rev_delay: RevDelay,
+    tape_stop: TapeStop,
+    stutter: Stutter,
+    freeze: Freeze,
+    gate: Gate,
+    vocoder: Vocoder,
+    freq_shift: FreqShift,
+    vinyl: VinylFx,
+    dj_filter: DjFilter,
+    tremolo: TremoloFx,
+    vibrato: VibratoFx,
+    iso_eq: IsoEqFx,
+    deesser: DeEsserFx,
+    resbank: ResBankFx,
+    tape_echo: TapeEchoFx,
+    mb_comp: MultibandCompFx,
+    grain_delay: GrainDelayFx,
+    spectral_gate: SpectralGateFx,
+    plate: PlateFx,
+    trance_gate: TranceGateFx,
+    wavefolder: WaveFolderFx,
+    /// Per-voice peak-decay envelope state — one slot per
+    /// `VoiceMeterSlot`.  Updated every sample inside `process_block`
+    /// from the per-voice bus signals; published once per audio
+    /// callback to `voice_meters` for the UI to read.
+    voice_envs: [f32; crate::audio::voice_meters::VOICE_METER_SLOTS],
+    /// Shared atomic publish target for `voice_envs`.  Wrapped in
+    /// `Arc` so the UI thread can read without locks.
+    pub(crate) voice_meters: std::sync::Arc<crate::audio::voice_meters::VoiceLevels>,
+    /// Momentary gain-reduction envelope (linear gain ratio, 1.0 =
+    /// no reduction).  Audio thread updates inside `apply_fx_chain`
+    /// whenever a dynamics FX runs (Compressor / Limiter /
+    /// MultibandComp); decays toward 1.0 with a ~200 ms release so a
+    /// peak attenuation reads cleanly even at the UI's 60 Hz sample
+    /// rate.  Published once per audio callback via `gr_levels`.
+    pub(crate) gr_env: f32,
+    /// Shared atomic publish target for `gr_env`.
+    pub(crate) gr_levels: std::sync::Arc<crate::audio::gr_levels::GrLevels>,
     bitcrush_held: f32,
     bitcrush_counter: u32,
     // FX state
@@ -90,13 +222,45 @@ pub struct DspState {
     ring_mod_phase: f32,
     eq: EqBands,
     noise_voice: NoiseVoice,
+    theremin: ThereminVoice,
+    pendulum: PendulumVoice,
+    fm_ops: FmOpsVoice,
+    additive: AdditiveVoice,
+    modal: ModalVoice,
+    chiptune: ChiptuneVoice,
+    vocal: VocalVoice,
     granular: GranularVoice,
     hoover: HooverVoice,
+    pluck: PluckVoice,
+    wavetable: WavetableVoice,
+    sample_instrument: SampleInstrumentVoice,
     an1x: An1xVoice,
     amen: AmenVoice,
     // LFO state
     lfo_phases: [f32; 4],
     lfo_sh_held: [f32; 4],
+    /// Cached Slew utility output value per slot.  Tracks the
+    /// smoothed target across blocks so the rise / fall envelope
+    /// is continuous rather than restarting at each callback.
+    slew_state: [f32; crate::state::SLEW_SLOTS],
+    /// Cached Sample-and-hold latch per slot.
+    sample_hold_state: [f32; crate::state::SAMPLE_HOLD_SLOTS],
+    /// TriggerDiv per-slot edge counter — increments on each rising
+    /// edge of the input.  Output fires when `count % ratio == 0`.
+    trigger_div_count: [u32; crate::state::TRIGGER_DIV_SLOTS],
+    /// TriggerDiv previous-input cache for rising-edge detection.
+    trigger_div_prev: [f32; crate::state::TRIGGER_DIV_SLOTS],
+    /// FunctionGen per-slot envelope phase 0..1 within the active
+    /// segment.  Reset on each rising edge.
+    function_gen_phase: [f32; crate::state::FUNCTION_GEN_SLOTS],
+    /// FunctionGen per-slot envelope state — 0 = idle (output 0),
+    /// 1 = attack (rising 0→1), 2 = release (falling 1→0).
+    function_gen_state: [u8; crate::state::FUNCTION_GEN_SLOTS],
+    /// FunctionGen previous-input cache for rising-edge detection.
+    function_gen_prev: [f32; crate::state::FUNCTION_GEN_SLOTS],
+    /// Last sequencer step seen by `process_block`.  Used by S&H
+    /// to detect step transitions (the "clock edge").
+    prev_seq_step: u32,
     lfo_noise: NoiseGen,
     free_eg_phase: f32, // 0..1 through the 8-step EG period
     free_eg_done: bool, // true after one-shot completes
@@ -146,7 +310,33 @@ pub struct DspState {
     /// step is inactive.
     fx_pan_phase: f32,
     fx_pan_side: f32,
+    /// FxWiden master-stage latch.  The chain step is a passthrough
+    /// that flips this true with the latest knob amounts; the master
+    /// stage reads + applies them, then resets `fx_widen_active` for
+    /// the next sample.  Same idiom as `fx_pan_side`.  Haas delay buf
+    /// is a small ring on the L channel — sized to MAX_HAAS_SAMPLES at
+    /// 48 kHz × 30 ms × headroom.
+    fx_widen_active: bool,
+    fx_widen_haas_amt: f32,
+    fx_widen_side_amt: f32,
+    fx_widen_mix_amt: f32,
+    fx_widen_haas_buf: Vec<f32>,
+    fx_widen_haas_pos: usize,
+    /// Mid/side `FxParamEq` cascades — instantiated once, used only
+    /// when `param_eq_ms_mode` is active and the chain's ParamEq step
+    /// runs.  When idle, they stay zero-state and don't drift; their
+    /// state initialises lazily on first use.  The chain ParamEq step
+    /// is a passthrough in M/S mode so the master gets the dry signal
+    /// to decode.
+    param_eq_mid: ParamEq,
+    param_eq_side: ParamEq,
+    param_eq_ms_active: bool,
 }
+
+/// Maximum Haas delay length in samples — 48 kHz × 50 ms (headroom
+/// past the user-facing 0..30 ms range).  Heap-allocated once at
+/// `DspState::new` so per-block paths stay allocation-free.
+pub(super) const FX_WIDEN_HAAS_MAX_SAMPLES: usize = 2400;
 
 impl DspState {
     pub fn new(
@@ -154,6 +344,8 @@ impl DspState {
         params: AudioParams,
         fx_plan: FxPlan,
         tts_consumer: rtrb::Consumer<f32>,
+        voice_meters: std::sync::Arc<crate::audio::voice_meters::VoiceLevels>,
+        gr_levels: std::sync::Arc<crate::audio::gr_levels::GrLevels>,
     ) -> Self {
         let mut p = params;
         p.sample_rate = sample_rate;
@@ -174,9 +366,46 @@ impl DspState {
             rim909: Snare::new(0xffff),
             gabber_kick: GabberKick::new(0xab12),
             reverb: Reverb::new(),
+            conv_reverb: ConvReverb::new(),
+            param_eq: ParamEq::new(),
+            pitch_shift: PitchShift::new(),
+            ms_master: MsMaster::new(),
             delay: DelayLine::new(),
             chorus: Chorus::new(),
             phaser: Phaser::new(),
+            flanger: Flanger::new(),
+            limiter: Limiter::new(),
+            svf: Svf::new(),
+            comb: CombRes::new(),
+            tilt: Tilt::new(sample_rate),
+            transient: Transient::new(),
+            exciter: Exciter::new(),
+            multitap: Multitap::new(),
+            rev_delay: RevDelay::new(),
+            tape_stop: TapeStop::new(),
+            stutter: Stutter::new(),
+            freeze: Freeze::new(),
+            gate: Gate::new(),
+            vocoder: Vocoder::new(sample_rate),
+            freq_shift: FreqShift::new(),
+            vinyl: VinylFx::new(sample_rate),
+            dj_filter: DjFilter::new(),
+            tremolo: TremoloFx::new(),
+            vibrato: VibratoFx::new(),
+            iso_eq: IsoEqFx::new(),
+            deesser: DeEsserFx::new(),
+            resbank: ResBankFx::new(),
+            tape_echo: TapeEchoFx::new(),
+            mb_comp: MultibandCompFx::new(),
+            grain_delay: GrainDelayFx::new(),
+            spectral_gate: SpectralGateFx::new(),
+            plate: PlateFx::new(sample_rate),
+            trance_gate: TranceGateFx::new(),
+            wavefolder: WaveFolderFx::new(),
+            voice_envs: [0.0; crate::audio::voice_meters::VOICE_METER_SLOTS],
+            voice_meters,
+            gr_env: 1.0,
+            gr_levels,
             compressor: Compressor::new(),
             tape_sat: TapeSat::new(),
             autotune: Autotune::new(),
@@ -185,12 +414,30 @@ impl DspState {
             bitcrush_held: 0.0,
             bitcrush_counter: 0,
             noise_voice: NoiseVoice::new(0x4015_EB3D),
+            theremin: ThereminVoice::new(),
+            pendulum: PendulumVoice::new(),
+            fm_ops: FmOpsVoice::new(),
+            additive: AdditiveVoice::new(),
+            modal: ModalVoice::new(),
+            chiptune: ChiptuneVoice::new(),
+            vocal: VocalVoice::new(),
             granular: GranularVoice::new(0xBEEF_CAFE),
             hoover: HooverVoice::new(),
+            pluck: PluckVoice::new(),
+            wavetable: WavetableVoice::new(),
+            sample_instrument: SampleInstrumentVoice::new(),
             an1x: An1xVoice::new(),
             amen: AmenVoice::new(),
             lfo_phases: [0.0; 4],
             lfo_sh_held: [0.0; 4],
+            slew_state: [0.0; crate::state::SLEW_SLOTS],
+            sample_hold_state: [0.0; crate::state::SAMPLE_HOLD_SLOTS],
+            trigger_div_count: [0; crate::state::TRIGGER_DIV_SLOTS],
+            trigger_div_prev: [0.0; crate::state::TRIGGER_DIV_SLOTS],
+            function_gen_phase: [0.0; crate::state::FUNCTION_GEN_SLOTS],
+            function_gen_state: [0; crate::state::FUNCTION_GEN_SLOTS],
+            function_gen_prev: [0.0; crate::state::FUNCTION_GEN_SLOTS],
+            prev_seq_step: u32::MAX,
             lfo_noise: NoiseGen::new(0xCAFE_BABE),
             free_eg_phase: 0.0,
             free_eg_done: false,
@@ -217,6 +464,15 @@ impl DspState {
             duck_release: 1.0 - (-2.0_f32 / sample_rate).exp(),
             fx_pan_phase: 0.0,
             fx_pan_side: 0.0,
+            fx_widen_active: false,
+            fx_widen_haas_amt: 0.4,
+            fx_widen_side_amt: 0.0,
+            fx_widen_mix_amt: 0.0,
+            fx_widen_haas_buf: vec![0.0; FX_WIDEN_HAAS_MAX_SAMPLES],
+            fx_widen_haas_pos: 0,
+            param_eq_mid: ParamEq::new(),
+            param_eq_side: ParamEq::new(),
+            param_eq_ms_active: false,
         }
     }
 
@@ -240,642 +496,54 @@ impl DspState {
         self.granular.load(data);
     }
 
-    pub fn handle_trigger(&mut self, event: &TriggerEvent) {
-        use crate::sequencer::TriggerEvent::*;
-        match event {
-            DrumTrigger {
-                voice,
-                velocity,
-                slice,
-            } => {
-                let in_rack = match voice {
-                    DrumVoice::Kick808
-                    | DrumVoice::Snare808
-                    | DrumVoice::HihatClosed808
-                    | DrumVoice::HihatOpen808
-                    | DrumVoice::TomHi808
-                    | DrumVoice::TomMid808
-                    | DrumVoice::TomLo808 => self.params.rack_drums808,
-                    DrumVoice::Kick909
-                    | DrumVoice::Snare909
-                    | DrumVoice::HihatClosed909
-                    | DrumVoice::HihatOpen909
-                    | DrumVoice::Clap909
-                    | DrumVoice::Rim909 => self.params.rack_drums909,
-                    DrumVoice::Amen => self.params.rack_amen,
-                    DrumVoice::GabberKick => self.params.rack_gabber_kick,
-                };
-                if !in_rack {
-                    return;
-                }
-                self.drum_velocity[voices::drum_voice_idx(voice)] = velocity.clamp(0.0, 1.0);
-                match voice {
-                    DrumVoice::Kick808 => self.kick808.trigger(),
-                    DrumVoice::Snare808 => self.snare808.trigger(),
-                    DrumVoice::HihatClosed808 => self.hihat_closed808.trigger(),
-                    DrumVoice::HihatOpen808 => self.hihat_open808.trigger(),
-                    DrumVoice::TomHi808 => self.tom_hi808.trigger(),
-                    DrumVoice::TomMid808 => self.tom_mid808.trigger(),
-                    DrumVoice::TomLo808 => self.tom_lo808.trigger(),
-                    DrumVoice::Kick909 => self.kick909.trigger(),
-                    DrumVoice::Snare909 => self.snare909.trigger(),
-                    DrumVoice::HihatClosed909 => self.hihat_closed909.trigger(),
-                    DrumVoice::HihatOpen909 => self.hihat_open909.trigger(),
-                    DrumVoice::Clap909 => self.clap909.trigger(),
-                    DrumVoice::Rim909 => self.rim909.trigger(),
-                    DrumVoice::Amen => self.amen.trigger(
-                        *slice,
-                        self.params.amen_slice_count,
-                        self.params.amen_start_offset,
-                        self.params.amen_end_offset,
-                        self.params.amen_reverse,
-                        self.params.amen_gate,
-                        self.params.amen_stutter,
-                        &self.params.amen_slice_positions,
-                        &self.params.amen_slice_pitches,
-                        &self.params.amen_slice_volumes,
-                        &self.params.amen_slice_reverses,
-                        self.params.amen_bpm_stretch,
-                        self.params.amen_bpm_stretch_preserve,
-                        self.params.amen_source_bpm,
-                        self.params.sequencer_bpm,
-                    ),
-                    DrumVoice::GabberKick => self.gabber_kick.trigger(),
-                }
-            }
-            BassTrigger {
-                voice_idx,
-                note,
-                accent,
-                slide,
-                gate_samples: _,
-                pan,
-            } => {
-                if self.params.rack_bass && *voice_idx < crate::state::MAX_BASS_VOICES {
-                    self.bass[*voice_idx].trigger(*note, *accent, *slide, self.params.tuning);
-                    self.bass_step_pan = pan.clamp(-1.0, 1.0);
-                }
-            }
-            BassGateOff { voice_idx } => {
-                if self.params.rack_bass && *voice_idx < crate::state::MAX_BASS_VOICES {
-                    self.bass[*voice_idx].gate_off();
-                }
-            }
-            HooverTrigger {
-                note,
-                accent,
-                slide,
-            } => {
-                if self.params.rack_hoover {
-                    self.hoover
-                        .trigger(*note, self.params.tuning, *accent, *slide);
-                }
-            }
-            HooverGateOff => {
-                if self.params.rack_hoover {
-                    self.hoover.gate_off();
-                }
-            }
-            An1xTrigger {
-                note,
-                accent,
-                slide,
-            } => {
-                if self.params.rack_an1x {
-                    self.an1x
-                        .trigger(*note, *accent, *slide, self.sample_rate, &self.params);
-                }
-            }
-            An1xGateOff => {
-                if self.params.rack_an1x {
-                    self.an1x.gate_off();
-                }
-            }
-        }
+    /// Load mono samples (resampled to engine rate) into the wavetable
+    /// voice.  The voice splits the buffer into 2048-sample frames at
+    /// load time so the audio thread reads frames without further
+    /// allocation.
+    pub fn load_wavetable(&mut self, data: std::sync::Arc<Vec<f32>>) {
+        self.wavetable.load(data);
     }
 
-    /// Process one buffer — pure computation, no I/O, no allocation.
-    pub fn process_block(&mut self, output: &mut [f32], channels: usize) {
-        let p_base = self.params;
-        let sr = self.sample_rate;
-        let block_size = output.len() / channels.max(1);
-
-        // Phase reset: when sequencer transitions from stopped to running, reset all LFO phases
-        if p_base.sequencer_running && !self.prev_running {
-            self.lfo_phases = [0.0; 4];
-            self.free_eg_phase = 0.0;
-            self.free_eg_done = false;
-        }
-        self.prev_running = p_base.sequencer_running;
-
-        // Advance LFO phases once per block and apply modulation to a working params copy
-        let mut p = p_base;
-        for i in 0..4 {
-            let lp = p_base.lfo[i];
-            // Run this slot if it's directly enabled OR a cable-routed mod
-            // sources from it — otherwise nothing depends on its phase.
-            let has_route = p_base
-                .mod_routes
-                .iter()
-                .take(p_base.mod_route_count as usize)
-                .any(|r| r.lfo_slot as usize == i);
-            if !lp.enabled && !has_route {
-                continue;
-            }
-            let rate_hz = 0.01 + lp.rate * 19.99;
-            let phase_inc = rate_hz * (block_size as f32 / sr);
-            let old_phase = self.lfo_phases[i];
-            self.lfo_phases[i] = (old_phase + phase_inc) % 1.0;
-            let wrapped = self.lfo_phases[i] < old_phase; // true when phase wrapped
-
-            let phase = (self.lfo_phases[i] + lp.phase_offset) % 1.0;
-            // S&H re-latches on each phase wrap; lfo_value_at itself is
-            // pure and just looks up the held value, so the latch lives here.
-            if lp.waveform == crate::state::LfoWaveform::SampleAndHold && wrapped {
-                self.lfo_sh_held[i] = self.lfo_noise.next();
-            }
-            let lfo_val = lfo_value_at(phase, lp.waveform, self.lfo_sh_held[i]);
-
-            // Slot's built-in target only fires when the slot is enabled.
-            // Cable-routed mods always fire — that's the user's intent when
-            // they patched a cable from this slot.
-            if lp.enabled {
-                let mod_val = lfo_val * lp.depth;
-                apply_mod_target(&mut p, lp.target, mod_val);
-            }
-            for r in p_base
-                .mod_routes
-                .iter()
-                .take(p_base.mod_route_count as usize)
-            {
-                if r.lfo_slot as usize == i {
-                    apply_mod_target(&mut p, r.target_u8, lfo_val * r.depth);
-                }
-            }
-        }
-
-        // ── Free EG ───────────────────────────────────────────────────────────
-        if p_base.free_eg_enabled && p_base.free_eg_target != 0 && !self.free_eg_done {
-            // Advance phase by one block
-            let phase_inc = (block_size as f32 / sr) / p_base.free_eg_period.max(0.001);
-            self.free_eg_phase += phase_inc;
-            if self.free_eg_phase >= 1.0 {
-                if p_base.free_eg_loop {
-                    self.free_eg_phase -= 1.0;
-                } else {
-                    self.free_eg_phase = 1.0;
-                    self.free_eg_done = true;
-                }
-            }
-            let mod_val = free_eg_value_at(
-                self.free_eg_phase,
-                &p_base.free_eg_values,
-                p_base.free_eg_depth,
-            );
-            apply_mod_target(&mut p, p_base.free_eg_target, mod_val);
-        }
-
-        if p.master_pitch_st.abs() > 0.001 {
-            p.lfo_pitch_mod_st += p.master_pitch_st;
-        }
-
-        // Sync voice 0's per-voice params with LFO/free-EG modulated values
-        p.bass_voice_params[0].cutoff = p.cutoff;
-        p.bass_voice_params[0].resonance = p.resonance;
-
-        let delay_samples =
-            (p.delay_time * sr * 2.0).clamp(1.0, MAX_DELAY_SAMPLES as f32 - 2.0) as usize;
-
-        // Snapshot FX chains into stack arrays (releases borrow on self.fx_plan).
-        let mut global_chain = [FxStep::Waveshaper; MAX_CHAIN];
-        let mut global_len = 0usize;
-        for (i, &s) in self.fx_plan.steps.iter().enumerate().take(MAX_CHAIN) {
-            global_chain[i] = s;
-            global_len += 1;
-        }
-
-        // Per-voice send snapshot — each voice can drive up to `MAX_SENDS`
-        // parallel FX sub-chains, each with its own wet gain.  All-stack
-        // so the frame loop iterates without touching HashMaps.
-        let snap_sends = |kind: ModuleKind| -> VoiceSendsSnap {
-            let mut out = VoiceSendsSnap {
-                chains: [[FxStep::Waveshaper; MAX_CHAIN]; MAX_SENDS],
-                chain_lens: [0usize; MAX_SENDS],
-                gains: [1.0f32; MAX_SENDS],
-                count: 0,
-            };
-            if let Some(sends) = self.fx_plan.voice_routes.get(&kind) {
-                for (si, send) in sends.iter().enumerate().take(MAX_SENDS) {
-                    for (ci, &step) in send.chain.iter().enumerate().take(MAX_CHAIN) {
-                        out.chains[si][ci] = step;
-                    }
-                    out.chain_lens[si] = send.chain.len().min(MAX_CHAIN);
-                    out.gains[si] = send.gain;
-                    out.count += 1;
-                }
-            }
-            out
-        };
-        let sends_bass = snap_sends(ModuleKind::AcidBass);
-        let sends_808 = snap_sends(ModuleKind::DrumKit808);
-        let sends_909 = snap_sends(ModuleKind::DrumKit909);
-        let sends_hoover = snap_sends(ModuleKind::HooverLead);
-        let sends_an1x = snap_sends(ModuleKind::An1xVoice);
-        let sends_amen = snap_sends(ModuleKind::AmenSampler);
-        let sends_noise = snap_sends(ModuleKind::NoiseVoice);
-        let sends_granular = snap_sends(ModuleKind::GranularTexture);
-        let sends_tts = snap_sends(ModuleKind::NeuTts);
-        let have_voice_routes = !self.fx_plan.voice_routes.is_empty();
-
-        // Snapshot feedback routes into a stack array — the audio thread
-        // consults this every apply_fx_chain call without re-borrowing
-        // self.fx_plan inside the frame loop.
-        const MAX_FEEDBACK: usize = 16;
-        let mut feedback_arr = [crate::state::FeedbackRoute {
-            source: FxStep::Waveshaper,
-            target: FxStep::Waveshaper,
-            gain: 0.0,
-        }; MAX_FEEDBACK];
-        let mut feedback_len = 0usize;
-        for (i, fr) in self
-            .fx_plan
-            .feedback_routes
-            .iter()
-            .enumerate()
-            .take(MAX_FEEDBACK)
-        {
-            feedback_arr[i] = *fr;
-            feedback_len += 1;
-        }
-
-        // Release the immutable borrow on self (via fx_plan) before the mutable frame loop.
-        let _ = snap_sends;
-
-        for frame in output.chunks_mut(channels) {
-            // Mix all voices to mono
-            let bass_out = self
-                .bass
-                .iter_mut()
-                .enumerate()
-                .map(|(i, v)| v.process(&p, &p.bass_voice_params[i]))
-                .sum::<f32>();
-
-            let dv = self.drum_velocity; // copy, not borrow (avoids lifetime conflict with &mut self)
-            let k808 = self.kick808.process(
-                p.kick808_pitch,
-                p.kick808_decay,
-                p.kick808_punch,
-                p.kick808_volume,
-                p.kick808_pitch_env_depth,
-                p.kick808_pitch_env_time,
-                p.kick808_clip,
-                sr,
-            );
-            let s808 = self.snare808.process(
-                p.snare808_tone,
-                p.snare808_snappy,
-                p.snare808_decay,
-                p.snare808_volume,
-                sr,
-            );
-            let hh808c =
-                self.hihat_closed808
-                    .process(p.hihat_closed808_decay, 0.8, p.hihat808_volume, sr);
-            let hh808o =
-                self.hihat_open808
-                    .process(p.hihat_open808_decay, 0.75, p.hihat808_volume, sr);
-            let th808 = self
-                .tom_hi808
-                .process(0.7, 0.4, 0.6, 0.7, 0.5, 0.2, 0.0, sr);
-            let tm808 = self
-                .tom_mid808
-                .process(0.5, 0.45, 0.6, 0.7, 0.5, 0.2, 0.0, sr);
-            let tl808 = self
-                .tom_lo808
-                .process(0.3, 0.5, 0.6, 0.7, 0.5, 0.2, 0.0, sr);
-
-            let k909 = self.kick909.process(
-                p.kick909_pitch,
-                p.kick909_decay,
-                p.kick909_punch,
-                p.kick909_volume,
-                p.kick909_pitch_env_depth,
-                p.kick909_pitch_env_time,
-                p.kick909_clip,
-                sr,
-            );
-            let s909 = self.snare909.process(
-                p.snare909_tone,
-                p.snare909_snappy,
-                p.snare909_decay,
-                p.snare909_volume,
-                sr,
-            );
-            let hh909c =
-                self.hihat_closed909
-                    .process(p.hihat_closed909_decay, 0.85, p.hihat909_volume, sr);
-            let hh909o =
-                self.hihat_open909
-                    .process(p.hihat_open909_decay, 0.8, p.hihat909_volume, sr);
-            let clap = self.clap909.process(p.clap909_decay, p.clap909_volume, sr);
-            let rim = self.rim909.process(0.7, 0.3, 0.15, 0.75, sr);
-            let gk = self.gabber_kick.process(&p, sr);
-            let noise_out = self.noise_voice.process(sr, &p);
-            let hoover_out = if p.hoover_enabled {
-                self.hoover.process(sr, &p)
-            } else {
-                0.0
-            };
-            // Cross-modulation: bass → AN1X pitch (one-sample delay via bass_out)
-            if p.xmod_bass_to_an1x_pitch > 0.001 {
-                p.lfo_pitch_mod_st += bass_out * p.xmod_bass_to_an1x_pitch * 24.0;
-            }
-            // Cross-modulation: noise → bass filter cutoff (for next frame)
-            if p.xmod_noise_to_filter > 0.001 {
-                p.cutoff = (p.cutoff + noise_out * p.xmod_noise_to_filter * 0.5).clamp(0.0, 1.0);
-            }
-            let an1x_out = if p.an1x_enabled {
-                self.an1x.process(sr, &p)
-            } else {
-                0.0
-            };
-            let amen_out = self.amen.process(p.amen_pitch, p.amen_volume, p.amen_loop);
-            let (granular_out, granular_side) = if p.granular_enabled {
-                let (gl, gr) = self.granular.process(
-                    p.granular_volume,
-                    p.granular_density,
-                    p.granular_grain_size,
-                    p.granular_position,
-                    p.granular_position_jitter,
-                    p.granular_pitch_scatter,
-                    sr,
-                );
-                ((gl + gr) * 0.5, (gl - gr) * 0.5)
-            } else {
-                (0.0, 0.0)
-            };
-
-            // Per-voice bus sums (scaled to prevent clipping)
-            let bus_bass = bass_out;
-            let bus_808 = k808 * dv[0]
-                + s808 * dv[1]
-                + hh808c * dv[2]
-                + hh808o * dv[3]
-                + th808 * dv[4]
-                + tm808 * dv[5]
-                + tl808 * dv[6]
-                + gk * dv[14];
-            let bus_909 = k909 * dv[7]
-                + s909 * dv[8]
-                + hh909c * dv[9]
-                + hh909o * dv[10]
-                + clap * dv[11]
-                + rim * dv[12];
-            let bus_hoover = hoover_out;
-            let bus_an1x = an1x_out;
-            let bus_amen = amen_out * dv[13];
-            let bus_noise = noise_out;
-            let bus_granular = granular_out;
-
-            // Sidechain compression: kick ducks bass/pad/hoover/granular
-            let (bus_bass, bus_an1x, bus_hoover, bus_granular) = if p.sidechain_amount > 0.001 {
-                let kick_level = (k808 * dv[0]).abs() + (k909 * dv[7]).abs();
-                let att_ms = 0.1 + p.sidechain_attack * 49.9; // 0.1–50 ms
-                let rel_ms = 10.0 + p.sidechain_release * 490.0; // 10–500 ms
-                self.sidechain_env =
-                    sidechain_envelope_step(self.sidechain_env, kick_level, att_ms, rel_ms, sr);
-                let duck = sidechain_duck(self.sidechain_env, p.sidechain_amount);
-                (
-                    bus_bass * duck,
-                    bus_an1x * duck,
-                    bus_hoover * duck,
-                    bus_granular * duck,
-                )
-            } else {
-                (bus_bass, bus_an1x, bus_hoover, bus_granular)
-            };
-
-            // Gated reverb: detect transient from pre-FX dry signal.
-            // When gate_time > 0, re-open gate on transients; close exponentially.
-            let detection_sum = (bus_bass
-                + bus_808
-                + bus_909
-                + bus_hoover
-                + bus_an1x
-                + bus_amen
-                + bus_noise
-                + bus_granular)
-                * 0.60;
-            self.reverb_gate_env = gated_reverb_envelope_step(
-                self.reverb_gate_env,
-                detection_sum.abs(),
-                p.reverb_gate_time,
-                sr,
-            );
-            let gate_env = self.reverb_gate_env;
-
-            // Route voices through FX chains and sum to output.
-            // Fast path: no voice routes → apply global chain to full dry mix (unchanged behaviour).
-            // Per-voice path: each bus through its own chain, then sum, then global chain.
-            let fb = &feedback_arr[..feedback_len];
-            let synth_out = if !have_voice_routes {
-                let dry = detection_sum; // already scaled 0.60 above
-                self.apply_fx_chain(
-                    dry,
-                    &global_chain[..global_len],
-                    fb,
-                    &p,
-                    delay_samples,
-                    sr,
-                    gate_env,
-                )
-            } else {
-                // Each voice routes through every one of its parallel
-                // sends; the helper sums the FX outputs and returns the
-                // bus signal unchanged when the voice has no sends
-                // (fallback to dry so un-wired voices stay audible).
-                let routed_bass = if sends_bass.count > 0 {
-                    self.route_voice_sends(
-                        bus_bass,
-                        &sends_bass,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_bass
-                };
-                let routed_808 = if sends_808.count > 0 {
-                    self.route_voice_sends(bus_808, &sends_808, fb, &p, delay_samples, sr, gate_env)
-                } else {
-                    bus_808
-                };
-                let routed_909 = if sends_909.count > 0 {
-                    self.route_voice_sends(bus_909, &sends_909, fb, &p, delay_samples, sr, gate_env)
-                } else {
-                    bus_909
-                };
-                let routed_hoover = if sends_hoover.count > 0 {
-                    self.route_voice_sends(
-                        bus_hoover,
-                        &sends_hoover,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_hoover
-                };
-                let routed_an1x = if sends_an1x.count > 0 {
-                    self.route_voice_sends(
-                        bus_an1x,
-                        &sends_an1x,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_an1x
-                };
-                let routed_amen = if sends_amen.count > 0 {
-                    self.route_voice_sends(
-                        bus_amen,
-                        &sends_amen,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_amen
-                };
-                let routed_noise = if sends_noise.count > 0 {
-                    self.route_voice_sends(
-                        bus_noise,
-                        &sends_noise,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_noise
-                };
-                let routed_granular = if sends_granular.count > 0 {
-                    self.route_voice_sends(
-                        bus_granular,
-                        &sends_granular,
-                        fb,
-                        &p,
-                        delay_samples,
-                        sr,
-                        gate_env,
-                    )
-                } else {
-                    bus_granular
-                };
-                let mixed = (routed_bass
-                    + routed_808
-                    + routed_909
-                    + routed_hoover
-                    + routed_an1x
-                    + routed_amen
-                    + routed_noise
-                    + routed_granular)
-                    * 0.60;
-                // Global chain after per-voice mixing
-                self.apply_fx_chain(
-                    mixed,
-                    &global_chain[..global_len],
-                    fb,
-                    &p,
-                    delay_samples,
-                    sr,
-                    gate_env,
-                )
-            };
-
-            // TTS bus: pop one sample, apply TTS voice chain, duck synth and mix.
-            // `tts_voice_volume` scales the bus post-FX — modulatable via
-            // the `NeuTtsVolume` LFO target.  Scaling AFTER FX keeps duck
-            // activity tied to the raw sample stream regardless of gain.
-            let tts_raw = self.tts_consumer.pop().unwrap_or(0.0);
-            let tts_fx = if tts_raw != 0.0 && sends_tts.count > 0 {
-                self.route_voice_sends(tts_raw, &sends_tts, fb, &p, delay_samples, sr, gate_env)
-            } else {
-                tts_raw
-            };
-            let tts_sig = tts_fx * p.tts_voice_volume;
-            // Smooth duck envelope: attenuate synth when TTS active
-            let tts_active = tts_raw != 0.0 || self.tts_consumer.slots() > 0;
-            let duck_target = if tts_active { 0.35_f32 } else { 1.0 };
-            let coeff = if self.tts_duck > duck_target {
-                self.duck_attack
-            } else {
-                self.duck_release
-            };
-            self.tts_duck += (duck_target - self.tts_duck) * coeff;
-
-            let out = ((synth_out * self.tts_duck + tts_sig) * p.master_volume).clamp(-1.0, 1.0);
-
-            // Per-voice pan → side signal (computed before FX borrows self).
-            // Bass pan: per-step override (latched from BassTrigger.pan)
-            // wins when non-zero, otherwise the voice's static pan_303.
-            let bass_pan = if self.bass_step_pan.abs() > 0.0001 {
-                self.bass_step_pan
-            } else {
-                p.pan_303
-            };
-            let pan_side = bus_bass * bass_pan * 0.5
-                + k808 * dv[0] * p.pan_kick808 * 0.5
-                + s808 * dv[1] * p.pan_snare808 * 0.5
-                + (hh808c * dv[2] + hh808o * dv[3]) * p.pan_hihat808 * 0.5
-                + k909 * dv[7] * p.pan_kick909 * 0.5
-                + s909 * dv[8] * p.pan_snare909 * 0.5
-                + (hh909c * dv[9] + hh909o * dv[10]) * p.pan_hihat909 * 0.5
-                + clap * dv[11] * p.pan_clap909 * 0.5
-                + gk * dv[14] * p.gabber_pan * 0.5
-                + hoover_out * p.pan_hoover * 0.5
-                + an1x_out * p.pan_an1x * 0.5
-                + noise_out * p.pan_noise * 0.5;
-            // Decay the Pan FxStep side-contribution when the step
-            // hasn't run this sample, so switching it off stops the
-            // auto-pan cleanly instead of latching the last side value.
-            self.fx_pan_side *= 0.995;
-            let has_stereo = (p.stereo_width - 0.5).abs() > 0.01
-                || granular_side.abs() > 0.001
-                || pan_side.abs() > 0.0001
-                || self.fx_pan_side.abs() > 0.0001;
-            if channels >= 2 && has_stereo {
-                let mid = out;
-                let chorus_side = self.chorus.read_tap(0.4) * 0.3;
-                let w = p.stereo_width * 2.0;
-                let gran_w = if p.granular_enabled {
-                    p.granular_spray
-                } else {
-                    0.0
-                };
-                let side = chorus_side * w + granular_side * gran_w + pan_side + self.fx_pan_side;
-                let left = (mid + side).clamp(-1.0, 1.0);
-                let right = (mid - side).clamp(-1.0, 1.0);
-                frame[0] = left;
-                frame[1] = right;
-                for s in frame.iter_mut().skip(2) {
-                    *s = out;
-                }
-            } else {
-                for s in frame.iter_mut() {
-                    *s = out;
-                }
-            }
-        }
+    /// Load a single mono buffer into the SampleInstrument voice.
+    pub fn load_sample_instrument(&mut self, data: std::sync::Arc<Vec<f32>>) {
+        self.sample_instrument.load(data);
     }
+    /// Switch the SampleInstrument voice to SFZ multisample mode.
+    pub fn load_sample_instrument_sfz(&mut self, regions: Vec<SfzRegionRuntime>) {
+        self.sample_instrument.load_sfz(regions);
+    }
+
+    /// Live count of active voices in the SampleInstrument poly pool
+    /// (0..=POLY_VOICES).  Sampled once per audio callback and surfaced
+    /// to the UI poly-meter via an `AtomicU8`.
+    pub fn sample_instrument_active(&self) -> u8 {
+        self.sample_instrument.active_voice_count() as u8
+    }
+
+    /// Load a new impulse response into the convolution reverb.  Called
+    /// outside the audio callback (via `AudioCommand::LoadImpulseResponse`)
+    /// so allocation/FFT pre-computation in here is fine.  `channels`
+    /// is 1 for mono IRs, 2 for interleaved stereo.  `reversed` stores
+    /// the IR back-to-front for the classic reverse-reverb effect.
+    pub fn load_impulse_response(
+        &mut self,
+        data: std::sync::Arc<Vec<f32>>,
+        channels: u8,
+        reversed: bool,
+    ) {
+        self.conv_reverb.load_ir(data, channels, reversed);
+    }
+
+    /// Drop any loaded impulse response — the wet path falls back to the
+    /// filter-only Phase 1 behaviour.
+    pub fn clear_impulse_response(&mut self) {
+        self.conv_reverb.clear_ir();
+    }
+
+    // `handle_trigger` lives in `trigger_handler.rs` (extracted to
+    // keep this file under the 1000-line cap).
+
+    // `process_block` lives in `process_block.rs` — extracted from
+    // this file so it stays under the 1000-line cap.  Same `impl
+    // DspState` block, just split across two files.
 }

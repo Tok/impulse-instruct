@@ -35,6 +35,18 @@ impl ImpulseApp {
                             gate_samples: 22050,
                             pan: 0.0,
                         }));
+                    // Pitch-mappable granular: live MIDI notes also drive
+                    // the granular base-note transposition so a played
+                    // bird-call corpus tracks the keyboard.
+                    let granular_pitch_map = {
+                        let s = self.state.read();
+                        s.granular.enabled && s.granular.pitch_mappable
+                    };
+                    if granular_pitch_map {
+                        let _ = self
+                            .audio_tx
+                            .push(AudioCommand::Trigger(TriggerEvent::GranularPitch { note }));
+                    }
                     let step = self.state.read().sequencer.current_step;
                     let s = self.state.read().clone();
                     let was_active = s
@@ -53,8 +65,61 @@ impl ImpulseApp {
                             voice_idx: 0,
                         }));
                 }
+                MidiEvent::PitchBend { channel, value } => {
+                    // MPE per-note pitch bend — store on AppState.mpe
+                    // for downstream consumers (API / WS) and route
+                    // pitch bend on the master channel through the
+                    // existing pipeline (none of which exists yet, so
+                    // V1 is just the snapshot).  Channel 0 = master in
+                    // an MPE lower zone; we still capture it.
+                    let mut s = self.state.write();
+                    s.mpe.channel = channel;
+                    s.mpe.pitch_bend = value.clamp(-1.0, 1.0);
+                }
+                MidiEvent::ChannelPressure { channel, value } => {
+                    let mut s = self.state.write();
+                    s.mpe.channel = channel;
+                    s.mpe.pressure = crate::midi::pressure_to_unit(value);
+                }
+                MidiEvent::ControlChange { cc, value, channel }
+                    if cc == 74 && crate::midi::is_mpe_note_channel(channel) =>
+                {
+                    // CC74 on a per-note channel = MPE timbre (Y axis).
+                    // Snapshot to AppState.mpe instead of routing
+                    // through the static cc_to_param_path table so
+                    // MPE controllers don't accidentally wrench the
+                    // bass cutoff knob on every per-note Y wiggle.
+                    let mut s = self.state.write();
+                    s.mpe.channel = channel;
+                    s.mpe.timbre = value as f32 / 127.0;
+                }
                 MidiEvent::ControlChange { cc, value, .. } => {
-                    if let Some((path, scale)) = cc_to_param_path(cc) {
+                    // 1. If a learn-next-CC request is pending, this CC
+                    //    becomes the binding instead of acting on a
+                    //    parameter.  Save and clear; let the next CC
+                    //    of the same number drive the param normally.
+                    if let Some(target) = self.midi_learn_target.take() {
+                        let mut s = self.state.write();
+                        s.ui_prefs.midi_cc_bindings.insert(cc, target.clone());
+                        log::info!("[midi] learned CC{} → {}", cc, target);
+                        self.session_dirty = true;
+                        continue;
+                    }
+                    // 2. User binding wins over the static table.
+                    let user_binding = self
+                        .state
+                        .read()
+                        .ui_prefs
+                        .midi_cc_bindings
+                        .get(&cc)
+                        .cloned();
+                    if let Some(path) = user_binding {
+                        let scaled = value as f32 / 127.0;
+                        let update = super::dot_path_to_json(&path, scaled);
+                        let next = apply_llm_update(self.state.read().clone(), &update, &[]);
+                        *self.state.write() = next;
+                        self.push_audio_params();
+                    } else if let Some((path, scale)) = cc_to_param_path(cc) {
                         let scaled = scale(value);
                         let update = super::dot_path_to_json(path, scaled);
                         let next = apply_llm_update(self.state.read().clone(), &update, &[]);
@@ -83,7 +148,6 @@ impl ImpulseApp {
                         self.push_audio_params();
                     }
                 }
-                _ => {}
             }
         }
     }

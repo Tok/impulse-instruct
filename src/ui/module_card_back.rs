@@ -2,7 +2,7 @@
 // Back-panel card rendering — extracted from module_card.rs to keep that file
 // under the 1000-line limit.
 
-use egui::{Color32, Frame, Margin, Pos2, Rect, Rounding, Sense, Stroke, Vec2};
+use egui::{Color32, CornerRadius, Frame, Margin, Pos2, Rect, Sense, Stroke, Vec2};
 
 use super::module_card::{
     CARD_ROUNDING, CardResponse, PORT_RADIUS, PortPos, TITLE_BAR_H, draw_focus_shine,
@@ -34,10 +34,10 @@ pub fn module_card_back(
         ui.set_min_width(min_w);
     }
 
-    let frame = Frame::none()
+    let frame = Frame::NONE
         .fill(fill)
         .inner_margin(Margin::ZERO)
-        .rounding(Rounding::same(CARD_ROUNDING))
+        .corner_radius(CornerRadius::from(CARD_ROUNDING))
         .stroke(Stroke::new(1.0, Color32::from_gray(38)));
 
     let mut toggle_clicked = false;
@@ -52,8 +52,9 @@ pub fn module_card_back(
             ui.set_max_width(card_w);
             // Publish the card width so the floating mod-overlay can size
             // its wrap width to the actual card it belongs to.
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(egui::Id::new("back_card_w").with(module_id), card_w));
+            ui.ctx().data_mut(|d| {
+                d.insert_temp(egui::Id::unique("back_card_w").with(module_id), card_w)
+            });
             // Match the front panel's grid height
             if let Some(mh) = min_height {
                 ui.set_min_height(mh);
@@ -64,11 +65,11 @@ pub fn module_card_back(
                 ui.allocate_exact_size(Vec2::new(card_w, TITLE_BAR_H), Sense::hover());
             let painter = ui.painter_at(title_rect);
             // Round top corners to match the card frame; bottom stays flat
-            let title_rounding = Rounding {
-                nw: CARD_ROUNDING,
-                ne: CARD_ROUNDING,
-                sw: 0.0,
-                se: 0.0,
+            let title_rounding = CornerRadius {
+                nw: CARD_ROUNDING as u8,
+                ne: CARD_ROUNDING as u8,
+                sw: 0,
+                se: 0,
             };
             painter.rect_filled(title_rect, title_rounding, title_bg);
             painter.line_segment(
@@ -87,7 +88,7 @@ pub fn module_card_back(
             let label = if kind == ModuleKind::LlmAgent {
                 let persona: String = ui
                     .ctx()
-                    .data(|d| d.get_temp(egui::Id::new("agent_persona").with(module_id)))
+                    .data(|d| d.get_temp(egui::Id::unique("agent_persona").with(module_id)))
                     .unwrap_or_default();
                 if persona.is_empty() {
                     kind.label().to_string()
@@ -97,7 +98,7 @@ pub fn module_card_back(
             } else if kind == ModuleKind::LfoModule {
                 let slot: usize = ui
                     .ctx()
-                    .data(|d| d.get_temp(egui::Id::new("lfo_slot").with(module_id)))
+                    .data(|d| d.get_temp(egui::Id::unique("lfo_slot").with(module_id)))
                     .unwrap_or(0);
                 format!("{} #{}", kind.label(), slot + 1)
             } else {
@@ -125,8 +126,11 @@ pub fn module_card_back(
                 let led_center = Pos2::new(title_rect.left() + 9.0, title_rect.center().y);
                 let led_r = 2.6_f32;
                 let led_hit = Rect::from_center_size(led_center, Vec2::splat(10.0));
-                let led_resp =
-                    ui.interact(led_hit, ui.id().with("led").with(module_id), Sense::click());
+                let led_resp = ui.interact(
+                    led_hit,
+                    ui.scope_id().with("led").with(module_id),
+                    Sense::click(),
+                );
                 if led_resp.clicked() {
                     toggle_clicked = true;
                 }
@@ -175,7 +179,7 @@ pub fn module_card_back(
                 Pos2::new(title_rect.left() + 20.0, title_rect.min.y),
                 Pos2::new(title_rect.right() - 30.0, title_rect.max.y),
             );
-            let drag_resp = ui.interact(drag_rect, ui.id().with("title_drag"), Sense::drag());
+            let drag_resp = ui.interact(drag_rect, ui.scope_id().with("title_drag"), Sense::drag());
             title_dragged = drag_resp.dragged();
             title_drag_released = drag_resp.drag_stopped();
             if drag_resp.hovered() || drag_resp.dragged() {
@@ -191,8 +195,11 @@ pub fn module_card_back(
                     Pos2::new(title_rect.right() - 12.0, title_rect.center().y),
                     Vec2::splat(10.0),
                 );
-                let rm_resp =
-                    ui.interact(rm_rect, ui.id().with("rm").with(module_id), Sense::click());
+                let rm_resp = ui.interact(
+                    rm_rect,
+                    ui.scope_id().with("rm").with(module_id),
+                    Sense::click(),
+                );
                 if rm_resp.clicked() {
                     remove_clicked = true;
                 }
@@ -277,7 +284,7 @@ pub fn module_card_back(
                 );
                 ui.interact(
                     Rect::from_center_size(pos, port_size),
-                    ui.id().with(hash),
+                    ui.scope_id().with(hash),
                     Sense::hover(),
                 )
                 .on_hover_text(hover);
@@ -328,7 +335,7 @@ pub fn module_card_back(
                 );
                 ui.interact(
                     Rect::from_center_size(pos, port_size),
-                    ui.id().with(hash),
+                    ui.scope_id().with(hash),
                     Sense::hover(),
                 )
                 .on_hover_text(hover);
@@ -339,7 +346,7 @@ pub fn module_card_back(
                 let cv_label = if kind == ModuleKind::LfoModule {
                     let slot: usize = ui
                         .ctx()
-                        .data(|d| d.get_temp(egui::Id::new("lfo_slot").with(module_id)))
+                        .data(|d| d.get_temp(egui::Id::unique("lfo_slot").with(module_id)))
                         .unwrap_or(0);
                     format!("#{}", slot + 1)
                 } else {
@@ -365,7 +372,7 @@ pub fn module_card_back(
                 if avail_h > 18.0 {
                     let wasd = ui
                         .ctx()
-                        .data(|d| d.get_temp::<bool>(egui::Id::new("wasd_as_arrows")))
+                        .data(|d| d.get_temp::<bool>(egui::Id::unique("wasd_as_arrows")))
                         .unwrap_or(false);
                     let scroll_line = if wasd {
                         "WASD to scroll."

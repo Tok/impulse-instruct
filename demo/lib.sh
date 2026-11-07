@@ -8,15 +8,15 @@ TTS_DIR="${TTS_DIR:-$DEMO_DIR/tts_cache}"
 NARRATION_LIST="${NARRATION_LIST:-$DEMO_DIR/.narration_playlist}"
 XDO="python3 $DEMO_DIR/xdo.py"
 
-# TTS settings — NeuTTS Air for demo narration
-# Setup: ./scripts/setup-neutts.sh
+# TTS settings — Qwen3-TTS for demo narration
+# Setup: ./scripts/download-models.sh tts
 PROJECT_DIR="${DEMO_DIR}/.."
-NEUTTS_PORT="${NEUTTS_PORT:-8770}"
-NEUTTS_URL="http://127.0.0.1:${NEUTTS_PORT}"
-NEUTTS_VENV="${PROJECT_DIR}/.neutts-venv"
-NEUTTS_REF_AUDIO="${NEUTTS_REF_AUDIO:-${PROJECT_DIR}/voices/narrator.wav}"
-NEUTTS_REF_TEXT="${NEUTTS_REF_TEXT:-${PROJECT_DIR}/voices/narrator.txt}"
-NEUTTS_PID=""
+TTS_PORT="${TTS_PORT:-8770}"
+TTS_URL="http://127.0.0.1:${TTS_PORT}"
+TTS_VENV="${PROJECT_DIR}/.tts-venv"
+TTS_REF_AUDIO="${TTS_REF_AUDIO:-${PROJECT_DIR}/voices/narrator.wav}"
+TTS_REF_TEXT="${TTS_REF_TEXT:-${PROJECT_DIR}/voices/narrator.txt}"
+TTS_PID=""
 
 # Window ID — set by record-demo.sh after finding the app
 APP_WINDOW_ID="${APP_WINDOW_ID:-0}"
@@ -113,6 +113,36 @@ api_rack_reset() {
     curl -sf -X POST "$API/api/rack/reset" >/dev/null 2>&1 || true
 }
 
+api_ui_prefs() {
+    # Pin UI preferences from a scenario so demo setup doesn't depend
+    # on whatever the user left in their session.  Only fields present
+    # in the JSON are updated.  Recognised keys include huth_piano /
+    # huth_bar_osc / huth_ring_osc / huth_spectrum, the show_*
+    # visualization toggles, the stream_* event-stream layers, plus
+    # ui_scale / bloom / phosphor numeric fields.
+    # Usage: api_ui_prefs '{"huth_piano": false, "huth_spectrum": true}'
+    curl -sf -X POST "$API/api/ui_prefs" \
+        -H "Content-Type: application/json" \
+        -d "$1" >/dev/null 2>&1 || true
+}
+
+api_midi_import() {
+    # Import a MIDI file into the sequencer as two bass voices.
+    # Usage: api_midi_import /abs/path/to/score.mid
+    #        api_midi_import /abs/path/to/score.mid 8        (force 32nd grid)
+    # Returns JSON summary from the server (bpm, step_division, banks_used,
+    # notes_voice_0, notes_voice_1, was_truncated, picked_tracks).
+    local path="$1"
+    local div="${2:-}"
+    local div_json=""
+    if [ -n "$div" ]; then
+        div_json=", \"step_division\": $div"
+    fi
+    curl -sf -X POST "$API/api/midi/import" \
+        -H "Content-Type: application/json" \
+        -d "{\"path\": \"$path\" $div_json}" 2>/dev/null
+}
+
 api_state_reset() {
     # Full AppState wipe — everything back to defaults (Empty rack preset),
     # preserving only the currently-loaded model path.  Guarantees a blank
@@ -128,6 +158,30 @@ api_set_style() {
     curl -sf -X POST "$API/api/style" \
         -H "Content-Type: application/json" \
         -d "{\"id\": \"$1\"}" >/dev/null 2>&1 || true
+}
+
+api_sample() {
+    # Load a recording (.wav or .sfz) into the SampleInstrument voice.
+    # Usage: api_sample "samples/instruments/SalamanderGrandPiano/Salamander Grand Piano V3.sfz"
+    #        api_sample --random
+    if [ "$1" = "--random" ]; then
+        curl -sf -X POST "$API/api/sample" \
+            -H "Content-Type: application/json" \
+            -d '{"random": true}' >/dev/null 2>&1 || true
+    else
+        # jq handles spaces / quotes / unicode in the path safely.
+        local body
+        if command -v jq >/dev/null 2>&1; then
+            body=$(jq -nc --arg p "$1" '{path:$p}')
+        else
+            local esc
+            esc=$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            body=$(printf '{"path":"%s"}' "$esc")
+        fi
+        curl -sf -X POST "$API/api/sample" \
+            -H "Content-Type: application/json" \
+            -d "$body" >/dev/null 2>&1 || true
+    fi
 }
 
 api_rack_add() {
@@ -167,6 +221,18 @@ api_rack_remove() {
     curl -sf -X POST "$API/api/rack/remove" \
         -H "Content-Type: application/json" \
         -d "{\"id\": $1}" >/dev/null 2>&1 || true
+}
+
+api_rack_enable() {
+    # Toggle a module's enabled flag.  FX modules come in DISABLED
+    # on `add` so they don't click at their default wet mix; call
+    # this to flip them on when the scene wants the effect active.
+    # Usage: api_rack_enable bitcrush true   | api_rack_enable bass false
+    local kind="$1"
+    local on="${2:-true}"
+    curl -sf -X POST "$API/api/rack/enable" \
+        -H "Content-Type: application/json" \
+        -d "{\"kind\": \"$kind\", \"enabled\": $on}" >/dev/null 2>&1 || true
 }
 
 api_preset() {
@@ -222,36 +288,36 @@ wait_for_api() {
     echo "  API is up (took ${waited}s)"
 }
 
-# ─── NeuTTS server lifecycle ──────────────────────────────────────────────────
+# ─── Qwen3-TTS server lifecycle ──────────────────────────────────────────────────
 
-start_neutts_server() {
-    if curl -sf "${NEUTTS_URL}/health" >/dev/null 2>&1; then
-        echo "  NeuTTS server already running on port ${NEUTTS_PORT}"
+start_tts_server() {
+    if curl -sf "${TTS_URL}/health" >/dev/null 2>&1; then
+        echo "  Qwen3-TTS server already running on port ${TTS_PORT}"
         return 0
     fi
-    local python="${NEUTTS_VENV}/bin/python"
+    local python="${TTS_VENV}/bin/python"
     [ -x "$python" ] || python="python3"
-    echo "  Starting NeuTTS server (port ${NEUTTS_PORT})..."
-    "$python" "${PROJECT_DIR}/scripts/neutts-server.py" --port "$NEUTTS_PORT" &
-    NEUTTS_PID=$!
+    echo "  Starting Qwen3-TTS server (port ${TTS_PORT})..."
+    "$python" "${PROJECT_DIR}/scripts/tts-server.py" --port "$TTS_PORT" &
+    TTS_PID=$!
     local waited=0
-    while ! curl -sf "${NEUTTS_URL}/health" >/dev/null 2>&1; do
+    while ! curl -sf "${TTS_URL}/health" >/dev/null 2>&1; do
         sleep 1
         waited=$((waited + 1))
-        if [ "$waited" -ge 30 ]; then
-            echo "  ERROR: NeuTTS server failed to start after 30s" >&2
+        if [ "$waited" -ge 90 ]; then
+            echo "  ERROR: Qwen3-TTS server failed to start after 90s" >&2
             return 1
         fi
     done
-    echo "  NeuTTS server ready (took ${waited}s, PID: $NEUTTS_PID)"
+    echo "  Qwen3-TTS server ready (took ${waited}s, PID: $TTS_PID)"
 }
 
-stop_neutts_server() {
-    if [ -n "$NEUTTS_PID" ]; then
-        kill "$NEUTTS_PID" 2>/dev/null
-        wait "$NEUTTS_PID" 2>/dev/null
-        NEUTTS_PID=""
-        echo "  NeuTTS server stopped"
+stop_tts_server() {
+    if [ -n "$TTS_PID" ]; then
+        kill "$TTS_PID" 2>/dev/null
+        wait "$TTS_PID" 2>/dev/null
+        TTS_PID=""
+        echo "  Qwen3-TTS server stopped"
     fi
 }
 
@@ -259,7 +325,7 @@ stop_neutts_server() {
 
 # Transform subtitle text into a TTS-friendly form.
 #
-# NeuTTS sometimes mispronounces bare acronyms (reads "AI" as the word "eye",
+# Qwen3-TTS sometimes mispronounces bare acronyms (reads "AI" as the word "eye",
 # runs "LFO" together as "elfo"), so we spell them out with dots for the
 # speech pass.  The subtitle keeps the original short form, since that reads
 # more naturally on screen.
@@ -278,9 +344,9 @@ tts_speakable() {
 }
 
 tts_generate() {
-    # Pre-generate a TTS clip using NeuTTS Air server. Returns the wav path.
+    # Pre-generate a TTS clip using Qwen3-TTS server. Returns the wav path.
     # Usage: tts_generate "clip_id" "Text to speak"
-    # Retries up to `TTS_MAX_ATTEMPTS` times (default 10). NeuTTS can:
+    # Retries up to `TTS_MAX_ATTEMPTS` times (default 10). Qwen3-TTS can:
     #   - Stall on the first few warm-up calls
     #   - Occasionally fail on specific phonetic inputs
     #   - Segfault outright, leaving the server dead — we detect that via
@@ -329,15 +395,15 @@ tts_generate() {
     if command -v jq >/dev/null 2>&1; then
         json=$(jq -nc \
             --arg text "$text" \
-            --arg ref_audio "$NEUTTS_REF_AUDIO" \
-            --arg ref_text "$NEUTTS_REF_TEXT" \
+            --arg ref_audio "$TTS_REF_AUDIO" \
+            --arg ref_text "$TTS_REF_TEXT" \
             --arg out "$outfile" \
             '{text:$text, ref_audio:$ref_audio, ref_text:$ref_text, out_path:$out}')
     else
         local esc
         esc=$(printf '%s' "$text" | sed 's/\\/\\\\/g; s/"/\\"/g')
         json=$(printf '{"text":"%s","ref_audio":"%s","ref_text":"%s","out_path":"%s"}' \
-            "$esc" "$NEUTTS_REF_AUDIO" "$NEUTTS_REF_TEXT" "$outfile")
+            "$esc" "$TTS_REF_AUDIO" "$TTS_REF_TEXT" "$outfile")
     fi
     local attempt=0
     local resp_code=""
@@ -346,12 +412,12 @@ tts_generate() {
         rm -f "$outfile"
         resp_code=$(curl -s -w "%{http_code}" \
             --max-time 120 \
-            -X POST "${NEUTTS_URL}/synthesize" \
+            -X POST "${TTS_URL}/synthesize" \
             -H "Content-Type: application/json" \
             --data-binary "$json" \
             -o "$outfile" 2>/dev/null || echo "000")
         if [ -s "$outfile" ]; then
-            # Length sanity-check: NeuTTS occasionally produces a runaway
+            # Length sanity-check: Qwen3-TTS occasionally produces a runaway
             # clip that drones on well past the input text.  A single such
             # clip playing under `say` (blocking) can stall the entire
             # scenario — we saw a 5-word line synthesised as 48 s of
@@ -363,21 +429,21 @@ tts_generate() {
                 ''|*[!0-9.]*) gen_dur="0" ;;
             esac
             if [ "$(printf '%s > %s\n' "$gen_dur" "$max_dur" | bc 2>/dev/null)" = "1" ]; then
-                echo "  WARN: NeuTTS attempt $attempt/$max_attempts produced ${gen_dur}s for ${est}s line (> ${max_dur}s ceiling): $text" >&2
+                echo "  WARN: Qwen3-TTS attempt $attempt/$max_attempts produced ${gen_dur}s for ${est}s line (> ${max_dur}s ceiling): $text" >&2
                 rm -f "$outfile"
             else
                 echo "$outfile"
                 return 0
             fi
         else
-            echo "  WARN: NeuTTS attempt $attempt/$max_attempts failed (HTTP $resp_code) for: $text" >&2
+            echo "  WARN: Qwen3-TTS attempt $attempt/$max_attempts failed (HTTP $resp_code) for: $text" >&2
         fi
         # Check if the server is even alive — if not (crashed, segfaulted,
         # OOM'd), restart it before burning more retries.
-        if ! curl -sf --max-time 3 "${NEUTTS_URL}/health" >/dev/null 2>&1; then
-            echo "  [tts] NeuTTS server unreachable — restarting…" >&2
-            NEUTTS_PID=""
-            start_neutts_server || {
+        if ! curl -sf --max-time 3 "${TTS_URL}/health" >/dev/null 2>&1; then
+            echo "  [tts] Qwen3-TTS server unreachable — restarting…" >&2
+            TTS_PID=""
+            start_tts_server || {
                 echo "  [tts] restart failed, will retry again" >&2
             }
         fi
@@ -388,7 +454,7 @@ tts_generate() {
             sleep 2
         fi
     done
-    echo "  ERROR: NeuTTS synth gave up after $max_attempts attempts for: $text" >&2
+    echo "  ERROR: Qwen3-TTS synth gave up after $max_attempts attempts for: $text" >&2
     rm -f "$outfile"
     echo "$outfile"
     return 1
@@ -986,6 +1052,11 @@ reset_all() {
     # all params. Stronger than reset_rack: use at the top of style scenarios
     # to prevent a prior session's active_style (or any leftover state) from
     # bleeding into the new demo.
+    # Also sweeps any stray background pan-LFO python loops from a
+    # previous (crashed) scenario run — those orphans keep hammering
+    # `/api/params` at 10 Hz until killed, which shows up as clicks
+    # in the audio and `bass_voices (x777)` in the UI log.
+    stop_pan_lfo
     api_state_reset
     api_flip_front
     api_collapse "none"
@@ -1006,9 +1077,29 @@ add_instrument() {
     api_rack_add "$1"
 }
 
+load_sample() {
+    # Load a recording into the SampleInstrument voice.
+    # Usage: load_sample "samples/instruments/.../Foo.sfz"
+    #        load_sample --random
+    api_sample "$1"
+}
+
 add_effect() {
     # Add an effect module.  Usage: add_effect reverb
+    # FX modules come in DISABLED by default so they don't click at
+    # their default wet mix when first added.  Call `enable_fx "$1"`
+    # when the scene wants the effect in-signal.
     api_rack_add "$1"
+}
+
+enable_fx() {
+    # Turn on a previously-added FX module so it processes audio.
+    # Pair with `add_effect` to add-then-reveal: the module appears
+    # in the rack silently, then (potentially after a brief camera
+    # linger) the signal starts flowing through it.
+    # Usage: enable_fx bitcrush           # default: enable
+    #        enable_fx bitcrush false     # explicitly disable
+    api_rack_enable "$1" "${2:-true}"
 }
 
 add_agent() {
@@ -1052,6 +1143,130 @@ stop()  { api_stop; }
 set_bpm() {
     # Force sequencer tempo. Usage: set_bpm 170
     api_params "{\"sequencer\":{\"bpm\":$1}}"
+}
+
+start_opposing_pan_lfo() {
+    # Run a background sine LFO that pans bass voices 0 and 1 in
+    # anti-phase — voice 0 follows sin(2π·rate·t), voice 1 follows the
+    # same sine 180° out of phase, so the two hands cross through the
+    # centre at opposite times.  Writes at 10 Hz (down from 20 Hz) so
+    # the cpal/state write-lock path isn't hammered; at a typical
+    # 0.15 Hz oscillation rate that's ~66 samples per cycle — still
+    # visually smooth in the stream / pan indicators.
+    #
+    # Each request carries `"quiet":true` so it doesn't hit the UI log.
+    # Requires the app to be running the post-`quiet` binary (commit
+    # 69416c5 or later); older binaries silently ignore the flag and
+    # will spam the in-app log.
+    #
+    # Cleanest fix long-term: add `BassLfoTarget::Pan` + a per-voice
+    # phase offset so the audio thread runs the anti-phase LFO
+    # natively with zero HTTP traffic — see PLAN.md.
+    # Usage: start_opposing_pan_lfo [rate_hz=0.15] [depth_0_to_1=0.65]
+    local rate="${1:-0.15}"
+    local depth="${2:-0.65}"
+    python3 -u -c "
+import math, time, subprocess
+rate, depth = $rate, $depth
+t0 = time.time()
+while True:
+    t = time.time() - t0
+    phase = 2 * math.pi * rate * t
+    p0 = depth * math.sin(phase)
+    p1 = depth * math.sin(phase + math.pi)
+    body = '{\"params\":{\"bass_voices\":[{\"pan\":%.3f},{\"pan\":%.3f}]},\"quiet\":true}' % (p0, p1)
+    subprocess.run(
+        ['curl', '-sf', '-X', 'POST', '$API/api/params',
+         '-H', 'Content-Type: application/json', '-d', body],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    time.sleep(0.10)
+" >/dev/null 2>&1 &
+    local pid=$!
+    echo "$pid" > /tmp/impulse-pan-lfo.pid
+    echo "  [pan-lfo] started pid=$pid rate=${rate}Hz depth=${depth}"
+}
+
+stop_pan_lfo() {
+    # Kill the background pan LFO started by `start_opposing_pan_lfo`.
+    # Safe to call multiple times.  First path: pid file written by a
+    # still-alive start.  Second path: a pkill fallback that catches
+    # orphans from a scenario that crashed / was force-quit before it
+    # could run its End scene — those processes keep hammering the
+    # API at 10 Hz, showing up as `[API] params: bass_voices (x777)`
+    # in the UI log even after the current scenario stopped using
+    # pan LFOs.  The match pattern is narrow (`bass_voices` + `pan`
+    # + the curl command shape) so we don't accidentally kill
+    # unrelated python processes.
+    if [ -f /tmp/impulse-pan-lfo.pid ]; then
+        local pid
+        pid=$(cat /tmp/impulse-pan-lfo.pid)
+        kill "$pid" 2>/dev/null || true
+        rm -f /tmp/impulse-pan-lfo.pid
+        echo "  [pan-lfo] stopped pid=$pid"
+    fi
+    # Orphan sweep.  Matches the exact signature of the python loop:
+    # a `python3` process whose cmdline contains `bass_voices` AND
+    # `pan`.  `-f` matches the full cmdline; `2>/dev/null` swallows
+    # the "no process found" exit code.
+    local killed
+    killed=$(pgrep -af 'python3.*bass_voices.*pan' 2>/dev/null || true)
+    if [ -n "$killed" ]; then
+        pkill -f 'python3.*bass_voices.*pan' 2>/dev/null || true
+        echo "  [pan-lfo] swept orphan(s):"
+        echo "$killed" | while read -r line; do echo "    $line"; done
+    fi
+}
+
+set_ui_prefs() {
+    # Thin alias for scenario readability.  Same contract as
+    # `api_ui_prefs` — JSON body with any subset of UiPrefs fields.
+    # Usage: set_ui_prefs '{"huth_piano": false, "huth_spectrum": true}'
+    api_ui_prefs "$1"
+}
+
+load_midi() {
+    # Import a MIDI file and populate shell vars from the summary so the
+    # scenario can pace itself against the piece's real duration.
+    #   Usage: load_midi demo/scenarios/bach-italian-3rd.mid
+    #          load_midi demo/scenarios/foo.mid 8           (force /8 grid)
+    # Sets on success (leaks into the caller's shell — bash scoping):
+    #   MIDI_OK=1
+    #   MIDI_BPM               e.g. 240.0
+    #   MIDI_DURATION          playback seconds (float)
+    #   MIDI_BANKS_USED        int
+    #   MIDI_NOTES_V0 / V1     int
+    #   MIDI_TRUNCATED         0 or 1
+    # On failure sets MIDI_OK=0 (returns non-zero too).
+    local path="$1"
+    local div="${2:-}"
+    local resp
+    resp=$(api_midi_import "$path" "$div")
+    # One python pass extracts every field and emits `VAR=value` lines
+    # for `eval` — much faster than 5 separate python invocations.
+    local vars
+    vars=$(printf '%s' "$resp" | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    ok = 1 if d.get('ok', False) else 0
+    print(f'MIDI_OK={ok}')
+    if ok:
+        print(f\"MIDI_BPM={d.get('bpm', 0)}\")
+        print(f\"MIDI_DURATION={d.get('duration_seconds', 0)}\")
+        print(f\"MIDI_BANKS_USED={d.get('banks_used', 0)}\")
+        print(f\"MIDI_NOTES_V0={d.get('notes_voice_0', 0)}\")
+        print(f\"MIDI_NOTES_V1={d.get('notes_voice_1', 0)}\")
+        print(f\"MIDI_TRUNCATED={1 if d.get('was_truncated') else 0}\")
+except Exception:
+    print('MIDI_OK=0')
+" 2>/dev/null)
+    eval "$vars"
+    if [ "${MIDI_OK:-0}" = "1" ]; then
+        echo "  [midi] $path — ${MIDI_BPM} BPM, ${MIDI_DURATION}s, ${MIDI_BANKS_USED} banks, v0=${MIDI_NOTES_V0} v1=${MIDI_NOTES_V1} trunc=${MIDI_TRUNCATED}"
+        return 0
+    fi
+    echo "  [midi] import failed — response: $resp" >&2
+    return 1
 }
 
 # ── AI prompts ───────────────────────────────────────────────────────────────
@@ -1112,6 +1327,58 @@ tour_rack() {
         api_scroll "$tgt"
         pause "$per"
     done
+}
+
+fill_wait() {
+    # Occupy a stretch of playback by scrolling around the rack.  The
+    # back panel gets a BRIEF peek — one short scroll on the back, not
+    # a lingering dwell — then we flip back to the front and keep
+    # cycling through the front zones until the time's up.
+    #
+    # The sequence always ends on the front panel with `look_at
+    # sequencer`, so the next scene's `add_instrument` doesn't land
+    # while the rack is still showing cables.
+    #
+    # Usage: fill_wait 40           # ~40 s total
+    local total="${1:-30}"
+    # Budget split:
+    #   back-panel peek:  2 s flip + 3 s look_at voice + 2 s flip = 7 s total
+    #   front cycling:    remaining time divided evenly across 5 front moves
+    local back_peek=7
+    local front_budget
+    front_budget=$(echo "scale=2; $total - $back_peek" | bc -l 2>/dev/null)
+    if [ "$(echo "$front_budget < 5" | bc 2>/dev/null)" = "1" ]; then
+        # Too short for a back peek — just cycle the front.
+        back_peek=0
+        front_budget="$total"
+    fi
+    local front_moves=(
+        "focus_on bass"
+        "look_at ai"
+        "look_at fxmod"
+        "look_at global"
+        "look_at sequencer"
+    )
+    local n=${#front_moves[@]}
+    local per
+    per=$(echo "scale=2; $front_budget / $n" | bc -l 2>/dev/null)
+    if [ "$(echo "$per < 1.5" | bc 2>/dev/null)" = "1" ]; then
+        per="1.5"
+    fi
+    # 1. Front: bass.
+    focus_on bass; pause "$per"
+    # 2. Front: AI console.
+    look_at ai;    pause "$per"
+    # 3. Quick back-panel peek at the voice zone.
+    if [ "$back_peek" -gt 0 ]; then
+        show_cables
+        look_at voice; pause 3
+        show_knobs
+    fi
+    # 4+. Front cycling until the time budget runs out.
+    look_at fxmod;     pause "$per"
+    look_at global;    pause "$per"
+    look_at sequencer; pause "$per"
 }
 
 # ── Parameter control ────────────────────────────────────────────────────────

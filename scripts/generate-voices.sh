@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # ─── generate-voices.sh ──────────────────────────────────────────────────────
-# Generate NeuTTS reference voice clips from espeak-ng.
-# Run once after setup — creates voices/*.wav + *.txt pairs that NeuTTS Air
+# Generate TTS reference voice clips from espeak-ng.
+# Run once after setup — creates voices/*.wav + *.txt pairs that Qwen3-TTS
 # uses as voice-cloning references.
 #
 # Each voice is a 10-15s clip of espeak-ng with a specific character, plus
-# its exact transcript. NeuTTS clones the timbre from these references.
+# its exact transcript. Qwen3-TTS clones the timbre from these references.
+# espeak references sound robotic by design; drop in real recordings
+# (see voices/README.md) for natural voices.
 #
 # Users can replace any .wav with their own recording (keep the .txt in sync)
 # for a custom voice. Requirements: mono, 16-48 kHz, 3-15 seconds.
@@ -16,7 +18,10 @@
 #   ./scripts/generate-voices.sh --force   # regenerate even if files exist
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
+# Dev checkout: this script lives in scripts/ — step up to the repo root.
+# Release zip: it sits next to the binary — stay put.
+if [ -f ../Cargo.toml ]; then cd ..; fi
 
 VOICES_DIR="voices"
 mkdir -p "$VOICES_DIR"
@@ -54,7 +59,7 @@ generate_voice() {
     echo "  $name: ${dur}s ($(du -h "$wav" | cut -f1))"
 }
 
-echo "Generating NeuTTS voice references..."
+echo "Generating TTS voice references..."
 echo ""
 
 # ── Voice definitions ────────────────────────────────────────────────────────

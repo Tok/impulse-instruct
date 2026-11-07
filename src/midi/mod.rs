@@ -4,9 +4,11 @@
 // Maps incoming MIDI to AppState mutations sent back to the UI thread.
 
 pub mod export;
+pub mod import;
 pub use export::{
     drum_voice_to_gm_note, export_sequencer_smf, save_midi_export, save_midi_export_to,
 };
+pub use import::{ImportSummary, MidiImport, import_midi_file, import_midi_into};
 
 use crossbeam_channel::Sender;
 use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
@@ -16,17 +18,91 @@ use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
 /// BPM and to recover BPM from incoming clock pulses.
 pub const MIDI_CLOCK_PPQN: f64 = 24.0;
 
+/// Samples between consecutive MIDI clock pulses (0xF8) at the given
+/// BPM and sample rate.  24 PPQN means a 120-BPM clock fires every
+/// 60s ÷ (120 × 24) ≈ 20.8 ms — at 48 kHz that's exactly 1000 samples.
+/// Pure helper so the audio thread's clock-out accumulator can be
+/// unit-tested without an audio engine.  Returns f64 to keep the
+/// accumulator math precise across millions of pulses per session.
+#[inline]
+pub fn midi_clock_tick_interval_samples(bpm: f32, sample_rate: f32) -> f64 {
+    let bpm = (bpm as f64).max(1.0);
+    (sample_rate as f64 * 60.0) / (bpm * MIDI_CLOCK_PPQN)
+}
+
+/// True when an inter-pulse interval (seconds between two clock
+/// pulses) is plausible enough to feed into the BPM averager.
+/// Caps at 10 ms = 300 BPM (the upper bound of the BPM slider) and
+/// 300 ms ≈ 7.5 BPM (slower than any plausible source clock).
+/// Outside the window we discard the sample as a glitch — a short
+/// interval is usually a doubled-up pulse, a long one usually a
+/// dropped pulse or a paused source.
+#[inline]
+pub fn is_valid_clock_interval(secs: f64) -> bool {
+    secs > 0.01 && secs < 0.30
+}
+
+/// Convert an averaged inter-pulse interval (seconds) into BPM.
+/// 24 PPQN: BPM = 60 / (avg × 24).  Returns 0.0 for non-positive
+/// inputs so a buggy averager (empty window, divide-by-zero) can't
+/// poison the BPM display.
+#[inline]
+pub fn clock_interval_to_bpm(avg_secs: f64) -> f32 {
+    if avg_secs <= 0.0 {
+        return 0.0;
+    }
+    (60.0 / (avg_secs * MIDI_CLOCK_PPQN)) as f32
+}
+
 // ─── MIDI events we emit to the UI thread ─────────────────────────────────────
 
 #[derive(Clone, Debug)]
 pub enum MidiEvent {
-    NoteOn { channel: u8, note: u8, velocity: u8 },
-    NoteOff { channel: u8, note: u8 },
-    ControlChange { channel: u8, cc: u8, value: u8 },
-    PitchBend { channel: u8, value: f32 }, // -1.0–+1.0
+    NoteOn {
+        channel: u8,
+        note: u8,
+        velocity: u8,
+    },
+    NoteOff {
+        channel: u8,
+        note: u8,
+    },
+    ControlChange {
+        channel: u8,
+        cc: u8,
+        value: u8,
+    },
+    PitchBend {
+        channel: u8,
+        value: f32,
+    }, // -1.0–+1.0
+    /// MIDI Channel Pressure (aftertouch), 1 data byte (0..127).  MPE
+    /// uses this on per-note channels (typically chs 2-N) for the
+    /// "Z" expression axis (pressure / volume).
+    ChannelPressure {
+        channel: u8,
+        value: u8,
+    },
     Clock,
     Start,
     Stop,
+}
+
+/// True when `channel` is part of an MPE per-note zone — any channel
+/// other than 0 (i.e. master ch 1 in 1-indexed MIDI numbering).
+/// Treated as a heuristic rather than a strict zone-manager parse;
+/// most MPE controllers default to chs 2-N for note channels and ch
+/// 1 for master, which matches "channel != 0" perfectly.  Pure helper
+/// so the dispatch path can be unit-tested without midir.
+#[inline]
+pub fn is_mpe_note_channel(channel: u8) -> bool {
+    channel != 0
+}
+
+/// Map a 7-bit pressure value to a unit-interval expression value.
+#[inline]
+pub fn pressure_to_unit(value: u8) -> f32 {
+    (value & 0x7F) as f32 / 127.0
 }
 
 // ─── CC → param mapping ───────────────────────────────────────────────────────
@@ -133,7 +209,7 @@ fn try_open_midi(port_name: &str, event_tx: Sender<MidiEvent>) -> Option<MidiInp
     Some(connection)
 }
 
-fn parse_midi(msg: &[u8]) -> Option<MidiEvent> {
+pub(crate) fn parse_midi(msg: &[u8]) -> Option<MidiEvent> {
     if msg.is_empty() {
         return None;
     }
@@ -162,6 +238,11 @@ fn parse_midi(msg: &[u8]) -> Option<MidiEvent> {
                 value: val,
             })
         }
+        // Channel Pressure (aftertouch) — 1 data byte = pressure.
+        0xD0 if msg.len() >= 2 => Some(MidiEvent::ChannelPressure {
+            channel,
+            value: msg[1],
+        }),
         0xF8 => Some(MidiEvent::Clock),
         0xFA => Some(MidiEvent::Start),
         0xFC => Some(MidiEvent::Stop),

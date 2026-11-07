@@ -94,7 +94,7 @@ fn fixed_input_slot_compiles_to_single_route_with_matching_target() {
     let (routes, count) = compile_mod_routes(&s);
     assert_eq!(count, 1, "one Fixed(BassPan) cable → one route");
     let r = routes[0];
-    assert_eq!(r.lfo_slot, 0, "first LFO in rack → slot 0");
+    assert_eq!(r.source_buf_idx, 0, "first LFO in rack → buf idx 0");
     assert_eq!(
         r.target_u8,
         lfo_target_to_u8(LfoTarget::BassPan),
@@ -256,7 +256,9 @@ fn empty_selector_list_emits_zero_routes_without_panicking() {
 #[test]
 fn lfo_slot_index_reflects_lfo_module_order() {
     // The default rack seeds 4 LfoModules.  A cable from the THIRD
-    // LfoModule must compile to lfo_slot=2 (0-indexed), not 0.
+    // LfoModule must compile to source_buf_idx = MOD_BUF_LFO_BASE + 2,
+    // not the first slot.
+    use crate::audio::dsp::MOD_BUF_LFO_BASE;
     let mut s = AppState::default();
     let lfos: Vec<u32> = s
         .rack
@@ -281,7 +283,44 @@ fn lfo_slot_index_reflects_lfo_module_order() {
     let (routes, count) = compile_mod_routes(&s);
     assert_eq!(count, 1);
     assert_eq!(
-        routes[0].lfo_slot, 2,
-        "third LFO must resolve to slot index 2",
+        routes[0].source_buf_idx as usize,
+        MOD_BUF_LFO_BASE + 2,
+        "third LFO must resolve to buf idx LFO_BASE + 2",
+    );
+}
+
+// ─── CV sequencer source ────────────────────────────────────────────────────
+
+#[test]
+fn cv_sequencer_cable_compiles_to_cv_seq_buf_idx() {
+    // A cable from CvSequencer → AcidBass.Mod[0] (Fixed(BassPan))
+    // must resolve to source_buf_idx = MOD_BUF_CV_SEQ_BASE + (cv-
+    // seq module index in rack order).
+    use crate::audio::dsp::MOD_BUF_CV_SEQ_BASE;
+    let mut s = AppState::default();
+    let cv_seq_id = s.rack.add_module(ModuleKind::CvSequencer);
+    let bass_id = s
+        .rack
+        .modules
+        .iter()
+        .find(|m| m.kind == ModuleKind::AcidBass)
+        .map(|m| m.id)
+        .unwrap();
+    patch_mod_cable(&mut s, cv_seq_id, bass_id, 0);
+    let (routes, count) = compile_mod_routes(&s);
+    assert!(count >= 1, "CvSeq → bass cable must compile to a route");
+    let cv_route = routes
+        .iter()
+        .take(count as usize)
+        .find(|r| r.source_buf_idx as usize >= MOD_BUF_CV_SEQ_BASE)
+        .expect("at least one route should source from a cv-seq slot");
+    assert_eq!(
+        cv_route.source_buf_idx as usize, MOD_BUF_CV_SEQ_BASE,
+        "first CvSequencer in rack → CV_SEQ_BASE + 0",
+    );
+    assert_eq!(
+        cv_route.target_u8,
+        lfo_target_to_u8(LfoTarget::BassPan),
+        "Fixed(BassPan) opcode must propagate from the cable target",
     );
 }

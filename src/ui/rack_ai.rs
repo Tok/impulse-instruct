@@ -85,7 +85,11 @@ pub(super) fn draw_ai_zone(
         let y = zone_rect.min.y + gr as f32 * step;
         let card_rect =
             egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
-        let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .max_rect(card_rect)
+                .layout(egui::Layout::top_down(egui::Align::LEFT)),
+        );
         let reaches_master = app.state.read().rack.reaches_master(id);
         let resp = if app.rack_flipped {
             module_card::module_card_back(
@@ -151,7 +155,7 @@ pub(super) fn draw_ai_zone(
 /// clipped by `painter.with_clip_rect(rect)`.
 pub(crate) fn draw_last_response_preview(ui: &mut egui::Ui, last_resp: &str) {
     let font = egui::FontId::monospace(7.5);
-    let row_h = ui.fonts(|f| f.row_height(&font));
+    let row_h = ui.fonts_mut(|f| f.row_height(&font));
     const LINES: usize = 6;
     let viewport_h = row_h * LINES as f32 + 4.0;
     let viewport_w = ui.available_width();
@@ -178,7 +182,7 @@ pub(crate) fn draw_last_response_preview(ui: &mut egui::Ui, last_resp: &str) {
         let mut current = String::new();
         for ch in raw_line.chars() {
             let candidate: String = current.chars().chain(std::iter::once(ch)).collect();
-            let w = ui.fonts(|f| {
+            let w = ui.fonts_mut(|f| {
                 f.layout_no_wrap(candidate.clone(), font.clone(), color)
                     .size()
                     .x
@@ -204,7 +208,7 @@ pub(crate) fn draw_last_response_preview(ui: &mut egui::Ui, last_resp: &str) {
         && !last.ends_with('…')
     {
         // Shorten enough to fit the ellipsis.
-        while ui.fonts(|f| {
+        while ui.fonts_mut(|f| {
             let mut t = last.clone();
             t.push('…');
             f.layout_no_wrap(t, font.clone(), color).size().x

@@ -3,7 +3,7 @@
 // Grayscale palette — all colors are off-tint R=G=B.
 // Color channels will later be used for highlights/accents.
 
-use egui::{Color32, FontId, Pos2, Rect, Rounding, Shadow, Stroke, Style, Vec2, Visuals};
+use egui::{Color32, CornerRadius, FontId, Pos2, Rect, Shadow, Stroke, Style, Vec2, Visuals};
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
@@ -107,7 +107,7 @@ pub fn apply(ctx: &egui::Context) {
     // Spacing
     style.spacing.item_spacing = egui::vec2(4.0, 4.0);
     style.spacing.button_padding = egui::vec2(6.0, 3.0);
-    style.spacing.window_margin = egui::Margin::same(8.0);
+    style.spacing.window_margin = egui::Margin::same(8);
     style.spacing.slider_width = 80.0;
     style.spacing.interact_size = egui::vec2(36.0, 18.0);
 
@@ -121,8 +121,11 @@ pub fn apply(ctx: &egui::Context) {
     visuals.window_stroke = Stroke::new(1.0, SLATE);
     visuals.window_shadow = Shadow::NONE;
     visuals.popup_shadow = Shadow::NONE;
-    visuals.window_rounding = Rounding::same(3.0);
-    visuals.menu_rounding = Rounding::same(3.0);
+    visuals.window_corner_radius = CornerRadius::same(3);
+    visuals.menu_corner_radius = CornerRadius::same(3);
+    // egui 0.37 changed the default slider handle from a circle to a
+    // rounded rect; keep the round knob-style thumb.
+    visuals.handle_shape = egui::style::HandleShape::Circle;
 
     // Widget styles
     let w = &mut visuals.widgets;
@@ -130,34 +133,39 @@ pub fn apply(ctx: &egui::Context) {
     w.noninteractive.bg_fill = PIT;
     w.noninteractive.bg_stroke = Stroke::new(1.0, SLATE);
     w.noninteractive.fg_stroke = Stroke::new(1.0, SMOKE);
-    w.noninteractive.rounding = Rounding::same(2.0);
+    w.noninteractive.corner_radius = CornerRadius::same(2);
 
     w.inactive.bg_fill = PIT;
     w.inactive.bg_stroke = Stroke::new(1.0, IRON);
     w.inactive.fg_stroke = Stroke::new(1.0, ASH);
-    w.inactive.rounding = Rounding::same(2.0);
+    w.inactive.corner_radius = CornerRadius::same(2);
 
     w.hovered.bg_fill = SLATE;
     w.hovered.bg_stroke = Stroke::new(1.0, ASH);
     w.hovered.fg_stroke = Stroke::new(1.5, FOG);
-    w.hovered.rounding = Rounding::same(2.0);
+    w.hovered.corner_radius = CornerRadius::same(2);
 
     w.active.bg_fill = IRON;
     w.active.bg_stroke = Stroke::new(1.0, FOG);
     w.active.fg_stroke = Stroke::new(2.0, CHALK);
-    w.active.rounding = Rounding::same(2.0);
+    w.active.corner_radius = CornerRadius::same(2);
 
     w.open.bg_fill = IRON;
     w.open.bg_stroke = Stroke::new(1.0, FOG);
     w.open.fg_stroke = Stroke::new(1.5, CHALK);
-    w.open.rounding = Rounding::same(2.0);
+    w.open.corner_radius = CornerRadius::same(2);
 
     visuals.selection.bg_fill = IRON;
     visuals.selection.stroke = Stroke::new(1.0, CHALK);
     visuals.hyperlink_color = CHALK;
 
     style.visuals = visuals;
-    ctx.set_style(style);
+    // egui ≥ 0.29 keeps separate dark/light styles and follows the OS
+    // theme by default.  Pin dark and install the palette for both so an
+    // OS light-mode switch can't swap in egui's stock light style.
+    ctx.set_theme(egui::ThemePreference::Dark);
+    ctx.set_style_of(egui::Theme::Light, style.clone());
+    ctx.set_style_of(egui::Theme::Dark, style);
 
     // Suppress egui's debug-build overlays: the "first use of ID …" red
     // labels on widget-id collisions and the debug-on-hover red boxes.
@@ -206,7 +214,7 @@ pub fn header_color() -> Color32 {
 ///
 /// Effect: very dark fill + 1px bright top border + 1px dark bottom border —
 /// the "edge of smoked glass" look from the neumorphic chrome spec.
-pub fn draw_glass_panel(painter: &egui::Painter, rect: egui::Rect, rounding: egui::Rounding) {
+pub fn draw_glass_panel(painter: &egui::Painter, rect: egui::Rect, rounding: egui::CornerRadius) {
     // Dark glass fill
     painter.rect_filled(rect, rounding, Color32::from_gray(15));
     // 1px bright top border
@@ -264,6 +272,31 @@ const LED_RING_LAYERS: [(f32, u8); 16] = [
 /// Draw a 3D-looking glowing LED at `center` (panels, sequencer, modules).
 /// `radius` is the visible core radius; halo extends to ~3.2×.  `intensity`
 /// 0..=1 fades every layer together.
+/// Translucent colour with egui ≤ 0.28 semantics: alpha is premultiplied
+/// in *linear* light.  egui 0.37's `Color32::from_rgba_unmultiplied`
+/// premultiplies the gamma-encoded bytes instead, which renders low-alpha
+/// glows, halos and overlays markedly darker (white @ α=25: 88 → 25).
+/// Every translucent colour in the UI was tuned against the old math, so
+/// all call sites go through here.  Pure.
+pub fn rgba_unmultiplied(r: u8, g: u8, b: u8, a: u8) -> Color32 {
+    use egui::ecolor::{gamma_u8_from_linear_f32, linear_f32_from_gamma_u8};
+    match a {
+        0 => Color32::TRANSPARENT,
+        255 => Color32::from_rgb(r, g, b),
+        _ => {
+            let a_lin = a as f32 / 255.0;
+            let p = |c: u8| gamma_u8_from_linear_f32(linear_f32_from_gamma_u8(c) * a_lin);
+            Color32::from_rgba_premultiplied(p(r), p(g), p(b), a)
+        }
+    }
+}
+
+/// Translucent white with egui ≤ 0.28 `Color32::from_white_alpha`
+/// semantics (linear-light premultiply) — see [`rgba_unmultiplied`].
+pub fn white_alpha(a: u8) -> Color32 {
+    rgba_unmultiplied(255, 255, 255, a)
+}
+
 pub fn led(painter: &egui::Painter, center: Pos2, radius: f32, color: Color32, intensity: f32) {
     let i = intensity.clamp(0.0, 1.0);
     if i <= 0.0 || radius <= 0.0 {
@@ -280,7 +313,7 @@ pub fn led(painter: &egui::Painter, center: Pos2, radius: f32, color: Color32, i
         (0.299 * color.r() as f32 + 0.587 * color.g() as f32 + 0.114 * color.b() as f32) / 255.0;
     let lum_comp = (1.0 - (lum - 0.4).max(0.0) * 0.85).max(0.45);
     let scale = |a: u8| -> u8 { (a as f32 * i * lum_comp) as u8 };
-    let rgba = |r: u8, g: u8, b: u8, a: u8| Color32::from_rgba_unmultiplied(r, g, b, scale(a));
+    let rgba = |r: u8, g: u8, b: u8, a: u8| rgba_unmultiplied(r, g, b, scale(a));
 
     // 16 concentric rings, outside-in
     for &(mult, alpha) in &LED_RING_LAYERS {
@@ -297,7 +330,7 @@ pub fn led(painter: &egui::Painter, center: Pos2, radius: f32, color: Color32, i
     painter.circle_stroke(
         center,
         radius,
-        Stroke::new(0.8, Color32::from_rgba_unmultiplied(0, 0, 0, scale(150))),
+        Stroke::new(0.8, rgba_unmultiplied(0, 0, 0, scale(150))),
     );
     // Specular highlight near top-left (the "3D dome" reflection)
     let spec_off = Vec2::new(-radius * 0.32, -radius * 0.32);
@@ -319,7 +352,7 @@ pub fn led_dark(painter: &egui::Painter, center: Pos2, radius: f32, intensity: f
         return;
     }
     let scale = |a: u8| -> u8 { (a as f32 * i) as u8 };
-    let black = |a: u8| -> Color32 { Color32::from_rgba_unmultiplied(0, 0, 0, scale(a)) };
+    let black = |a: u8| -> Color32 { rgba_unmultiplied(0, 0, 0, scale(a)) };
 
     // 16 concentric rings — same geometry as `led`, all in BLACK.  On a
     // bright key this paints a soft dark halo and a near-solid dark core.
@@ -333,14 +366,14 @@ pub fn led_dark(painter: &egui::Painter, center: Pos2, radius: f32, intensity: f
     painter.circle_stroke(
         center,
         radius,
-        Stroke::new(0.7, Color32::from_rgba_unmultiplied(40, 40, 40, scale(180))),
+        Stroke::new(0.7, rgba_unmultiplied(40, 40, 40, scale(180))),
     );
     // Specular highlight near top-left (glass dome catches light).
     let spec_off = Vec2::new(-radius * 0.32, -radius * 0.32);
     painter.circle_filled(
         center + spec_off,
         (radius * 0.32).max(0.7),
-        Color32::from_rgba_unmultiplied(255, 255, 255, scale(180)),
+        rgba_unmultiplied(255, 255, 255, scale(180)),
     );
 }
 
@@ -360,7 +393,7 @@ pub fn led_flat(
         return;
     }
     let scale = |a: u8| -> u8 { (a as f32 * i) as u8 };
-    let rgba = |r: u8, g: u8, b: u8, a: u8| Color32::from_rgba_unmultiplied(r, g, b, scale(a));
+    let rgba = |r: u8, g: u8, b: u8, a: u8| rgba_unmultiplied(r, g, b, scale(a));
 
     // Saturated core
     painter.circle_filled(center, radius, rgba(color.r(), color.g(), color.b(), 255));
@@ -379,11 +412,21 @@ pub fn led_flat(
 /// fill colour (use `VOID` for the deepest screens, `DEEP` for slightly
 /// lighter "panel" surfaces like the global log).  Call before rendering
 /// the contents so they sit on top of the fill.
-pub fn draw_screen_panel(painter: &egui::Painter, rect: Rect, rounding: Rounding, fill: Color32) {
+pub fn draw_screen_panel(
+    painter: &egui::Painter,
+    rect: Rect,
+    rounding: CornerRadius,
+    fill: Color32,
+) {
     // Custom fill
     painter.rect_filled(rect, rounding, fill);
     // Subtle dark outer frame
-    painter.rect_stroke(rect, rounding, Stroke::new(1.0, Color32::from_gray(2)));
+    painter.rect_stroke(
+        rect,
+        rounding,
+        Stroke::new(1.0, Color32::from_gray(2)),
+        egui::StrokeKind::Middle,
+    );
     // 1-px top inner highlight (light hits the top edge of the recess)
     let inner = rect.shrink(1.0);
     painter.line_segment(
@@ -408,7 +451,7 @@ pub fn draw_screen_panel(painter: &egui::Painter, rect: Rect, rounding: Rounding
 
 /// Convenience wrapper for the deep-`VOID` screen background used by
 /// oscilloscopes and the event stream.
-pub fn draw_screen_bezel(painter: &egui::Painter, rect: Rect, rounding: Rounding) {
+pub fn draw_screen_bezel(painter: &egui::Painter, rect: Rect, rounding: CornerRadius) {
     draw_screen_panel(painter, rect, rounding, VOID);
 }
 
@@ -474,10 +517,10 @@ pub fn screen_chip_at(
     fill: Color32,
     content: impl FnOnce(&mut egui::Ui),
 ) {
-    let rounding = Rounding::same(SCREEN_CHIP_ROUNDING);
+    let rounding = CornerRadius::from(SCREEN_CHIP_ROUNDING);
     draw_screen_panel(ui.painter(), outer_rect, rounding, fill);
     let inner = outer_rect.shrink(HEADER_CHIP_INSET);
-    let mut child = ui.child_ui(inner, *ui.layout(), None);
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner).layout(*ui.layout()));
     content(&mut child);
 }
 
@@ -492,17 +535,22 @@ pub fn screen_chip(
     fill: Color32,
     content: impl FnOnce(&mut egui::Ui),
 ) -> egui::Response {
-    let rounding = Rounding::same(SCREEN_CHIP_ROUNDING);
-    let resp = egui::Frame::none()
+    let rounding = CornerRadius::from(SCREEN_CHIP_ROUNDING);
+    let resp = egui::Frame::NONE
         .fill(fill)
-        .inner_margin(egui::Margin::symmetric(6.0, 3.0))
-        .rounding(rounding)
+        .inner_margin(egui::Margin::symmetric(6, 3))
+        .corner_radius(rounding)
         .show(ui, content);
     // Post-paint just the bezel highlights / shadow / outer frame on top of
     // the contents — perimeter pixels only, so widget area is unaffected.
     let rect = resp.response.rect;
     let painter = ui.painter();
-    painter.rect_stroke(rect, rounding, Stroke::new(1.0, Color32::from_gray(2)));
+    painter.rect_stroke(
+        rect,
+        rounding,
+        Stroke::new(1.0, Color32::from_gray(2)),
+        egui::StrokeKind::Middle,
+    );
     let inner = rect.shrink(1.0);
     painter.line_segment(
         [inner.left_top(), inner.right_top()],
