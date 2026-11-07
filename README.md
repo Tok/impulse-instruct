@@ -42,7 +42,7 @@ Everything runs entirely offline: no cloud calls, no subscriptions, no latency. 
 
 ---
 
-## v0.7.8 — Pre-release
+## v0.7.9 — Pre-release
 
 **This is pre-release software.** It works and makes sound, but expect rough edges. The UI is functional but visually unpolished in places.
 
@@ -321,7 +321,7 @@ The LLM understands musical intent well. When a style doesn't land, the cause is
 
 ## Test Suites
 
-2410 unit tests plus 3 LLM integration suites that run against a real model:
+2446 unit tests plus 3 LLM integration suites that run against a real model:
 
 | Suite | What it tests |
 |-------|--------------|
