@@ -8,7 +8,7 @@ cargo build                          # debug build
 cargo run                            # run (mock LLM, HTTP API on by default)
 cargo run -- --no-api                # run without HTTP/MCP API
 cargo run -- --model models/x.gguf --log debug
-cargo run --features llm --release   # real LLM inference (needs libclang-dev)
+cargo run --release                  # real LLM inference via llama-server (build it with ./scripts/build-llama-server.sh)
 cargo test                           # unit tests (split across src/tests/)
 ./start.sh                           # build + launch (release, mock LLM)
 ./start.sh --dev                     # build + launch (debug + verbose)
@@ -44,7 +44,7 @@ scripts\run-llm-bass.bat
 | `src/audio/dsp.rs` | All DSP synthesis: 303 ladder filter, 808/909 voices, reverb, delay. Pure functions only - **no allocations inside `process_block()`**. |
 | `src/audio/mod.rs` | cpal stream + rtrb ring buffer. Audio callback reads from rtrb, never touches `Arc<RwLock<AppState>>`. |
 | `src/sequencer/mod.rs` | 16-step clock as a pure function: `advance_clock(ClockState, &SequencerState, block_size, sr) → (ClockState, Vec<TriggerEvent>)` |
-| `src/llm/mod.rs` | LLM inference thread. Mock mode when no model file found. Real inference via `--features llm`. |
+| `src/llm/mod.rs` | LLM inference thread. Mock mode when no model file found or llama-server fails to start. Real inference via the llama-server subprocess pool (`src/llm/server_pool.rs`). |
 | `src/llm/prompt.rs` | System prompt builder + JSON schema for grammar-constrained generation. |
 | `src/api/mod.rs` | axum HTTP/MCP API. Only starts when `--api` flag passed. |
 | `src/midi/mod.rs` | midir input (CC→param mapping, NoteOn/Off → live record) + MIDI clock output (MidiClockOutput struct). |
@@ -106,12 +106,13 @@ Quick summary of the key rules:
 
 ## Crate versions (locked)
 
-- egui/eframe 0.28 - UI
-- cpal 0.15 - audio I/O
-- axum 0.7 - HTTP
-- midir 0.9 - MIDI
-- rtrb 0.3 - lock-free audio ring buffer
-- llama-cpp-2 0.1 - optional, needs `libclang-dev cmake`
+- egui/eframe 0.37 - UI (panels attach to the root `Ui` via `App::ui`; translucent colours go through `theme::rgba_unmultiplied` / `theme::white_alpha`, not `Color32::from_rgba_unmultiplied`, to keep egui 0.28's linear-light alpha)
+- cpal 0.18 - audio I/O
+- axum 0.8 - HTTP (route params use `/{param}`, not `/:param`)
+- ureq 3 - llama-server / NeuTTS HTTP client
+- midir 0.11 - MIDI
+- rtrb 0.4 - lock-free audio ring buffer
+- parking_lot 0.13 - `RwLock<AppState>` (not reentrant: never call `.read()`/`.write()` while holding a guard on the same thread)
 
 ## LLM integration
 

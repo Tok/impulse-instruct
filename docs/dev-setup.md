@@ -236,10 +236,11 @@ All models use `.llama-official-build/bin/llama-server` (standard llama.cpp), bu
 
 | Crate | Version | Purpose |
 |-------|---------|---------|
-| egui / eframe | 0.28 | UI |
-| cpal | 0.15 | Audio I/O |
-| axum | 0.7 | HTTP API |
-| midir | 0.9 | MIDI |
-| rtrb | 0.3 | Lock-free audio ring buffer |
-| parking_lot | latest | RwLock for AppState |
+| egui / eframe | 0.37 | UI |
+| cpal | 0.18 | Audio I/O |
+| axum | 0.8 | HTTP API |
+| ureq | 3 | HTTP client (llama-server, NeuTTS) |
+| midir | 0.11 | MIDI |
+| rtrb | 0.4 | Lock-free audio ring buffer |
+| parking_lot | 0.13 | RwLock for AppState |
 | crossbeam-channel | latest | Thread communication |

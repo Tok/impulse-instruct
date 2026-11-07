@@ -351,13 +351,13 @@ Written in Rust. Key dependencies:
 
 | Component | Library |
 |-----------|---------|
-| UI | [egui](https://github.com/emilk/egui) / eframe 0.28 |
-| Audio I/O | [cpal](https://github.com/RustAudio/cpal) 0.15 |
+| UI | [egui](https://github.com/emilk/egui) / eframe 0.37 |
+| Audio I/O | [cpal](https://github.com/RustAudio/cpal) 0.18 |
 | Audio thread - DSP | [rtrb](https://github.com/mgeier/rtrb) lock-free ring buffer |
 | LLM inference | [llama-server](https://github.com/ggml-org/llama.cpp) (official) |
 | TTS voice cloning | [NeuTTS Air](https://huggingface.co/neuphonic/neutts-air) (GGUF, local) + [espeak-ng](https://github.com/espeak-ng/espeak-ng) (phonemization) |
-| HTTP/MCP API | [axum](https://github.com/tokio-rs/axum) 0.7 |
-| MIDI | [midir](https://github.com/Boddlnagg/midir) 0.9 |
+| HTTP/MCP API | [axum](https://github.com/tokio-rs/axum) 0.8 |
+| MIDI | [midir](https://github.com/Boddlnagg/midir) 0.11 |
 
 ---
 
