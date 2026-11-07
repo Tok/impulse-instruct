@@ -162,6 +162,20 @@ jobs:
           cp scripts/download-models.sh  bundle/download-models.sh
           cp scripts/download-models.bat bundle/download-models.bat
           chmod +x bundle/download-models.sh
+          # TTS (optional, set up by `download-models tts`): the server the
+          # app spawns from the cwd-relative path scripts/tts-server.py, the
+          # placeholder-voice generator, and voices/ (transcripts + README;
+          # the .wav references are generated or user-supplied).  samples/
+          # ships its README skeleton so users know where packs go.
+          mkdir -p bundle/scripts
+          cp scripts/tts-server.py bundle/scripts/tts-server.py
+          cp scripts/generate-voices.sh  bundle/generate-voices.sh
+          cp scripts/generate-voices.bat bundle/generate-voices.bat
+          chmod +x bundle/generate-voices.sh
+          git ls-files voices samples | while read -r f; do
+            mkdir -p "bundle/$(dirname "$f")"
+            cp "$f" "bundle/$f"
+          done
           echo "# Place .gguf model files here. See README for download instructions." > bundle/models/README.md
 
           # Include version in the zip filename (e.g. v0.7.4)
@@ -224,6 +238,7 @@ jobs:
 
             ### Recommended models
             - **Gemma 4 E4B Q4_K_M** (~4.6 GB) — best accuracy, default; needed for all presets
+            - **Qwen3-TTS** (optional, ~4.3 GB + PyTorch, ~4.5 GB VRAM) — voices the MC/DJ agents. Needs Python 3.10+; run `./download-models.sh tts` / `download-models.bat tts`, then press START on a TTS module. Swap in real voices via `voices/README.md`.
           files: |
             ${{ env.ZIP_NAME }}
             ${{ matrix.asset_name }}.sha256

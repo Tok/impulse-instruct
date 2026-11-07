@@ -35,7 +35,10 @@
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 printf "\n  \033[38;2;110;110;110m▁▂▄▅▇██▇▅▄▂▁▁▂▄▅▇█\033[38;2;160;160;160m I M P U L S E • I N S T R U C T \033[38;2;110;110;110m█▇▅▄▂▁▁▂▄▅▇██▇▅▄▂▁\033[0m\n\n"
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
+# Dev checkout: this script lives in scripts/ — step up to the repo root.
+# Release zip: it sits next to the binary — stay put.
+if [ -f ../Cargo.toml ]; then cd ..; fi
 
 MODEL_DIR="models"
 mkdir -p "$MODEL_DIR"
@@ -79,8 +82,11 @@ setup_tts() {
     "$TTS_MODEL_ID"
 
   if [[ ! -f "voices/default.wav" ]]; then
-    echo "  Generating voice references..."
-    ./scripts/generate-voices.sh 2>/dev/null || true
+    echo "  Generating placeholder voice references (espeak-ng)..."
+    # scripts/ in a dev checkout, next to this script in the release zip.
+    for gen in ./scripts/generate-voices.sh ./generate-voices.sh; do
+      [[ -x "$gen" ]] && { "$gen" 2>/dev/null || true; break; }
+    done
   fi
 
   if tts_ready; then

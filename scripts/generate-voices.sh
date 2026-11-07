@@ -18,7 +18,10 @@
 #   ./scripts/generate-voices.sh --force   # regenerate even if files exist
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
+# Dev checkout: this script lives in scripts/ — step up to the repo root.
+# Release zip: it sits next to the binary — stay put.
+if [ -f ../Cargo.toml ]; then cd ..; fi
 
 VOICES_DIR="voices"
 mkdir -p "$VOICES_DIR"

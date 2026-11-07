@@ -6,6 +6,9 @@
 # device, etc.).
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
+# Run from the bundle dir so models/, voices/, scripts/tts-server.py and
+# session.json resolve next to the binary (start.bat does `cd /d "%~dp0"`).
+cd "$DIR"
 BIN="$DIR/impulse-instruct-linux-x86_64"
 
 if [ ! -x "$BIN" ]; then
