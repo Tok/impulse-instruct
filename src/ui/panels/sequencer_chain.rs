@@ -126,7 +126,7 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // long imports (Bach III at 53 banks) auto-flip into view.
     let total_pages = crate::state::MAX_BANKS.div_ceil(BANKS_PER_PAGE);
     let edit_page = pattern_edit / BANKS_PER_PAGE;
-    let page_key = egui::Id::new("bank_page");
+    let page_key = egui::Id::unique("bank_page");
     let stored: Option<usize> = ui.ctx().data(|d| d.get_temp(page_key));
     let mut page = stored
         .unwrap_or(edit_page)
@@ -309,7 +309,7 @@ pub fn draw_pattern_chain(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             .size(8.0),
     );
     let mut new_style: Option<Option<String>> = None;
-    egui::ComboBox::from_id_source("pattern_style_combo")
+    egui::ComboBox::from_id_salt("pattern_style_combo")
         .selected_text(
             egui::RichText::new(cur_label)
                 .monospace()
@@ -446,8 +446,8 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Drag-to-reorder bookkeeping.  `drag_src` tracks the slot the
     // pointer picked up this frame; on hover over a different slot it
     // swaps with it and follows.
-    let drag_key = egui::Id::new("song_timeline_drag_src");
-    let popover_key = egui::Id::new("song_timeline_popover");
+    let drag_key = egui::Id::unique("song_timeline_drag_src");
+    let popover_key = egui::Id::unique("song_timeline_popover");
 
     ui.horizontal(|ui| {
         ui.add_space(2.0);
@@ -530,9 +530,9 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // per-rect clip rect — which reads as "the left column of
             // pixels is missing" on the highlighted bar.
             let painter = ui.painter().clone();
-            let rounding = egui::Rounding::same(3.0);
+            let rounding = egui::CornerRadius::same(3);
             painter.rect_filled(rect, rounding, fill);
-            painter.rect_stroke(rect, rounding, stroke);
+            painter.rect_stroke(rect, rounding, stroke, egui::StrokeKind::Middle);
 
             // Pattern number, centred in the narrow bar.  Font sized
             // so up to 3 digits ("999") still fits cleanly inside
@@ -628,7 +628,7 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     {
         let mut open = true;
         egui::Window::new("")
-            .id(egui::Id::new(("song_popover", pos)))
+            .id(egui::Id::unique(("song_popover", pos)))
             .title_bar(false)
             .resizable(false)
             .collapsible(false)
@@ -701,7 +701,7 @@ pub fn draw_song_timeline(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                         None => "—".to_string(),
                     };
                     let mut pick: Option<Option<String>> = None;
-                    egui::ComboBox::from_id_source(("song_popover_style", pos))
+                    egui::ComboBox::from_id_salt(("song_popover_style", pos))
                         .selected_text(egui::RichText::new(cur_label).monospace().size(9.0))
                         .width(120.0)
                         .show_ui(ui, |ui| {

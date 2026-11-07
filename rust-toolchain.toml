@@ -9,5 +9,5 @@
 # version and stay in lockstep.
 
 [toolchain]
-channel = "1.95.0"
+channel = "1.99.1"
 components = ["rustfmt", "clippy"]

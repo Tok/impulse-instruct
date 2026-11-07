@@ -178,7 +178,7 @@ pub fn draw_sample_instrument(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 })
                 .unwrap_or_else(|| "(none)".to_string());
             let mut chosen = current_idx;
-            egui::ComboBox::from_id_source("sf2_preset_picker")
+            egui::ComboBox::from_id_salt("sf2_preset_picker")
                 .width((ui.available_width() - 20.0).max(120.0))
                 .selected_text(egui::RichText::new(current_label).monospace().size(8.5))
                 .show_ui(ui, |ui| {

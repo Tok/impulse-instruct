@@ -100,7 +100,7 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .and_then(|n| n.to_str())
                 .unwrap_or("(pick sample)")
                 .to_string();
-            egui::ComboBox::from_id_source("granular_sample_picker")
+            egui::ComboBox::from_id_salt("granular_sample_picker")
                 .width((ui.available_width() - 70.0).max(60.0))
                 .selected_text(egui::RichText::new(current_name).monospace().size(8.0))
                 .show_ui(ui, |ui| {
@@ -146,7 +146,7 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Auto-reload if the path changed from outside (API, LLM, style).  A
     // simple equality check against a ctx-cached "last loaded" avoids
     // hammering the disk on every frame.
-    let mem_id = egui::Id::new("granular_last_loaded_path");
+    let mem_id = egui::Id::unique("granular_last_loaded_path");
     let last_loaded: String = ui
         .ctx()
         .data(|d| d.get_temp::<String>(mem_id))
@@ -171,13 +171,14 @@ pub fn draw_granular(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     let painter = ui.painter_at(rect);
     painter.rect_filled(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         egui::Color32::from_gray(10),
     );
     painter.rect_stroke(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         egui::Stroke::new(0.5, egui::Color32::from_gray(30)),
+        egui::StrokeKind::Middle,
     );
     // Column-wise min/max over the ring buffer, starting at the oldest
     // sample (head) so the display scrolls left→right in chronological

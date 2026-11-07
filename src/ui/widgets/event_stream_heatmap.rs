@@ -54,7 +54,7 @@ pub(super) fn draw_heatmap(
     use crate::state::DrumVoice;
 
     // Backdrop — same recessed-screen treatment as the main widget.
-    theme::draw_screen_bezel(painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(painter, rect, egui::CornerRadius::same(2));
 
     let row_h = rect.height() / HEATMAP_ROWS.len() as f32;
     let label_w = 26.0_f32;
@@ -172,7 +172,7 @@ pub(super) fn draw_heatmap(
             let v = (v_max * (1.0 - age * 0.6)) as u8;
             painter.rect_filled(
                 Rect::from_min_max(Pos2::new(l, bin_top), Pos2::new(r, bin_bot)),
-                egui::Rounding::same(0.5),
+                egui::CornerRadius::from(0.5),
                 Color32::from_gray(v),
             );
         }

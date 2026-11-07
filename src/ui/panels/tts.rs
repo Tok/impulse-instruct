@@ -19,13 +19,15 @@ use crate::ui::{ImpulseApp, theme, widgets};
 /// Called infrequently (~1 Hz) — cached on `tts_server_online_at` below.
 fn check_neutts_alive() -> bool {
     let url = format!("http://127.0.0.1:{}/health", NEUTTS_PORT);
-    ureq::AgentBuilder::new()
-        .timeout_connect(std::time::Duration::from_millis(250))
-        .timeout(std::time::Duration::from_millis(250))
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_connect(Some(std::time::Duration::from_millis(250)))
+        .timeout_global(Some(std::time::Duration::from_millis(250)))
         .build()
+        .into();
+    agent
         .get(&url)
         .call()
-        .map(|r| (200..300).contains(&r.status()))
+        .map(|r| r.status().is_success())
         .unwrap_or(false)
 }
 
@@ -184,12 +186,12 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     let now = ui.ctx().input(|i| i.time);
     let last_check: f64 = ui
         .ctx()
-        .data(|d| d.get_temp::<f64>(egui::Id::new("tts_health_check_at")))
+        .data(|d| d.get_temp::<f64>(egui::Id::unique("tts_health_check_at")))
         .unwrap_or(-10.0);
     if now - last_check > 1.0 {
         app.neutts_online = check_neutts_alive();
         ui.ctx()
-            .data_mut(|d| d.insert_temp(egui::Id::new("tts_health_check_at"), now));
+            .data_mut(|d| d.insert_temp(egui::Id::unique("tts_health_check_at"), now));
     }
     ui.horizontal(|ui| {
         let (label, color) = if app.neutts_online {
@@ -217,7 +219,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             // Reset the cache so the next frame re-polls immediately
             // once the server comes up.
             ui.ctx()
-                .data_mut(|d| d.insert_temp(egui::Id::new("tts_health_check_at"), -10.0_f64));
+                .data_mut(|d| d.insert_temp(egui::Id::unique("tts_health_check_at"), -10.0_f64));
         }
     });
 
@@ -313,7 +315,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     // Per-module text buffer stored in egui memory — doesn't need to persist
     // across sessions and we don't want to pollute TtsModuleState with UI
     // state.  Key by module_id so each TTS module has its own line.
-    let mem_id = egui::Id::new(("tts_say_input", module_id));
+    let mem_id = egui::Id::unique(("tts_say_input", module_id));
     let mut line: String = ui
         .ctx()
         .data(|d| d.get_temp::<String>(mem_id))

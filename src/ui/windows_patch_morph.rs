@@ -169,10 +169,10 @@ impl ImpulseApp {
         let (rect, _) =
             ui.allocate_exact_size(egui::vec2(ui.available_width(), 6.0), egui::Sense::hover());
         let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, egui::Rounding::same(1.0), theme::PIT);
+        painter.rect_filled(rect, egui::CornerRadius::same(1), theme::PIT);
         let mut fill = rect;
         fill.set_width(rect.width() * frac);
-        painter.rect_filled(fill, egui::Rounding::same(1.0), theme::CHALK);
+        painter.rect_filled(fill, egui::CornerRadius::same(1), theme::CHALK);
 
         ui.add_space(8.0);
         ui.horizontal(|ui| {

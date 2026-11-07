@@ -189,7 +189,7 @@ impl AudioEngine {
         // Prefer SAMPLE_RATE_HZ if the device supports it so the callback can
         // skip resampling.  Otherwise fall back to the default-config rate
         // and let the callback's linear-interp resampler bridge.
-        let target_rate = cpal::SampleRate(SAMPLE_RATE_HZ);
+        let target_rate: cpal::SampleRate = SAMPLE_RATE_HZ;
         let resolved_rate = match device.supported_output_configs() {
             Ok(configs) => configs
                 .filter(|r| {
@@ -205,7 +205,7 @@ impl AudioEngine {
             sample_rate: resolved_rate,
             buffer_size: cpal::BufferSize::Default,
         };
-        let device_rate = config.sample_rate.0 as f32;
+        let device_rate = config.sample_rate as f32;
         let channels = config.channels as usize;
         if device_rate != SAMPLE_RATE {
             log::warn!(
@@ -318,7 +318,7 @@ impl AudioEngine {
         );
         let stream = match supported.sample_format() {
             SampleFormat::F32 => device.build_output_stream(
-                &config,
+                config,
                 move |output: &mut [f32], _| {
                     // Drain incoming commands
                     while let Ok(cmd) = params_rx.pop() {
@@ -695,7 +695,7 @@ impl AudioEngine {
             sample_instrument_poly,
             voice_meters,
             gr_levels,
-            sample_rate: config.sample_rate.0,
+            sample_rate: config.sample_rate,
             block_size: 0, // determined at runtime in callback
             _stream: stream,
         })

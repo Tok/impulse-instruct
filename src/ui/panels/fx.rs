@@ -278,7 +278,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     if widgets::param_control(ui, "GATE", &mut rgt_norm, pm("fx.reverb_gate_time"), ctrl).0 {
                         rgt = rgt_norm * 2.0; changed = true;
                     }
-                    if ui.add(egui::SelectableLabel::new(rev_freeze, "FREEZE")).clicked() {
+                    if ui.add(egui::Button::selectable(rev_freeze, "FREEZE")).clicked() {
                         rev_freeze = !rev_freeze; changed = true;
                     }
                 });
@@ -326,7 +326,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 // swell-into-hit feel.  Third FX with a reversal toggle
                 // alongside reverb (reverb_dir) and delay (delay_dir).
                 if ui
-                    .add(egui::SelectableLabel::new(comp_reverse, "REVERSE"))
+                    .add(egui::Button::selectable(comp_reverse, "REVERSE"))
                     .on_hover_text(
                         "Swap attack/release so the envelope misses the \
                          initial transient and clamps the sustain — classic \
@@ -365,7 +365,7 @@ pub fn draw_fx(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 let tuning_names = ["12-TET", "Just", "Slendro", "Pelog"];
                 let mut tuning_idx = app.state.read().fx.tuning as usize;
                 if tuning_idx >= tuning_names.len() { tuning_idx = 0; }
-                egui::ComboBox::from_id_source("tuning_sel")
+                egui::ComboBox::from_id_salt("tuning_sel")
                     .width(60.0)
                     .selected_text(tuning_names[tuning_idx])
                     .show_ui(ui, |ui| {

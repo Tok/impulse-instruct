@@ -52,7 +52,7 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 
     // Which voice is currently being edited.  Stored in egui memory so
     // the tab selection sticks across frames without polluting AppState.
-    let sel_id = egui::Id::new("preecho_selected_voice");
+    let sel_id = egui::Id::unique("preecho_selected_voice");
     let mut selected: String = ui
         .ctx()
         .data(|d| d.get_temp::<String>(sel_id))
@@ -257,13 +257,14 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             } else {
                 egui::Color32::from_gray(22)
             };
-            painter.rect_filled(r, egui::Rounding::same(1.5), fill);
+            painter.rect_filled(r, egui::CornerRadius::from(1.5), fill);
             // Beat boundaries get a subtle brighter outline so 4/4 subdivisions read cleanly.
             if i % 4 == 0 {
                 painter.rect_stroke(
                     r,
-                    egui::Rounding::same(1.5),
+                    egui::CornerRadius::from(1.5),
                     egui::Stroke::new(0.6, theme::ASH),
+                    egui::StrokeKind::Middle,
                 );
             }
         }
@@ -360,7 +361,7 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 .color(theme::SMOKE),
         );
         let mut new_curve: Option<RampCurve> = None;
-        egui::ComboBox::from_id_source("preecho_curve")
+        egui::ComboBox::from_id_salt("preecho_curve")
             .selected_text(
                 egui::RichText::new(curve_label(cfg.curve))
                     .monospace()
@@ -416,7 +417,7 @@ pub(super) fn draw_preecho_row(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let is_melodic = matches!(selected.as_str(), "bass" | "hoover" | "an1x");
         if is_melodic {
             let mut new_app: Option<NoteApproach> = None;
-            egui::ComboBox::from_id_source("preecho_note_approach")
+            egui::ComboBox::from_id_salt("preecho_note_approach")
                 .selected_text(
                     egui::RichText::new(approach_label(cfg.note_approach))
                         .monospace()

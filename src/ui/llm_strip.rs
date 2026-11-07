@@ -205,7 +205,7 @@ impl ImpulseApp {
             egui::vec2(right_w, total_h),
         );
 
-        ui.allocate_ui_at_rect(cycle_rect, |ui| {
+        ui.scope_builder(egui::UiBuilder::new().max_rect(cycle_rect), |ui| {
             let secs_to_next_fire = self.jam_next_fire.map(|(at, _)| {
                 at.saturating_duration_since(std::time::Instant::now())
                     .as_secs_f32()
@@ -221,12 +221,12 @@ impl ImpulseApp {
             );
         });
         if score_rect.height() >= 14.0 {
-            ui.allocate_ui_at_rect(score_rect, |ui| {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(score_rect), |ui| {
                 let s = self.state.read();
                 super::widgets::lane_scores(ui, &s, score_rect);
             });
         }
-        ui.allocate_ui_at_rect(right_rect, |ui| {
+        ui.scope_builder(egui::UiBuilder::new().max_rect(right_rect), |ui| {
             ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
                 self.draw_llm_console_inner(ui);
             });
@@ -261,7 +261,7 @@ impl ImpulseApp {
                     .size(8.0)
                     .color(theme::ASH),
             );
-            egui::ComboBox::from_id_source("console_model")
+            egui::ComboBox::from_id_salt("console_model")
                 .selected_text(
                     egui::RichText::new(&cur_short)
                         .monospace()
@@ -587,7 +587,7 @@ impl ImpulseApp {
                     .unwrap_or("None"),
             };
             let mut new_sel: Option<Option<String>> = None;
-            egui::ComboBox::from_id_source(ui.id().with("console_style"))
+            egui::ComboBox::from_id_salt(ui.scope_id().with("console_style"))
                 .selected_text(egui::RichText::new(cur_name).monospace().size(9.5))
                 .width(140.0)
                 .show_ui(ui, |ui| {

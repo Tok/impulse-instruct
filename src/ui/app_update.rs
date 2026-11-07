@@ -1,14 +1,14 @@
 // ─── ui/app_update.rs ────────────────────────────────────────────────────────
-// `impl eframe::App for ImpulseApp` — the per-frame `update` hook plus
+// `impl eframe::App for ImpulseApp` — the per-frame `ui` hook plus
 // the session-save `save` hook.  Lifted out of ui/mod.rs to keep the
 // entry module under the 1000-line cap; mod.rs now holds the struct
 // definition + its inherent `impl ImpulseApp` block, while all frame-
 // driven drawing / input / message-draining lives here.
 //
-// Keeps the full `update` body in one file so debugging a frame-loop
+// Keeps the full `ui` body in one file so debugging a frame-loop
 // issue doesn't need a hunt across sub-modules.
 
-use egui::{CentralPanel, Frame, TopBottomPanel};
+use egui::{CentralPanel, Frame, Panel};
 
 use super::{
     DRUM_LOG_CAP, DrumLogEntry, ImpulseApp, MELODIC_LOG_CAP, MelodicLogEntry, MelodicVoice, panels,
@@ -23,7 +23,10 @@ impl eframe::App for ImpulseApp {
         }
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // egui 0.37: panels attach to the root `Ui`; windows, areas and
+        // input still go through the `Context`.
+        let ctx = &root.ctx().clone();
         // Capture the system's native pixels_per_point on the first real frame,
         // after the window is shown and DPI is known.
         if self.native_ppp <= 0.0 {
@@ -51,12 +54,12 @@ impl eframe::App for ImpulseApp {
 
         // Publish touch_mode + WASD flag so widgets can read them without signature changes.
         ctx.data_mut(|d| {
-            d.insert_temp(egui::Id::new("touch_mode"), self.touch_mode);
+            d.insert_temp(egui::Id::unique("touch_mode"), self.touch_mode);
             d.insert_temp(
-                egui::Id::new("wasd_as_arrows"),
+                egui::Id::unique("wasd_as_arrows"),
                 self.state.read().ui_prefs.wasd_as_arrows,
             );
-            d.insert_temp(egui::Id::new("ctrl_locked"), self.ctrl_locked);
+            d.insert_temp(egui::Id::unique("ctrl_locked"), self.ctrl_locked);
         });
 
         self.drain_llm_outputs();
@@ -513,15 +516,15 @@ impl eframe::App for ImpulseApp {
             }
         }
         self.draw_windows(ctx);
-        self.draw_menu_and_header(ctx);
-        TopBottomPanel::bottom("footer")
+        self.draw_menu_and_header(root);
+        Panel::bottom("footer")
             .frame(
-                Frame::none()
+                Frame::NONE
                     .fill(theme::VOID)
-                    .inner_margin(egui::Margin::symmetric(6.0, 2.0)),
+                    .inner_margin(egui::Margin::symmetric(6, 2)),
             )
-            .exact_height(18.0)
-            .show(ctx, |ui| {
+            .exact_size(18.0)
+            .show(root, |ui| {
                 let (nm, na, nc) = {
                     let s = self.state.read();
                     (
@@ -562,14 +565,14 @@ impl eframe::App for ImpulseApp {
         // space for the rack canvas.  Re-enabled when the user toggles
         // performance mode off in the header view menu.
         if !self.state.read().ui_prefs.performance_mode {
-            TopBottomPanel::bottom("piano")
+            Panel::bottom("piano")
                 .frame(
-                    Frame::none()
+                    Frame::NONE
                         .fill(theme::VOID)
-                        .inner_margin(egui::Margin::symmetric(0.0, 0.0)),
+                        .inner_margin(egui::Margin::symmetric(0, 0)),
                 )
-                .exact_height(80.0)
-                .show(ctx, |ui| {
+                .exact_size(80.0)
+                .show(root, |ui| {
                     panels::draw_piano(self, ui, ctx);
                 });
         }
@@ -579,11 +582,12 @@ impl eframe::App for ImpulseApp {
         // so the rack doesn't load and nothing plays in the background.
         CentralPanel::default()
             .frame(
-                Frame::none()
+                Frame::NONE
                     .fill(theme::VOID)
-                    .inner_margin(egui::Margin::same(4.0)),
+                    .inner_margin(egui::Margin::same(4)),
             )
-            .show(ctx, |ui| {
+            .show(root, |ui| {
+                util::publish_central_rect(ctx, ui.max_rect());
                 if !self.show_wizard {
                     rack_canvas::draw_rack(self, ctx, ui);
                 }

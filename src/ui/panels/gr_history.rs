@@ -63,7 +63,7 @@ pub fn draw_gr_history(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // has reference rails (matching standard mastering meter conventions).
     painter.rect_filled(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         egui::Color32::from_gray(10),
     );
     let h = rect.height();

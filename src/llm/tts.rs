@@ -38,16 +38,17 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
     let root_note = 0u8; // caller can extend later
     let scale = crate::state::Scale::default();
     std::thread::spawn(move || {
-        let client = match ureq::AgentBuilder::new()
-            .timeout_connect(std::time::Duration::from_secs(2))
-            .timeout(std::time::Duration::from_secs(30))
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_connect(Some(std::time::Duration::from_secs(2)))
+            .timeout_global(Some(std::time::Duration::from_secs(30)))
+            .http_status_as_error(false)
             .build()
-            .post(&url)
-            .send_json(&payload)
-        {
-            Ok(resp) => resp,
-            Err(ureq::Error::Status(code, resp)) => {
-                let body = resp.into_string().unwrap_or_default();
+            .into();
+        let client = match agent.post(&url).send_json(&payload) {
+            Ok(resp) if resp.status().is_success() => resp,
+            Ok(resp) => {
+                let code = resp.status().as_u16();
+                let body = resp.into_body().read_to_string().unwrap_or_default();
                 log::warn!(
                     "NeuTTS /synthesize returned {} — voice_ref may be missing or invalid. Body: {}",
                     code,
@@ -63,7 +64,9 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
 
         // Read WAV bytes from response body.
         let mut wav_bytes = Vec::new();
-        if let Err(e) = client.into_reader().read_to_end(&mut wav_bytes) {
+        if let Err(e) =
+            std::io::Read::read_to_end(&mut client.into_body().into_reader(), &mut wav_bytes)
+        {
             log::warn!("NeuTTS: failed to read response body: {}", e);
             return;
         }

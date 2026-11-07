@@ -91,7 +91,7 @@ fn draw_meter_bar(ui: &mut egui::Ui, level: f32, w: f32, h: f32) {
     // Background well — same dark fill as the stereo meter.
     painter.rect_filled(
         rect,
-        egui::Rounding::same(2.0),
+        egui::CornerRadius::same(2),
         egui::Color32::from_gray(10),
     );
     // Level mapping: hybrid linear-then-log.  The bar tops out at
@@ -111,7 +111,11 @@ fn draw_meter_bar(ui: &mut egui::Ui, level: f32, w: f32, h: f32) {
     );
     // Brightness scales with level — bright when hot, dim when quiet.
     let g = (60.0 + visual * 180.0).min(240.0) as u8;
-    painter.rect_filled(bar_rect, egui::Rounding::ZERO, egui::Color32::from_gray(g));
+    painter.rect_filled(
+        bar_rect,
+        egui::CornerRadius::ZERO,
+        egui::Color32::from_gray(g),
+    );
     // Top tick at the unity (1.0) line so users have a visual
     // reference for "at 0 dBFS-ish".
     let unity_y = rect.bottom() - h * 0.95;

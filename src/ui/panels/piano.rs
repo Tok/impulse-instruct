@@ -103,11 +103,11 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
     // key fills — otherwise the rightward bloom gets covered by the next key's fill.
     let mut white_blooms: Vec<(Rect, Color32)> = Vec::new();
 
-    let wk_rounding = egui::Rounding {
-        nw: 1.0,
-        ne: 1.0,
-        sw: 3.0,
-        se: 3.0,
+    let wk_rounding = egui::CornerRadius {
+        nw: 1,
+        ne: 1,
+        sw: 3,
+        se: 3,
     };
 
     let mut white_idx = 0usize;
@@ -223,7 +223,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             );
             painter.rect_filled(
                 pill,
-                egui::Rounding::same(2.0),
+                egui::CornerRadius::same(2),
                 Color32::from_black_alpha(140),
             );
             let label_color = theme::note_color(note);
@@ -239,7 +239,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
         // Hover tooltip: full note name + frequency in Hz
         ui.interact(
             key_rect,
-            egui::Id::new(("piano_wkey", note)),
+            egui::Id::unique(("piano_wkey", note)),
             Sense::hover(),
         )
         .on_hover_text(format!(
@@ -267,7 +267,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             painter.rect_filled(
                 key_rect.expand(expand),
                 wk_rounding,
-                Color32::from_rgba_unmultiplied(r, g, b, alpha),
+                crate::ui::theme::rgba_unmultiplied(r, g, b, alpha),
             );
         }
     }
@@ -307,11 +307,11 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 }
             };
 
-            let bk_rounding = egui::Rounding {
-                nw: 1.0,
-                ne: 1.0,
-                sw: 3.0,
-                se: 3.0,
+            let bk_rounding = egui::CornerRadius {
+                nw: 1,
+                ne: 1,
+                sw: 3,
+                se: 3,
             };
 
             // Bloom for active black keys
@@ -323,7 +323,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                     painter.rect_filled(
                         key_rect.expand(expand),
                         bk_rounding,
-                        Color32::from_rgba_unmultiplied(r, g, b, alpha),
+                        crate::ui::theme::rgba_unmultiplied(r, g, b, alpha),
                     );
                 }
             }
@@ -381,7 +381,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
                 );
                 painter.rect_filled(
                     pill,
-                    egui::Rounding::same(2.0),
+                    egui::CornerRadius::same(2),
                     Color32::from_black_alpha(160),
                 );
                 let label_color = theme::note_color(note);
@@ -404,7 +404,7 @@ pub fn draw_piano(app: &mut ImpulseApp, ui: &mut egui::Ui, ctx: &egui::Context) 
             // Hover tooltip: full note name + frequency in Hz
             ui.interact(
                 key_rect,
-                egui::Id::new(("piano_bkey", note)),
+                egui::Id::unique(("piano_bkey", note)),
                 Sense::hover(),
             )
             .on_hover_text(format!(

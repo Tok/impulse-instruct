@@ -84,3 +84,35 @@ mod scale_clamps {
         assert!((s - 1.0).abs() < 1e-6);
     }
 }
+
+#[cfg(test)]
+mod wheel_units {
+    //! `wheel_event_points` reproduces egui ≤ 0.28's `raw_scroll_delta`
+    //! unit math, which Ctrl+MW zoom and the rack wheel boost rely on.
+    use crate::ui::util::wheel_event_points;
+    use egui::{MouseWheelUnit, vec2};
+
+    #[test]
+    fn point_unit_passes_through() {
+        let d = wheel_event_points(MouseWheelUnit::Point, vec2(0.0, -14.0), false, 40.0, 800.0);
+        assert_eq!(d, vec2(0.0, -14.0));
+    }
+
+    #[test]
+    fn line_unit_scales_by_line_speed() {
+        let d = wheel_event_points(MouseWheelUnit::Line, vec2(0.0, 1.0), false, 40.0, 800.0);
+        assert_eq!(d, vec2(0.0, 40.0));
+    }
+
+    #[test]
+    fn page_unit_scales_by_viewport_height() {
+        let d = wheel_event_points(MouseWheelUnit::Page, vec2(0.0, -0.5), false, 40.0, 800.0);
+        assert_eq!(d, vec2(0.0, -400.0));
+    }
+
+    #[test]
+    fn shift_folds_vertical_into_horizontal() {
+        let d = wheel_event_points(MouseWheelUnit::Point, vec2(2.0, 10.0), true, 40.0, 800.0);
+        assert_eq!(d, vec2(12.0, 0.0));
+    }
+}

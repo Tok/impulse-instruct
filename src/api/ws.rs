@@ -86,7 +86,7 @@ async fn push_state(
         return true; // unchanged — skip the send to keep traffic low
     }
     *last_hash = h;
-    socket.send(Message::Text(json)).await.is_ok()
+    socket.send(Message::Text(json.into())).await.is_ok()
 }
 
 /// Cheap rolling hash over the serialised state bytes.  FNV-1a 64-bit;

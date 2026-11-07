@@ -339,7 +339,7 @@ mod tests {
             .iter()
             .filter(|s| s.format.color != theme::FOG && s.format.color != theme::SMOKE)
             .map(|s| {
-                let range = s.byte_range.clone();
+                let range = s.byte_range.start.0..s.byte_range.end.0;
                 (text[range].to_string(), s.format.color)
             })
             .collect()

@@ -35,7 +35,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         for agent in &s.llm_agents {
             ctx.data_mut(|d| {
                 d.insert_temp(
-                    egui::Id::new("agent_persona").with(agent.id),
+                    egui::Id::unique("agent_persona").with(agent.id),
                     agent.persona_name.clone(),
                 );
             });
@@ -52,7 +52,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     let mut ports: Vec<PortPos> = Vec::new();
     let canvas_rect = ui.available_rect_before_wrap();
 
-    let ports_mem_id = egui::Id::new("rack_port_positions");
+    let ports_mem_id = egui::Id::unique("rack_port_positions");
     let prev_ports: Vec<PortPos> = ctx
         .memory(|m| m.data.get_temp(ports_mem_id))
         .unwrap_or_default();
@@ -81,15 +81,21 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         }
     }
 
-    let scroll_out = ScrollArea::vertical()
-        .id_source("rack_scroll")
-        .drag_to_scroll(false)
+    let mut scroll_area = ScrollArea::vertical()
+        .id_salt("rack_scroll")
+        .scroll_source(egui::scroll_area::ScrollSource {
+            drag: egui::scroll_area::DragScroll::Never,
+            ..Default::default()
+        })
         .auto_shrink([false; 2])
-        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
-        .show(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            draw_rack_inner(app, ui, &mut ports);
-        });
+        .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible);
+    if let Some(y) = super::rack_scroll::take_rack_scroll_y(ctx) {
+        scroll_area = scroll_area.vertical_scroll_offset(y);
+    }
+    let scroll_out = scroll_area.show(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        draw_rack_inner(app, ui, &mut ports);
+    });
 
     super::rack_scroll::handle_scroll(app, ctx, &scroll_target, &scroll_out);
     super::rack_scroll::publish_focus(app, ctx);
@@ -101,7 +107,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
     // the cached card_rects published at the bottom of draw_rack_inner.
     if app.state.read().ui_prefs.show_rack_minimap {
         let cards: Vec<(crate::state::ModuleKind, egui::Rect)> = ctx
-            .memory(|m| m.data.get_temp(egui::Id::new("module_card_rects")))
+            .memory(|m| m.data.get_temp(egui::Id::unique("module_card_rects")))
             .unwrap_or_default();
         if !cards.is_empty() {
             super::rack_minimap::draw(ctx, canvas_rect, &cards, &scroll_out);
@@ -114,7 +120,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
         let time = ctx.input(|i| i.time) as f32;
         let mut overlay = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Foreground,
-            egui::Id::new("port_highlights"),
+            egui::Id::unique("port_highlights"),
         ));
         overlay.set_clip_rect(canvas_rect);
 
@@ -132,7 +138,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                     overlay.circle_stroke(
                         pp.center,
                         module_card::PORT_RADIUS + 3.5,
-                        egui::Stroke::new(1.5, egui::Color32::from_white_alpha(200)),
+                        egui::Stroke::new(1.5, crate::ui::theme::white_alpha(200)),
                     );
                 } else if is_compatible {
                     // Pulsing ring on valid targets — faster pulse when hovered.
@@ -144,7 +150,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                     overlay.circle_stroke(
                         pp.center,
                         module_card::PORT_RADIUS + 3.5,
-                        egui::Stroke::new(1.5, egui::Color32::from_white_alpha(alpha)),
+                        egui::Stroke::new(1.5, crate::ui::theme::white_alpha(alpha)),
                     );
                 }
                 // Incompatible ports: no decoration
@@ -153,7 +159,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                 overlay.circle_stroke(
                     pp.center,
                     module_card::PORT_RADIUS + 2.5,
-                    egui::Stroke::new(1.0, egui::Color32::from_white_alpha(110)),
+                    egui::Stroke::new(1.0, crate::ui::theme::white_alpha(110)),
                 );
             }
         }
@@ -213,7 +219,7 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
 
         let painter = ctx.layer_painter(egui::LayerId::new(
             egui::Order::Tooltip,
-            egui::Id::new("module_drag_ghost"),
+            egui::Id::unique("module_drag_ghost"),
         ));
         let (fill, stroke_col) = if drop_blocked {
             (
@@ -226,11 +232,12 @@ pub fn draw_rack(app: &mut ImpulseApp, ctx: &egui::Context, ui: &mut egui::Ui) {
                 Color32::from_gray(140),
             )
         };
-        painter.rect_filled(ghost_rect, egui::Rounding::same(CARD_ROUNDING), fill);
+        painter.rect_filled(ghost_rect, egui::CornerRadius::from(CARD_ROUNDING), fill);
         painter.rect_stroke(
             ghost_rect,
-            egui::Rounding::same(CARD_ROUNDING),
+            egui::CornerRadius::from(CARD_ROUNDING),
             egui::Stroke::new(2.0, stroke_col),
+            egui::StrokeKind::Middle,
         );
         ctx.request_repaint();
     }
@@ -249,7 +256,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
     let col_w = grid_col_w(available_w);
     // Publish col_w so panels can read it via grid_unit()
     ui.ctx()
-        .data_mut(|d| d.insert_temp(egui::Id::new(GRID_COL_W_ID), col_w));
+        .data_mut(|d| d.insert_temp(egui::Id::unique(GRID_COL_W_ID), col_w));
 
     // Publish each LfoModule's slot index (0..3 by rack order) so the back
     // panel can label LFO #1, #2, … and CV-OUT jacks can reference it too.
@@ -259,7 +266,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
         for m in &s.rack.modules {
             if m.kind == ModuleKind::LfoModule {
                 ui.ctx()
-                    .data_mut(|d| d.insert_temp(egui::Id::new("lfo_slot").with(m.id), idx));
+                    .data_mut(|d| d.insert_temp(egui::Id::unique("lfo_slot").with(m.id), idx));
                 idx += 1;
             }
         }
@@ -387,7 +394,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             let y = zone_rect.min.y + gr as f32 * step;
             let card_rect =
                 egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
-            let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
+            let mut child = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(card_rect)
+                    .layout(egui::Layout::top_down(egui::Align::LEFT)),
+            );
             let reaches_master = app.state.read().rack.reaches_master(id);
             let resp = if app.rack_flipped {
                 module_card::module_card_back(
@@ -522,7 +533,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             let y = zone_rect.min.y + gr as f32 * step;
             let card_rect =
                 egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
-            let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
+            let mut child = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(card_rect)
+                    .layout(egui::Layout::top_down(egui::Align::LEFT)),
+            );
             let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(id);
             let eff_enabled = if is_dragging { false } else { enabled };
             let reaches_master = app.state.read().rack.reaches_master(id);
@@ -673,7 +688,11 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
             let y = zone_rect.min.y + gr as f32 * step;
             let card_rect =
                 egui::Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(slot_w, slot_h));
-            let mut child = ui.child_ui(card_rect, egui::Layout::top_down(egui::Align::LEFT), None);
+            let mut child = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(card_rect)
+                    .layout(egui::Layout::top_down(egui::Align::LEFT)),
+            );
             let is_dragging = app.module_drag.as_ref().map(|d| d.module_id) == Some(id);
             let eff_enabled = if is_dragging { false } else { enabled };
             let reaches_master = app.state.read().rack.reaches_master(id);
@@ -776,7 +795,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
                 let p = ui.painter();
                 p.rect_filled(
                     resp.card_rect,
-                    egui::Rounding::same(CARD_ROUNDING),
+                    egui::CornerRadius::from(CARD_ROUNDING),
                     Color32::from_rgba_premultiplied(0, 0, 0, 120),
                 );
             }
@@ -816,7 +835,7 @@ fn draw_rack_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, ports: &mut Vec<Port
 
     ui.ctx().memory_mut(|m| {
         m.data
-            .insert_temp(egui::Id::new("module_card_rects"), card_rects)
+            .insert_temp(egui::Id::unique("module_card_rects"), card_rects)
     });
 }
 // ─── Module drag helpers ──────────────────────────────────────────────────────

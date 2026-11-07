@@ -6,6 +6,25 @@ use egui::scroll_area::ScrollAreaOutput;
 use crate::state::ModuleKind;
 use crate::ui::ImpulseApp;
 
+/// egui 0.37 made `scroll_area::State::offset` private, so rack scroll
+/// writes are queued in egui temp memory and applied when `draw_rack`
+/// builds the next frame's `ScrollArea` (`vertical_scroll_offset`).  The
+/// old mutate-and-`store` path took effect on the next frame too, so the
+/// latency is unchanged.  Last write in a frame wins, as before.
+fn pending_scroll_id() -> egui::Id {
+    egui::Id::unique("rack_scroll_pending_y")
+}
+
+/// Queue an absolute rack scroll offset for the next frame.
+pub(crate) fn set_rack_scroll_y(ctx: &egui::Context, y: f32) {
+    ctx.data_mut(|d| d.insert_temp(pending_scroll_id(), y));
+}
+
+/// Take the queued rack scroll offset, if any (called once per frame).
+pub(crate) fn take_rack_scroll_y(ctx: &egui::Context) -> Option<f32> {
+    ctx.data_mut(|d| d.remove_temp::<f32>(pending_scroll_id()))
+}
+
 /// Resolve a scroll target string to a focus-highlight module kind.
 pub(crate) fn resolve_focus_kind(target: &str) -> Option<ModuleKind> {
     match target.to_ascii_lowercase().as_str() {
@@ -35,21 +54,19 @@ pub(crate) fn handle_scroll(
     scroll_target: &Option<String>,
     scroll_out: &ScrollAreaOutput<()>,
 ) {
-    let scroll_state_id = scroll_out.id;
+    let cur_y = scroll_out.state.clamped_offset().y;
     let max_y = (scroll_out.content_size.y - scroll_out.inner_rect.height()).max(0.0);
 
     // ── Mouse wheel boost (3× default speed) ─────────────────────────────────
     {
-        let wheel_y = ctx.input(|i| i.raw_scroll_delta.y);
+        let wheel_y = crate::ui::util::raw_wheel_delta(ctx).y;
         if wheel_y.abs() > 0.1
             && scroll_out
                 .inner_rect
                 .contains(ctx.pointer_latest_pos().unwrap_or_default())
         {
             let boost = wheel_y * 2.0; // 2× extra on top of egui's 1× = 3× total
-            let mut state = scroll_out.state;
-            state.offset.y = (state.offset.y - boost).clamp(0.0, max_y);
-            state.store(ctx, scroll_state_id);
+            set_rack_scroll_y(ctx, (cur_y - boost).clamp(0.0, max_y));
         }
     }
 
@@ -63,9 +80,7 @@ pub(crate) fn handle_scroll(
         // Two-finger vertical pan → rack scroll.  X-component is
         // ignored because the rack scrolls vertically only.
         if mt.translation_delta.y.abs() > 0.1 {
-            let mut state = scroll_out.state;
-            state.offset.y = (state.offset.y - mt.translation_delta.y).clamp(0.0, max_y);
-            state.store(ctx, scroll_state_id);
+            set_rack_scroll_y(ctx, (cur_y - mt.translation_delta.y).clamp(0.0, max_y));
             ctx.request_repaint();
         }
         // Pinch zoom → global UI scale, clamped to the same 0.5..=3.0
@@ -84,21 +99,21 @@ pub(crate) fn handle_scroll(
     {
         let scroll_speed = 180.0;
         let wasd = ctx
-            .data(|d| d.get_temp::<bool>(egui::Id::new("wasd_as_arrows")))
+            .data(|d| d.get_temp::<bool>(egui::Id::unique("wasd_as_arrows")))
             .unwrap_or(false);
         let up =
             ctx.input(|i| i.key_down(egui::Key::ArrowUp) || (wasd && i.key_down(egui::Key::W)));
         let down =
             ctx.input(|i| i.key_down(egui::Key::ArrowDown) || (wasd && i.key_down(egui::Key::S)));
         if up || down {
-            let mut state = scroll_out.state;
+            let mut y = cur_y;
             if down {
-                state.offset.y = (state.offset.y + scroll_speed).min(max_y);
+                y = (y + scroll_speed).min(max_y);
             }
             if up {
-                state.offset.y = (state.offset.y - scroll_speed).max(0.0);
+                y = (y - scroll_speed).max(0.0);
             }
-            state.store(ctx, scroll_state_id);
+            set_rack_scroll_y(ctx, y);
             ctx.request_repaint();
         }
     }
@@ -112,7 +127,7 @@ pub(crate) fn handle_scroll(
 
         // Read card_rects from this frame (stored by draw_rack_inner).
         let card_rects: Vec<(ModuleKind, egui::Rect)> = ctx
-            .memory(|m| m.data.get_temp(egui::Id::new("module_card_rects")))
+            .memory(|m| m.data.get_temp(egui::Id::unique("module_card_rects")))
             .unwrap_or_default();
 
         // Try module-level first, fall back to zone-level.
@@ -127,7 +142,7 @@ pub(crate) fn handle_scroll(
                         // rect.top() = screen position of the module card.
                         // The difference + current offset = absolute content Y.
                         let screen_offset = rect.top() - scroll_out.inner_rect.top();
-                        scroll_out.state.offset.y + screen_offset
+                        cur_y + screen_offset
                     })
             })
             .or_else(|| match t.to_ascii_lowercase().as_str() {
@@ -151,16 +166,14 @@ pub(crate) fn handle_scroll(
             });
 
         if let Some(y) = target_y {
-            let mut state = scroll_out.state;
-            let old_y = state.offset.y;
-            state.offset.y = y.max(0.0).min(max_y);
-            state.store(ctx, scroll_state_id);
+            let new_y = y.max(0.0).min(max_y);
+            set_rack_scroll_y(ctx, new_y);
             ctx.request_repaint();
             log::info!(
                 "API scroll {:?}: offset {:.0} → {:.0}  (max={:.0})",
                 t,
-                old_y,
-                state.offset.y,
+                cur_y,
+                new_y,
                 max_y
             );
         } else if module_kind.is_some() {
@@ -180,7 +193,7 @@ pub(crate) fn publish_focus(app: &mut ImpulseApp, ctx: &egui::Context) {
     }
     ctx.data_mut(|d| {
         d.insert_temp(
-            egui::Id::new("focused_module"),
+            egui::Id::unique("focused_module"),
             app.focused_module.map(|k| (k, elapsed)),
         );
     });

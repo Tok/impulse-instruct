@@ -121,7 +121,7 @@ fn draw_harmonic_histogram(
         return false;
     }
     let painter = ui.painter_at(rect);
-    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(&painter, rect, egui::CornerRadius::same(2));
 
     let n = ADDITIVE_HARMONICS as f32;
     let col_w = rect.width() / n;
@@ -174,7 +174,7 @@ fn draw_harmonic_histogram(
         } else {
             egui::Color32::from_gray(140)
         };
-        painter.rect_filled(bar, egui::Rounding::same(1.0), shade);
+        painter.rect_filled(bar, egui::CornerRadius::same(1), shade);
         // Tiny harmonic-number tick label above bar 0, 4, 8, 12.
         // Keeps the strip readable without crowding every column.
         if i.is_multiple_of(4) {

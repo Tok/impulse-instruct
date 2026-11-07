@@ -56,13 +56,13 @@ pub(crate) fn draw_pad_cycle_button(
     )
     .fill(Color32::from_gray(22))
     .stroke(egui::Stroke::new(0.5, Color32::from_gray(55)))
-    .rounding(egui::Rounding::same(3.0));
+    .corner_radius(egui::CornerRadius::same(3));
     let resp = ui.add(btn).on_hover_text("Cycle pad pair");
     if resp.clicked() {
         let pair = crate::ui::widgets::xy_pad_pair(ui.ctx(), pad_id);
         let next = (pair + 1) % num_pairs.max(1);
         ui.ctx()
-            .data_mut(|d| d.insert_temp(egui::Id::new(pad_id), next));
+            .data_mut(|d| d.insert_temp(egui::Id::unique(pad_id), next));
     }
 }
 
@@ -175,7 +175,7 @@ pub(crate) fn render_three_pad(
     // Push authoritative pair into egui temp so the widget renders it.
     let cur_pair = (*pair_state as usize) % 3;
     ui.ctx()
-        .data_mut(|d| d.insert_temp(egui::Id::new(pad_id), cur_pair));
+        .data_mut(|d| d.insert_temp(egui::Id::unique(pad_id), cur_pair));
 
     let (lx, ly) = three_pair_labels(cur_pair, labels[0], labels[1], labels[2]);
     let pad_locked = match cur_pair {
@@ -208,7 +208,7 @@ pub(crate) fn render_three_pad(
     // Read back: right-click on pad and cycle-button clicks both went to temp.
     let new_pair = ui
         .ctx()
-        .data(|d| d.get_temp::<usize>(egui::Id::new(pad_id)))
+        .data(|d| d.get_temp::<usize>(egui::Id::unique(pad_id)))
         .unwrap_or(cur_pair)
         % 3;
     let pair_changed = new_pair != cur_pair;

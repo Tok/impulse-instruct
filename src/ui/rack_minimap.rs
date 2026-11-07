@@ -72,17 +72,22 @@ pub fn draw(
         ),
         Vec2::new(MINIMAP_W, MINIMAP_H),
     );
-    let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::new("rack_minimap"));
+    let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("rack_minimap"));
     let mut painter = ctx.layer_painter(layer);
     painter.set_clip_rect(canvas_rect);
 
-    let r = egui::Rounding::same(4.0);
+    let r = egui::CornerRadius::same(4);
     painter.rect_filled(map_rect, r, Color32::from_rgba_premultiplied(8, 8, 8, 220));
-    painter.rect_stroke(map_rect, r, Stroke::new(0.8, theme::IRON));
+    painter.rect_stroke(
+        map_rect,
+        r,
+        Stroke::new(0.8, theme::IRON),
+        egui::StrokeKind::Middle,
+    );
 
     let content_h = scroll_out.content_size.y.max(1.0);
     let scroll_inner_min = scroll_out.inner_rect.min;
-    let scroll_offset_y = scroll_out.state.offset.y;
+    let scroll_offset_y = scroll_out.state.clamped_offset().y;
 
     // Map width: just clip cards to the canvas width range.  Most
     // racks fit a single column at the chosen grid_cols, so the X
@@ -103,7 +108,7 @@ pub fn draw(
             Pos2::new(x0 + 1.0, y0 + 1.0),
             Pos2::new((x1 - 1.0).max(x0 + 2.0), (y1 - 1.0).max(y0 + 2.0)),
         );
-        painter.rect_filled(thumb, egui::Rounding::same(1.0), Color32::from_gray(70));
+        painter.rect_filled(thumb, egui::CornerRadius::same(1), Color32::from_gray(70));
     }
 
     // Viewport indicator: the slice of content currently visible.
@@ -121,13 +126,14 @@ pub fn draw(
     );
     painter.rect_filled(
         view_rect,
-        egui::Rounding::same(1.5),
+        egui::CornerRadius::from(1.5),
         Color32::from_rgba_premultiplied(220, 220, 220, 22),
     );
     painter.rect_stroke(
         view_rect,
-        egui::Rounding::same(1.5),
+        egui::CornerRadius::from(1.5),
         Stroke::new(1.0, theme::CHALK),
+        egui::StrokeKind::Middle,
     );
 
     // Click-to-pan handler — read pointer state directly since the
@@ -145,9 +151,7 @@ pub fn draw(
         let max_y = (content_h - visible_h).max(0.0);
         let target_centre = map_y_to_content_y(pos.y, content_h, map_rect.min.y, MINIMAP_H);
         let target_top = (target_centre - visible_h * 0.5).clamp(0.0, max_y);
-        let mut state = scroll_out.state;
-        state.offset.y = target_top;
-        state.store(ctx, scroll_out.id);
+        super::rack_scroll::set_rack_scroll_y(ctx, target_top);
         clicked = true;
     }
     clicked

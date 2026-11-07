@@ -13,35 +13,31 @@ path = "src/bin/model_eval/main.rs"
 
 [dependencies]
 # Audio I/O
-cpal = "0.15"
-
-# DSP graph
-fundsp = { version = "0.18", default-features = false, features = ["std"] }
+cpal = "0.18"
 
 # UI — immediate-mode, cross-platform
-eframe = { version = "0.28", default-features = false, features = ["default_fonts", "glow"] }
-egui = "0.28"
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "x11", "wayland", "clipboard", "links"] }
+egui = "0.37"
 # Native file dialogs for File → Open / Open Project.  `xdg-portal` feature
 # lets Linux flatpaks / distros without gtk still get a working picker via
 # the freedesktop XDG portal.
-rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
+rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
 
 # HTTP API (MCP bridge) + llama-server HTTP client
-axum = { version = "0.7", features = ["json", "ws"] }
+axum = { version = "0.8", features = ["json", "ws"] }
 tokio = { version = "1", features = ["full"] }
-tower-http = { version = "0.5", features = ["cors"] }
-ureq = { version = "2", features = ["json"] }
+tower-http = { version = "0.7", features = ["cors"] }
+ureq = { version = "3", features = ["json"] }
 
 # MIDI
-midir = "0.9"
+midir = "0.11"
 # SMF (Standard MIDI File) parser for File → Import MIDI and the Bach
 # scenario import.  Pure Rust, zero-copy, no_std-friendly — pulls in no
 # extra runtime dependencies.
 midly = "0.5"
 
 # OSC (Open Sound Control) — UDP listener for Max/MSP, TouchOSC, Ableton
-rosc = "0.9"
-midi-msg = "0.5"
+rosc = "0.11"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -56,10 +52,10 @@ hound = "3"
 claxon = "0.4"
 
 # Lock-free audio↔UI ring buffer (wait-free, no-alloc in callback)
-rtrb = "0.3"
+rtrb = "0.4"
 
 # Concurrency
-parking_lot = "0.12"
+parking_lot = "0.13"
 crossbeam-channel = "0.5"
 
 # Utilities
@@ -67,7 +63,6 @@ libc = "0.2"
 anyhow = "1"
 log = "0.4"
 env_logger = "0.11"
-thiserror = "1"
 rustfft = "6"
 
 # Ableton Link — optional, gated behind the `link` feature so default

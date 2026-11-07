@@ -108,7 +108,7 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 let halo_reach = 30.0_f32;
                 let clip = led_rect
                     .expand(halo_reach)
-                    .intersect(ui.ctx().available_rect());
+                    .intersect(crate::ui::util::central_rect(ui.ctx()));
                 let overlay = ui.painter_at(clip);
                 theme::led(
                     &overlay,
@@ -142,8 +142,8 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                             .to_string(),
                         None => "(Def)".to_string(),
                     };
-                    let combo_id = ui.id().with("agent_model").with(module_id);
-                    egui::ComboBox::from_id_source(combo_id)
+                    let combo_id = ui.scope_id().with("agent_model").with(module_id);
+                    egui::ComboBox::from_id_salt(combo_id)
                         .selected_text(
                             egui::RichText::new(&display_name)
                                 .color(theme::SMOKE)
@@ -514,8 +514,8 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
                 .map(|e| e.name.to_string())
                 .unwrap_or_else(|| s.clone()),
         };
-        let combo_id = ui.id().with("agent_style").with(module_id);
-        egui::ComboBox::from_id_source(combo_id)
+        let combo_id = ui.scope_id().with("agent_style").with(module_id);
+        egui::ComboBox::from_id_salt(combo_id)
             .selected_text(
                 egui::RichText::new(&display)
                     .color(theme::SMOKE)
@@ -684,7 +684,7 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
             "load…".to_string()
         };
         let mut load_path: Option<std::path::PathBuf> = None;
-        egui::ComboBox::from_id_source(("persona_preset_combo", module_id))
+        egui::ComboBox::from_id_salt(("persona_preset_combo", module_id))
             .width(140.0)
             .selected_text(egui::RichText::new(label).monospace().size(7.5))
             .show_ui(ui, |ui| {
@@ -733,14 +733,14 @@ fn draw_llm_agent_inner(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32)
     } else {
         theme::IRON
     };
-    let collapse_id = ui.id().with("prompt_ovr").with(module_id);
+    let collapse_id = ui.scope_id().with("prompt_ovr").with(module_id);
     egui::CollapsingHeader::new(
         egui::RichText::new(ovr_header)
             .monospace()
             .size(7.5)
             .color(header_col),
     )
-    .id_source(collapse_id)
+    .id_salt(collapse_id)
     .default_open(false)
     .show(ui, |ui| {
         let ovr_resp = ui.add(

@@ -199,7 +199,7 @@ fn chip_button(ui: &mut egui::Ui, label: &str, selected: bool) -> egui::Response
                 .small()
                 .fill(if selected { theme::IRON } else { theme::PIT })
                 .stroke(egui::Stroke::NONE)
-                .rounding(2.0),
+                .corner_radius(2.0),
         )
     })
     .inner
@@ -326,7 +326,7 @@ pub fn draw_mod_input_ports(
         };
         ui.interact(
             Rect::from_center_size(pos, port_size),
-            ui.id().with(("bp_mod_in", i)),
+            ui.scope_id().with(("bp_mod_in", i)),
             Sense::hover(),
         )
         .on_hover_text(tip);
@@ -355,7 +355,7 @@ pub fn draw_mod_selector_dropdowns(
     // only the anchor; the overlay itself extends ~50–70 px below it (one
     // slider row + up to two wrapped chip rows), so we need a fatter
     // buffer to avoid the bottom-panel collision the user reported.
-    let screen_bottom = ctx.screen_rect().max.y;
+    let screen_bottom = ctx.content_rect().max.y;
     let bottom_panel_h = 105.0_f32;
     let overlay_est_h_max = 70.0_f32;
     let max_overlay_y = screen_bottom - bottom_panel_h - overlay_est_h_max;
@@ -437,20 +437,20 @@ pub fn draw_mod_selector_dropdowns(
         // further right (past the jack label) — so usable horizontal
         // budget = card_w - 16 - 36 - 4 (right margin).
         let card_w = ctx
-            .data(|d| d.get_temp::<f32>(egui::Id::new("back_card_w").with(p.port.module_id)))
+            .data(|d| d.get_temp::<f32>(egui::Id::unique("back_card_w").with(p.port.module_id)))
             .unwrap_or(180.0);
         let overlay_max_w = (card_w - 56.0).max(110.0);
         let chip_strip_w = (overlay_max_w - 8.0).max(90.0);
-        egui::Area::new(egui::Id::new(("mod_overlay", p.port.module_id, idx)))
+        egui::Area::new(egui::Id::unique(("mod_overlay", p.port.module_id, idx)))
             .order(egui::Order::Foreground)
             .fixed_pos(anchor)
             .show(ctx, |ui| {
                 ui.set_max_width(overlay_max_w);
-                let frame = egui::Frame::none()
+                let frame = egui::Frame::NONE
                     .fill(theme::DEEP)
                     .stroke(egui::Stroke::new(0.5, Color32::from_gray(50)))
-                    .rounding(2.0)
-                    .inner_margin(egui::Margin::symmetric(3.0, 1.0));
+                    .corner_radius(2.0)
+                    .inner_margin(egui::Margin::symmetric(3, 1));
                 frame.show(ui, |ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(3.0, 1.0);
                     // First row: polarity · depth slider · % readout

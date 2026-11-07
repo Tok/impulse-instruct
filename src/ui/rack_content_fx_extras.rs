@@ -230,7 +230,7 @@ pub(super) fn try_draw_fx_extras_content(
                     let mut any_changed = false;
                     for (i, lbl) in labels.iter().enumerate() {
                         let sel = mode == i as u8;
-                        if ui.add(egui::SelectableLabel::new(sel, *lbl)).clicked() {
+                        if ui.add(egui::Button::selectable(sel, *lbl)).clicked() {
                             mode = i as u8;
                             any_changed = true;
                         }

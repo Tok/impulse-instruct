@@ -37,7 +37,7 @@ pub fn event_stream(
     let painter = ui.painter_at(rect); // clip to rect bounds
 
     // Recessed-screen background (matches oscilloscopes for visual continuity)
-    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(&painter, rect, egui::CornerRadius::same(2));
 
     let pad = 2.0_f32;
     let outer = Rect::from_min_max(rect.min + Vec2::splat(pad), rect.max - Vec2::splat(pad));
@@ -144,8 +144,8 @@ pub fn event_stream(
         }
         let fill_a = ((base_alpha as f32) * 0.30) as u8;
         let stroke_a = ((base_alpha as f32) * 0.55) as u8;
-        let fill = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), fill_a);
-        let stroke = Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), stroke_a);
+        let fill = crate::ui::theme::rgba_unmultiplied(color.r(), color.g(), color.b(), fill_a);
+        let stroke = crate::ui::theme::rgba_unmultiplied(color.r(), color.g(), color.b(), stroke_a);
         painter.add(egui::Shape::Path(egui::epaint::PathShape {
             points: poly,
             closed: true,
@@ -355,7 +355,12 @@ pub fn event_stream(
                 [Pos2::new(x + r, y), Pos2::new(x + r + tail_len, y)],
                 Stroke::new(
                     (r * 0.55).max(1.0),
-                    Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), tail_alpha),
+                    crate::ui::theme::rgba_unmultiplied(
+                        color.r(),
+                        color.g(),
+                        color.b(),
+                        tail_alpha,
+                    ),
                 ),
             );
         }
@@ -451,7 +456,7 @@ pub fn event_stream(
                             [Pos2::new(x + r, y), Pos2::new(nx - circle_r, ny)],
                             Stroke::new(
                                 1.0,
-                                Color32::from_rgba_unmultiplied(
+                                crate::ui::theme::rgba_unmultiplied(
                                     color.r(),
                                     color.g(),
                                     color.b(),

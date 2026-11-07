@@ -30,7 +30,7 @@ pub fn draw_scope_colored(
         return;
     }
     let painter = ui.painter();
-    theme::draw_screen_bezel(painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(painter, rect, egui::CornerRadius::same(2));
 
     let w = rect.width();
     let mid = rect.center().y;
@@ -248,7 +248,7 @@ pub fn draw_footer_status(
         );
         // Estimate right-side width and center the stats
         let right_w = 180.0; // DSP sparkline + API + GitHub
-        let center_w = ui.fonts(|f| {
+        let center_w = ui.fonts_mut(|f| {
             f.layout_no_wrap(
                 center_text.clone(),
                 egui::FontId::monospace(8.0),
@@ -351,14 +351,14 @@ pub const SHORTCUT_GROUPS: &[(&str, &[(&str, &str)])] = &[
 /// Keyboard shortcuts help overlay. Returns true if close was clicked.
 pub fn draw_shortcuts_overlay(ctx: &egui::Context) -> bool {
     let mut close = false;
-    egui::Area::new(egui::Id::new("shortcuts_overlay"))
+    egui::Area::new(egui::Id::unique("shortcuts_overlay"))
         .fixed_pos(egui::pos2(40.0, 40.0))
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style())
                 .fill(egui::Color32::from_rgba_premultiplied(18, 18, 18, 240))
-                .rounding(egui::Rounding::same(8.0))
-                .inner_margin(egui::Margin::same(16.0))
+                .corner_radius(egui::CornerRadius::same(8))
+                .inner_margin(egui::Margin::same(16))
                 .show(ui, |ui| {
                     ui.heading(
                         egui::RichText::new("Keyboard Shortcuts")
@@ -404,10 +404,10 @@ pub fn draw_shortcuts_overlay(ctx: &egui::Context) -> bool {
 
 /// CRT scan-line overlay + edge vignette.
 pub fn draw_crt_overlay(ctx: &egui::Context) {
-    let screen = ctx.screen_rect();
+    let screen = ctx.content_rect();
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,
-        egui::Id::new("crt_overlay"),
+        egui::Id::unique("crt_overlay"),
     ));
     // Scan lines: semi-transparent dark lines at regular intervals
     let line_spacing = 6.0;
@@ -466,7 +466,7 @@ pub fn draw_ring_scope_colored(
     }
     let painter = ui.painter();
     // Recessed-screen background — matches the linear scope and event stream
-    theme::draw_screen_bezel(painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(painter, rect, egui::CornerRadius::same(2));
     let center = rect.center();
     let outer_r = size * 0.45;
     let inner_r = outer_r * 0.4;

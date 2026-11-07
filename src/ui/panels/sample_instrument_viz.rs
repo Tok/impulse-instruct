@@ -129,7 +129,7 @@ pub(crate) fn draw_waveform(
         return false;
     }
     let painter = ui.painter_at(rect);
-    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(&painter, rect, egui::CornerRadius::same(2));
     if thumb.is_empty() {
         return false;
     }
@@ -150,20 +150,20 @@ pub(crate) fn draw_waveform(
     let mut changed = false;
     // Shade outside the loop window when looping is on.
     if loop_enabled && *loop_end > *loop_start {
-        let shade = Color32::from_rgba_unmultiplied(8, 8, 8, 160);
+        let shade = crate::ui::theme::rgba_unmultiplied(8, 8, 8, 160);
         let ls_x = rect.min.x + loop_start.clamp(0.0, 1.0) * rect.width();
         let le_x = rect.min.x + loop_end.clamp(0.0, 1.0) * rect.width();
         if ls_x > rect.min.x {
             painter.rect_filled(
                 Rect::from_min_max(rect.min, Pos2::new(ls_x, rect.max.y)),
-                egui::Rounding::ZERO,
+                egui::CornerRadius::ZERO,
                 shade,
             );
         }
         if le_x < rect.max.x {
             painter.rect_filled(
                 Rect::from_min_max(Pos2::new(le_x, rect.min.y), rect.max),
-                egui::Rounding::ZERO,
+                egui::CornerRadius::ZERO,
                 shade,
             );
         }
@@ -306,7 +306,7 @@ pub(crate) fn draw_zone_map(
         return;
     }
     let painter = ui.painter_at(rect);
-    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(&painter, rect, egui::CornerRadius::same(2));
 
     // Show MIDI 21..=108 (piano range) so the strip uses the visible
     // area for the notes a user actually plays.  Out-of-range regions
@@ -399,12 +399,13 @@ pub(crate) fn draw_zone_map(
         } else {
             Color32::from_gray(150)
         };
-        painter.rect_filled(*band, egui::Rounding::same(1.0), shade);
+        painter.rect_filled(*band, egui::CornerRadius::same(1), shade);
         if is_selected {
             painter.rect_stroke(
                 *band,
-                egui::Rounding::same(1.0),
+                egui::CornerRadius::same(1),
                 Stroke::new(1.0, Color32::from_gray(255)),
+                egui::StrokeKind::Middle,
             );
         }
         // Tick at pitch_keycenter — bright pip so the user sees where

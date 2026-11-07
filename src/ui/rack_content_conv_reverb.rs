@@ -22,7 +22,7 @@ pub(super) fn draw_conv_reverb(
     let _ = ModuleKind::FxConvReverb;
     let scale: f32 = ui
         .ctx()
-        .data(|d| d.get_temp(egui::Id::new("module_scale")))
+        .data(|d| d.get_temp(egui::Id::unique("module_scale")))
         .unwrap_or(1.0);
     let ctrl = widgets::ControlPrefs::from_prefs_scaled(&app.state.read().ui_prefs, scale);
     let locked = app.state.read().llm.locked_params.clone();

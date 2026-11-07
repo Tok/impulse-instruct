@@ -4,7 +4,7 @@
 // so the main header module can stay focused on the transport strip
 // and log/scope panel.
 
-use egui::{Frame, TopBottomPanel};
+use egui::Frame;
 use std::path::{Path, PathBuf};
 
 use crate::export::{export_mp3, export_stems, export_wav};
@@ -17,16 +17,14 @@ fn list_recent_projects() -> Vec<PathBuf> {
     list_recent_projects_in(Path::new("."))
 }
 
-/// Process-global tokio runtime dedicated to `rfd` file-picker calls.
-/// Kept alive for the lifetime of the app so ashpd's cached D-Bus
-/// connection (and zbus's executor state) survives across successive
-/// picker invocations — a fresh per-call runtime hangs the second Import
-/// MIDI click because the zbus proxy established on the first call is
-/// tied to a runtime that's already been dropped.
+/// Process-global executor for `rfd::AsyncFileDialog` calls.
 ///
-/// Multi-thread runtime (not current-thread) because ashpd internally
-/// issues `tokio::spawn_blocking`, which needs a real blocking-pool,
-/// not just a single-threaded event loop.
+/// History: rfd ≤ 0.14 drove the XDG portal through ashpd/zbus, which
+/// needed a long-lived multi-thread tokio runtime (a per-call runtime
+/// hung the second picker invocation; the UI thread has no runtime, so
+/// sync `pick_file()` panicked).  rfd 0.17 ships its own portal client
+/// with no tokio dependency, so any executor works now — this runtime is
+/// kept because it is proven on the desktop and costs one idle thread.
 fn picker_runtime() -> &'static tokio::runtime::Runtime {
     use std::sync::OnceLock;
     static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
@@ -40,11 +38,8 @@ fn picker_runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
-/// Open a native file-picker using `rfd`'s xdg-portal backend.
-/// `rfd`'s sync `.pick_file()` panics on the egui UI thread because the
-/// portal backend calls `tokio::spawn_blocking` via ashpd and the UI
-/// thread has no tokio runtime.  We drive the async API on the shared
-/// picker runtime (see `picker_runtime` above) instead.
+/// Open a native file-picker using `rfd`'s xdg-portal backend, driven
+/// on the shared picker runtime (see `picker_runtime` above).
 ///
 /// `block_on` here blocks the UI until the user picks a file or cancels —
 /// matches the behaviour of `rfd::FileDialog::pick_file()` that the rest
@@ -64,8 +59,7 @@ pub(crate) fn pick_file_via_portal(filter_name: &str, extensions: &[&str]) -> Op
     })
 }
 
-/// Save-file counterpart to `pick_file_via_portal`.  Same rationale —
-/// the portal backend needs a long-lived tokio reactor.
+/// Save-file counterpart to `pick_file_via_portal`.
 fn save_file_via_portal(
     filter_name: &str,
     extensions: &[&str],
@@ -107,15 +101,15 @@ impl ImpulseApp {
         }
     }
 
-    pub(super) fn draw_menu_bar(&mut self, ctx: &egui::Context) {
-        TopBottomPanel::top("menu_bar")
+    pub(super) fn draw_menu_bar(&mut self, root: &mut egui::Ui) {
+        egui::Panel::top("menu_bar")
             .frame(
-                Frame::none()
+                Frame::NONE
                     .fill(theme::VOID)
-                    .inner_margin(egui::Margin::symmetric(4.0, 2.0)),
+                    .inner_margin(egui::Margin::symmetric(4, 2)),
             )
-            .show(ctx, |ui| {
-                egui::menu::bar(ui, |ui| {
+            .show(root, |ui| {
+                egui::MenuBar::new().ui(ui, |ui| {
                     ui.menu_button(egui::RichText::new("File").monospace().size(10.0), |ui| {
                         if ui
                             .button(egui::RichText::new("New project").monospace().size(10.0))
@@ -127,7 +121,7 @@ impl ImpulseApp {
                             // Snapshot keeps current rack/style intact until
                             // the user actually applies a preset, mirroring
                             // wizard "resume" behaviour.
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("Open project…").monospace().size(10.0))
@@ -144,7 +138,7 @@ impl ImpulseApp {
                             if let Some(path) = picked {
                                 self.load_project_from_path(&path);
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(
@@ -165,7 +159,7 @@ impl ImpulseApp {
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         // Recent projects sub-menu — populated from the cwd
                         // scan so each entry round-trips to the same load
@@ -204,7 +198,7 @@ impl ImpulseApp {
                                 }
                                 if let Some(p) = pick {
                                     self.load_project_from_path(&p);
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             },
                         );
@@ -225,7 +219,7 @@ impl ImpulseApp {
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
 
                         ui.separator();
@@ -248,7 +242,7 @@ impl ImpulseApp {
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
 
                         if ui
@@ -269,7 +263,7 @@ impl ImpulseApp {
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
 
                         if ui
@@ -304,7 +298,7 @@ impl ImpulseApp {
                                     self.log_text.push_str(&format!("{}\n", msg));
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
 
                         ui.separator();
@@ -341,7 +335,7 @@ impl ImpulseApp {
                                     }
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
 
                         if ui
@@ -364,7 +358,7 @@ impl ImpulseApp {
                                     }
                                 }
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
 
                         ui.separator();
@@ -373,7 +367,7 @@ impl ImpulseApp {
                             .button(egui::RichText::new("Quit").monospace().size(10.0))
                             .clicked()
                         {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                     });
 
@@ -394,7 +388,7 @@ impl ImpulseApp {
                                 *self.state.write() = prev;
                                 self.push_audio_params();
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .add_enabled(
@@ -410,7 +404,7 @@ impl ImpulseApp {
                                 *self.state.write() = next;
                                 self.push_audio_params();
                             }
-                            ui.close_menu();
+                            ui.close();
                         }
                         ui.separator();
                         // Eurorack patch generator — wipes the rack to
@@ -445,7 +439,7 @@ impl ImpulseApp {
                             };
                             self.push_audio_params();
                             self.session_dirty = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(
@@ -468,7 +462,7 @@ impl ImpulseApp {
                                     self.patch_morph_input_bars.max(1);
                             }
                             self.show_patch_morph = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
 
@@ -481,7 +475,7 @@ impl ImpulseApp {
                                 self.module_scales.insert(m.kind, 0.6);
                             }
                             self.session_dirty = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("Expand All").monospace().size(10.0))
@@ -489,7 +483,7 @@ impl ImpulseApp {
                         {
                             self.module_scales.clear();
                             self.session_dirty = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("Arrange").monospace().size(10.0))
@@ -497,7 +491,7 @@ impl ImpulseApp {
                         {
                             self.state.write().rack.arrange_canonical();
                             self.session_dirty = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("Reset Layout").monospace().size(10.0))
@@ -506,7 +500,7 @@ impl ImpulseApp {
                             self.module_scales.clear();
                             self.state.write().rack.arrange_canonical();
                             self.session_dirty = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
 
@@ -516,21 +510,21 @@ impl ImpulseApp {
                             .clicked()
                         {
                             self.show_prefs = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("System…").monospace().size(10.0))
                             .clicked()
                         {
                             self.show_sysinfo = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(egui::RichText::new("Lane Diff").monospace().size(10.0))
                             .clicked()
                         {
                             self.show_lane_diff = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button(
@@ -539,7 +533,7 @@ impl ImpulseApp {
                             .clicked()
                         {
                             self.show_undo_timeline = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                         ui.separator();
                         if ui
@@ -547,7 +541,7 @@ impl ImpulseApp {
                             .clicked()
                         {
                             self.show_about = true;
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                 });

@@ -161,7 +161,7 @@ pub(super) const GRID_COL_W_ID: &str = "rack_grid_col_w";
 /// Returns 0.0 if called outside the rack draw cycle.
 #[allow(dead_code)]
 pub(crate) fn grid_unit(ctx: &egui::Context) -> f32 {
-    ctx.data(|d| d.get_temp::<f32>(egui::Id::new(GRID_COL_W_ID)))
+    ctx.data(|d| d.get_temp::<f32>(egui::Id::unique(GRID_COL_W_ID)))
         .unwrap_or(0.0)
 }
 
@@ -241,8 +241,9 @@ pub(super) fn draw_zone_backdrop(
             // Hairline separator between cells — reinforces the tile grid.
             painter.rect_stroke(
                 rect,
-                egui::Rounding::same(1.0),
+                egui::CornerRadius::same(1),
                 egui::Stroke::new(0.5, stroke_col),
+                egui::StrokeKind::Middle,
             );
         }
         y0 += step;

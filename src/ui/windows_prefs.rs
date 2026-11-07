@@ -547,7 +547,7 @@ impl ImpulseApp {
         // Per-session UI state — which style's overrides are currently
         // being edited.  Stored in egui memory so it survives frames
         // without needing an AppState field.
-        let pick_id = egui::Id::new("prefs_style_overrides_pick");
+        let pick_id = egui::Id::unique("prefs_style_overrides_pick");
         let mut pick: String = ui
             .ctx()
             .data(|d| d.get_temp::<String>(pick_id))
@@ -577,7 +577,7 @@ impl ImpulseApp {
                 .find_by_id(&pick)
                 .map(|s| s.name.clone())
                 .unwrap_or_else(|| "— none —".into());
-            egui::ComboBox::from_id_source("style_overrides_dropdown")
+            egui::ComboBox::from_id_salt("style_overrides_dropdown")
                 .selected_text(
                     egui::RichText::new(current_label)
                         .monospace()
@@ -625,7 +625,7 @@ impl ImpulseApp {
                 .size(9.0)
                 .color(theme::FOG),
         );
-        let mc_edit_id = egui::Id::new(("prefs_style_mc", pick.clone()));
+        let mc_edit_id = egui::Id::unique(("prefs_style_mc", pick.clone()));
         let mut mc_buf: String = ui
             .ctx()
             .data(|d| d.get_temp::<String>(mc_edit_id))
@@ -649,7 +649,7 @@ impl ImpulseApp {
                 .size(9.0)
                 .color(theme::FOG),
         );
-        let themes_edit_id = egui::Id::new(("prefs_style_themes", pick.clone()));
+        let themes_edit_id = egui::Id::unique(("prefs_style_themes", pick.clone()));
         let mut themes_buf: String = ui
             .ctx()
             .data(|d| d.get_temp::<String>(themes_edit_id))

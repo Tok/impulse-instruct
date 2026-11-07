@@ -82,7 +82,7 @@ impl ImpulseApp {
                                     .size(9.5)
                                     .color(theme::FOG),
                             )
-                            .id_source(("lane_diff_row", i, rec.cycle))
+                            .id_salt(("lane_diff_row", i, rec.cycle))
                             .default_open(i == 0)
                             .show(ui, |ui| {
                                 let pretty = serde_json::to_string_pretty(&rec.update)

@@ -345,9 +345,7 @@ impl Freeze {
             // Disengaging — clear the captured snapshot and silence the
             // pending output so the next engagement starts fresh.
             self.captured = false;
-            for s in &mut self.out_buf {
-                *s = 0.0;
-            }
+            self.out_buf.fill(0.0);
             self.out_read = self.out_write_anchor;
         }
         self.last_mix = mix;

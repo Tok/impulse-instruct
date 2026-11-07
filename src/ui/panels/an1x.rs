@@ -173,8 +173,8 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
             // Wrap the ADSR display in a padded frame so it has visible
             // breathing room instead of butting up against the F.ENV
             // label and the separator.
-            egui::Frame::none()
-                .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+            egui::Frame::NONE
+                .inner_margin(egui::Margin::symmetric(8, 6))
                 .show(ui, |ui| {
                     if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
                         let mut st = app.state.write();
@@ -205,8 +205,8 @@ pub fn draw_an1x(app: &mut ImpulseApp, ui: &mut Ui) {
                     .size(7.0),
             );
             // Matching padding to the F.ENV block above.
-            egui::Frame::none()
-                .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+            egui::Frame::NONE
+                .inner_margin(egui::Margin::symmetric(8, 6))
                 .show(ui, |ui| {
                     if widgets::adsr_display(ui, &mut a, &mut d, &mut s, &mut r, 280.0, 100.0) {
                         let mut st = app.state.write();

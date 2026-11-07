@@ -31,7 +31,11 @@ pub fn draw_vectorscope(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         return;
     }
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+    painter.rect_filled(
+        rect,
+        egui::CornerRadius::same(2),
+        egui::Color32::from_gray(8),
+    );
 
     // Crosshair: vertical = mono, horizontal = anti-mono.  Drawn faint so
     // it doesn't compete with the lissajous trace.
@@ -95,7 +99,7 @@ pub fn draw_vectorscope(app: &mut ImpulseApp, ui: &mut egui::Ui) {
 ///
 /// Slot index for an `LfoModule` is its positional rank among
 /// `LfoModule` modules in `rack.modules` order — same rule used by
-/// `rack_canvas` when it publishes the `egui::Id::new("lfo_slot")`
+/// `rack_canvas` when it publishes the `egui::Id::unique("lfo_slot")`
 /// temp data, so the back-panel label and the scope agree.
 pub fn draw_lfo_scope(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     use crate::audio::dsp::fx_math::lfo_value_at;
@@ -117,7 +121,11 @@ pub fn draw_lfo_scope(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
         return;
     }
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+    painter.rect_filled(
+        rect,
+        egui::CornerRadius::same(2),
+        egui::Color32::from_gray(8),
+    );
 
     // Zero-crossing line.
     painter.line_segment(
@@ -201,7 +209,7 @@ pub fn lfo_slot_from_cables(state: &crate::state::AppState, scope_id: u32) -> Op
 
     // Resolve the source's slot index by counting LfoModule
     // instances up to (and including) it in rack order.  Same rule
-    // as `rack_canvas.rs`'s `egui::Id::new("lfo_slot").with(m.id)`
+    // as `rack_canvas.rs`'s `egui::Id::unique("lfo_slot").with(m.id)`
     // publication so the back-panel "LFO 1/2/3" labels and the
     // scope output stay consistent.
     let mut slot_idx = 0usize;
@@ -252,7 +260,11 @@ pub fn draw_cv_seq_scope(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32
         return;
     }
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+    painter.rect_filled(
+        rect,
+        egui::CornerRadius::same(2),
+        egui::Color32::from_gray(8),
+    );
     // Zero-line for the bipolar mapping.
     painter.line_segment(
         [
@@ -305,7 +317,7 @@ pub fn draw_cv_seq_scope(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32
                 egui::Pos2::new(x0, rect.top()),
                 egui::Vec2::new(step_w, rect.height()),
             );
-            painter.rect_filled(band, 0.0, egui::Color32::from_white_alpha(8));
+            painter.rect_filled(band, 0.0, crate::ui::theme::white_alpha(8));
         }
     }
 
@@ -363,7 +375,11 @@ pub fn draw_pitch_tracker(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         return;
     }
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+    painter.rect_filled(
+        rect,
+        egui::CornerRadius::same(2),
+        egui::Color32::from_gray(8),
+    );
 
     let (note_name, cents_off, conf) = match detected {
         None => ("—".to_string(), 0.0_f32, 0.0_f32),
@@ -442,7 +458,11 @@ pub fn draw_chord_display(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         return;
     }
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+    painter.rect_filled(
+        rect,
+        egui::CornerRadius::same(2),
+        egui::Color32::from_gray(8),
+    );
 
     let mut chord_label = String::from("—");
     let mut conf_text = String::new();
@@ -495,7 +515,7 @@ pub fn draw_chord_display(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 egui::Pos2::new(bx + bar_w - 1.0, strip_bot),
             );
             let g = (40.0 + 180.0 * v.clamp(0.0, 1.0)) as u8;
-            painter.rect_filled(bar, egui::Rounding::ZERO, egui::Color32::from_gray(g));
+            painter.rect_filled(bar, egui::CornerRadius::ZERO, egui::Color32::from_gray(g));
         }
     }
 }
@@ -513,7 +533,11 @@ pub fn draw_spectrogram(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         return;
     }
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+    painter.rect_filled(
+        rect,
+        egui::CornerRadius::same(2),
+        egui::Color32::from_gray(8),
+    );
 
     let history = &app.spectrogram_history;
     if history.is_empty() {
@@ -542,7 +566,7 @@ pub fn draw_spectrogram(app: &mut ImpulseApp, ui: &mut egui::Ui) {
     // Build a fresh ColorImage each repaint — small enough that the
     // allocation cost is acceptable, and avoids a long-lived texture
     // that would have to be invalidated on resize.
-    let mut img = egui::ColorImage::new([cols, rows], egui::Color32::from_gray(8));
+    let mut img = egui::ColorImage::filled([cols, rows], egui::Color32::from_gray(8));
 
     for px_x in 0..cols {
         // Map screen-x to history-frame index (newest column on the right).
@@ -602,7 +626,11 @@ pub fn draw_loudness_meter(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         return;
     }
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+    painter.rect_filled(
+        rect,
+        egui::CornerRadius::same(2),
+        egui::Color32::from_gray(8),
+    );
 
     // Helper: map LUFS in [-36, 0] → 0..1 normalised bar fill.
     let bar_norm = |lufs: f32| -> f32 { ((lufs + 36.0) / 36.0).clamp(0.0, 1.0) };
@@ -626,7 +654,7 @@ pub fn draw_loudness_meter(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 egui::Pos2::new(bar_left, bar_y0),
                 egui::Pos2::new(bar_right, bar_y1),
             ),
-            egui::Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             egui::Color32::from_gray(20),
         );
         // Fill.
@@ -636,7 +664,7 @@ pub fn draw_loudness_meter(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                 egui::Pos2::new(bar_left, bar_y0),
                 egui::Pos2::new(fill_x, bar_y1),
             ),
-            egui::Rounding::ZERO,
+            egui::CornerRadius::ZERO,
             *col,
         );
         // M/S label, left.
@@ -683,7 +711,11 @@ pub fn draw_phase_wheel(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         return;
     }
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, egui::Rounding::same(2.0), egui::Color32::from_gray(8));
+    painter.rect_filled(
+        rect,
+        egui::CornerRadius::same(2),
+        egui::Color32::from_gray(8),
+    );
 
     let centre = rect.center();
     let radius = (side * 0.5) - 4.0;

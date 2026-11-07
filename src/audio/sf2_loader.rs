@@ -394,8 +394,8 @@ fn build_region(
         a.clone()
     } else {
         let mut mono: Vec<f32> = Vec::with_capacity(raw.len() / 2);
-        for chunk in raw.chunks_exact(2) {
-            let s = i16_pcm_to_f32(i16::from_le_bytes([chunk[0], chunk[1]]));
+        for chunk in raw.as_chunks::<2>().0 {
+            let s = i16_pcm_to_f32(i16::from_le_bytes(*chunk));
             mono.push(s);
         }
         let resampled = if sample_rate == SAMPLE_RATE_HZ {

@@ -272,7 +272,7 @@ pub(super) fn draw_drum_rows(
                             .cloned()
                             .unwrap_or_default();
                         app.drum_clipboard = Some((*voice, pattern));
-                        ui.close_menu();
+                        ui.close();
                     }
                     let can_paste = app.drum_clipboard.is_some();
                     if ui
@@ -286,7 +286,7 @@ pub(super) fn draw_drum_rows(
                                 p[..copy_len].clone_from_slice(&steps[..copy_len]);
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui.button("Clear pattern").clicked() {
                         let mut s = app.state.write();
@@ -295,7 +295,7 @@ pub(super) fn draw_drum_rows(
                                 *step = Step::default();
                             }
                         }
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -420,7 +420,7 @@ pub(super) fn draw_drum_rows(
                                 egui::pos2(x, vy + vel_h * (1.0 - vel)),
                                 egui::vec2(w, vel_h * vel),
                             ),
-                            egui::Rounding::ZERO,
+                            egui::CornerRadius::ZERO,
                             egui::Color32::from_gray(vcol),
                         );
                         // Probability bar (middle)
@@ -431,7 +431,7 @@ pub(super) fn draw_drum_rows(
                                 egui::pos2(x, py + prob_h * (1.0 - prob)),
                                 egui::vec2(w, prob_h * prob),
                             ),
-                            egui::Rounding::ZERO,
+                            egui::CornerRadius::ZERO,
                             egui::Color32::from_gray(pcol),
                         );
                         // Ratchet ticks (bottom)
@@ -451,7 +451,7 @@ pub(super) fn draw_drum_rows(
                                     egui::pos2(x + t as f32 * tick_w, ry),
                                     egui::vec2((tick_w - 1.0).max(1.0), ratch_h),
                                 ),
-                                egui::Rounding::ZERO,
+                                egui::CornerRadius::ZERO,
                                 egui::Color32::from_gray(col),
                             );
                         }

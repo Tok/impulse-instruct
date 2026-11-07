@@ -49,7 +49,7 @@ pub fn step_button(
     // this frame.  The key is a single global `Id` because only one
     // pointer can be mid-drag at a time — two grids can coexist because
     // the pointer can only be hovering over one cell per frame.
-    let paint_key = egui::Id::new("step_paint_dir");
+    let paint_key = egui::Id::unique("step_paint_dir");
     let mut action: Option<bool> = None;
 
     // Plain click (including touch-tap) → toggle.
@@ -98,7 +98,7 @@ pub fn step_button(
         // the step's own chrome was covering the bleed anyway.
         let glow = painter.clone();
         // Generous rounding — no hard square corners visible
-        let r = egui::Rounding::same((size_px * 0.22).max(4.0));
+        let r = egui::CornerRadius::from((size_px * 0.22).max(4.0));
         let inner = rect.shrink(1.5);
 
         if active {
@@ -106,9 +106,19 @@ pub fn step_button(
             // Dark inset shadow frame, slightly brighter outer ring, deep inner well.
             painter.rect_filled(inner, r, theme::DEEP);
             // Bright bottom-right rim (light bounces off raised surround)
-            painter.rect_stroke(inner.shrink(0.5), r, Stroke::new(1.0, theme::IRON));
+            painter.rect_stroke(
+                inner.shrink(0.5),
+                r,
+                Stroke::new(1.0, theme::IRON),
+                egui::StrokeKind::Middle,
+            );
             // Dark top-left rim (pressed inward — shadow side)
-            painter.rect_stroke(inner, r, Stroke::new(1.0, theme::VOID));
+            painter.rect_stroke(
+                inner,
+                r,
+                Stroke::new(1.0, theme::VOID),
+                egui::StrokeKind::Middle,
+            );
             // Inset well
             let inset = inner.shrink(2.5);
             painter.rect_filled(inset, r, Color32::from_gray(22));
@@ -135,7 +145,7 @@ pub fn step_button(
                 // Velocity heat fill — brighter = louder
                 let dim = 0.35_f32 + vel * 0.65;
                 let g = (200.0 * dim) as u8;
-                painter.rect_filled(inset, r, Color32::from_rgba_unmultiplied(g, g, g, 70));
+                painter.rect_filled(inset, r, crate::ui::theme::rgba_unmultiplied(g, g, g, 70));
             }
             // Probability indicator: small corner dot when < 100%
             if probability < 0.99 {
@@ -149,12 +159,18 @@ pub fn step_button(
             // Bright top-left rim, dark bottom-right — classic emboss.
             painter.rect_filled(inner, r, Color32::from_gray(32));
             // Top-left highlight
-            painter.rect_stroke(inner, r, Stroke::new(1.0, Color32::from_gray(58)));
+            painter.rect_stroke(
+                inner,
+                r,
+                Stroke::new(1.0, Color32::from_gray(58)),
+                egui::StrokeKind::Middle,
+            );
             // Bottom-right shadow (slightly inset to overlay only bottom/right)
             painter.rect_stroke(
                 inner.shrink(0.5),
                 r,
                 Stroke::new(1.0, Color32::from_gray(10)),
+                egui::StrokeKind::Middle,
             );
 
             if let Some(col) = dot_color {
@@ -200,16 +216,22 @@ pub fn step_button(
                 glow.rect_filled(
                     rect.expand(expand),
                     r,
-                    Color32::from_rgba_unmultiplied(220, 220, 220, alpha),
+                    crate::ui::theme::rgba_unmultiplied(220, 220, 220, alpha),
                 );
             }
             // Bright outer border
-            painter.rect_stroke(rect.shrink(0.5), r, Stroke::new(1.5, theme::CHALK));
+            painter.rect_stroke(
+                rect.shrink(0.5),
+                r,
+                Stroke::new(1.5, theme::CHALK),
+                egui::StrokeKind::Middle,
+            );
             // Subtle inner ring — reinforces the "lit up" face
             painter.rect_stroke(
                 inner.shrink(1.5),
                 r,
-                Stroke::new(1.0, Color32::from_rgba_unmultiplied(200, 200, 200, 45)),
+                Stroke::new(1.0, crate::ui::theme::rgba_unmultiplied(200, 200, 200, 45)),
+                egui::StrokeKind::Middle,
             );
         }
     }

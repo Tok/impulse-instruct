@@ -125,6 +125,7 @@ mod song_mode_tests;
 mod spectrum_onset_tests;
 mod state_tests;
 mod style_resolve_tests;
+mod theme_color_tests;
 mod transitions_presets_tests;
 mod transport_helpers_tests;
 mod transport_tests;

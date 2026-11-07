@@ -69,7 +69,7 @@ pub fn param_eq_curve(
 
     for (i, band) in bands.iter_mut().enumerate() {
         let handle_pos = band_handle_pos(band, rect);
-        let hit_id = ui.id().with(id_source).with(("param_eq_handle", i));
+        let hit_id = ui.scope_id().with(id_source).with(("param_eq_handle", i));
         // Allocate an interact rect around the handle for click/drag.
         let hit_rect = Rect::from_center_size(handle_pos, Vec2::splat(HANDLE_HIT_RADIUS * 2.0));
         let handle_resp = ui.interact(hit_rect, hit_id, Sense::click_and_drag());

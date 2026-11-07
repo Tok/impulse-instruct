@@ -71,7 +71,7 @@ pub fn llm_cycle(
     let r_rim = r_outer;
     let r_dots = (r_outer + r_inner) * 0.5; // mid-band for queued dots
 
-    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(&painter, rect, egui::CornerRadius::same(2));
     // Subtle guide rings — same colours as `draw_ring_scope_colored`.
     painter.circle_stroke(center, r_outer, Stroke::new(1.0, theme::SLATE));
     painter.circle_stroke(center, r_inner, Stroke::new(0.5, theme::IRON));
@@ -231,7 +231,7 @@ pub fn llm_cycle(
                 painter.circle_stroke(
                     p,
                     r,
-                    Stroke::new(1.0, Color32::from_rgba_unmultiplied(220, 220, 220, a)),
+                    Stroke::new(1.0, crate::ui::theme::rgba_unmultiplied(220, 220, 220, a)),
                 );
             }
         }

@@ -432,14 +432,15 @@ fn draw_free_eg(app: &mut ImpulseApp, ui: &mut egui::Ui) {
                     egui::Color32::from_gray(40)
                 };
                 ui.painter()
-                    .rect_filled(bar_rect, egui::Rounding::ZERO, col);
+                    .rect_filled(bar_rect, egui::CornerRadius::ZERO, col);
                 ui.painter().rect_stroke(
                     egui::Rect::from_min_size(
                         egui::pos2(rect.min.x + 1.0, rect.max.y - 4.0 - bar_max_h),
                         egui::vec2(bar_w - 2.0, bar_max_h),
                     ),
-                    egui::Rounding::ZERO,
+                    egui::CornerRadius::ZERO,
                     egui::Stroke::new(1.0, egui::Color32::from_gray(30)),
+                    egui::StrokeKind::Middle,
                 );
             }
             if resp.dragged() {

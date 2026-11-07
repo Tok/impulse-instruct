@@ -269,7 +269,7 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
             // directly to `path` and syncing state once after show_ui
             // is the more reliable pattern.
             let path_before = path.clone();
-            egui::ComboBox::from_id_source("amen_sample_picker")
+            egui::ComboBox::from_id_salt("amen_sample_picker")
                 // Room for RANDOM + LOAD + PLAY (3 buttons, wider now).
                 .width((ui.available_width() - 150.0).max(60.0))
                 .selected_text(egui::RichText::new(current_name).monospace().size(8.0))
@@ -454,13 +454,14 @@ pub fn draw_amen(app: &mut ImpulseApp, ui: &mut egui::Ui) {
         let (rect, _) = ui.allocate_exact_size(egui::vec2(wave_w, wave_h), egui::Sense::hover());
         ui.painter().rect_filled(
             rect,
-            egui::Rounding::same(2.0),
+            egui::CornerRadius::same(2),
             egui::Color32::from_gray(10),
         );
         ui.painter().rect_stroke(
             rect,
-            egui::Rounding::same(2.0),
+            egui::CornerRadius::same(2),
             egui::Stroke::new(0.5, egui::Color32::from_gray(30)),
+            egui::StrokeKind::Middle,
         );
     }
     // AUTO detects transients and populates AmenState.slice_positions;

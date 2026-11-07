@@ -25,6 +25,18 @@ const MAX_SERVERS: usize = 8;
 /// Timeout for a single inference call.  8B models on CPU can take 60–90 s.
 const INFER_TIMEOUT_SECS: u64 = 180;
 
+/// HTTP agent for llama-server inference calls.  Non-2xx statuses come
+/// back as `Ok(response)` rather than `Err` so callers can include the
+/// server's error body in the message (ureq 3's `Error::StatusCode`
+/// carries only the code).
+fn infer_agent() -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(INFER_TIMEOUT_SECS)))
+        .http_status_as_error(false)
+        .build()
+        .into()
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 fn which_in_path(name: &str) -> bool {
@@ -225,7 +237,8 @@ impl LlamaServerBackend {
                 }
                 // Some llama-server builds return HTTP 200 while still loading the model
                 // (body: {"status":"loading model"}).  Only treat as live when body has "ok".
-                r.into_string()
+                r.into_body()
+                    .read_to_string()
                     .map(|body| body.contains("\"ok\""))
                     .unwrap_or(false)
             })
@@ -409,23 +422,19 @@ impl crate::llm::pipeline::PipelineBackend for LlamaServerBackend {
             }
         });
 
-        let agent = ureq::AgentBuilder::new()
-            .timeout(std::time::Duration::from_secs(INFER_TIMEOUT_SECS))
-            .build();
+        let agent = infer_agent();
 
         let resp = agent
             .post(&url)
-            .set("Content-Type", "application/json")
             .send_json(&body)
-            .map_err(|e| match e {
-                ureq::Error::Status(code, response) => {
-                    let body = response.into_string().unwrap_or_default();
-                    anyhow::anyhow!("llama-server lane request failed: status {code}\nbody: {body}")
-                }
-                other => anyhow::anyhow!("llama-server lane request failed: {other}"),
-            })?;
+            .map_err(|e| anyhow::anyhow!("llama-server lane request failed: {e}"))?;
+        if !resp.status().is_success() {
+            let code = resp.status().as_u16();
+            let body = resp.into_body().read_to_string().unwrap_or_default();
+            anyhow::bail!("llama-server lane request failed: status {code}\nbody: {body}");
+        }
 
-        let resp_text = resp.into_string()?;
+        let resp_text = resp.into_body().read_to_string()?;
         let resp_json: serde_json::Value = serde_json::from_str(&resp_text).map_err(|e| {
             anyhow::anyhow!("lane response JSON parse failed: {e}\nbody: {resp_text}")
         })?;
@@ -523,27 +532,24 @@ impl LlmBackend for LlamaServerBackend {
             "response_format": { "type": "json_object" }
         });
 
-        let agent = ureq::AgentBuilder::new()
-            .timeout(std::time::Duration::from_secs(INFER_TIMEOUT_SECS))
-            .build();
+        let agent = infer_agent();
 
         let t0 = std::time::Instant::now();
         let resp = agent
             .post(&url)
-            .set("Content-Type", "application/json")
             .send_json(&body)
-            .map_err(|e| match e {
-                ureq::Error::Status(code, response) => {
-                    let body = response.into_string().unwrap_or_default();
-                    anyhow::anyhow!("llama-server request failed: status code {code}\nbody: {body}")
-                }
-                other => anyhow::anyhow!("llama-server request failed: {other}"),
-            })?;
+            .map_err(|e| anyhow::anyhow!("llama-server request failed: {e}"))?;
+        if !resp.status().is_success() {
+            let code = resp.status().as_u16();
+            let body = resp.into_body().read_to_string().unwrap_or_default();
+            anyhow::bail!("llama-server request failed: status code {code}\nbody: {body}");
+        }
 
         let elapsed = t0.elapsed().as_secs_f32();
 
         let resp_text = resp
-            .into_string()
+            .into_body()
+            .read_to_string()
             .map_err(|e| anyhow::anyhow!("failed to read server response body: {}", e))?;
 
         let resp_json: serde_json::Value = serde_json::from_str(&resp_text)

@@ -52,7 +52,7 @@ pub fn draw_spectrum_bars(
     // Recessed-screen bezel — same treatment as the oscilloscopes so
     // the header's center column reads as one panel regardless of
     // which viz the user has selected.
-    theme::draw_screen_bezel(&painter, rect, egui::Rounding::same(2.0));
+    theme::draw_screen_bezel(&painter, rect, egui::CornerRadius::same(2));
 
     let bin_hz = SAMPLE_RATE / crate::audio::spectrum::FFT_SIZE as f32;
     let bands = if magnitudes.is_empty() {
@@ -105,7 +105,7 @@ pub fn draw_spectrum_bars(
             // shares one visual language.
             base
         };
-        painter.rect_filled(bar_rect, egui::Rounding::ZERO, color);
+        painter.rect_filled(bar_rect, egui::CornerRadius::ZERO, color);
     }
 
     // Peak-hold markers — thin horizontal strokes.  Grayscale always
@@ -131,7 +131,7 @@ pub fn draw_spectrum_bars(
 fn lerp_color(a: Color32, b: Color32, t: f32) -> Color32 {
     let t = t.clamp(0.0, 1.0);
     let lerp = |x: u8, y: u8| -> u8 { ((x as f32) * (1.0 - t) + (y as f32) * t).round() as u8 };
-    Color32::from_rgba_unmultiplied(
+    crate::ui::theme::rgba_unmultiplied(
         lerp(a.r(), b.r()),
         lerp(a.g(), b.g()),
         lerp(a.b(), b.b()),
