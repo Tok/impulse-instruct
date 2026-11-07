@@ -52,7 +52,7 @@ pub const SAMPLE_RATE_HZ: u32 = 48_000;
 
 /// Handle for pushing TTS audio to the DSP mix bus.
 /// Carries the target sample rate so the TTS pipeline can resample its WAV
-/// output to match the device rate — otherwise 24 kHz NeuTTS output played at
+/// output to match the device rate — otherwise 24 kHz TTS output played at
 /// 48 kHz ends up chipmunked and half-length (perceived as silence).
 #[derive(Clone)]
 pub struct TtsSink {

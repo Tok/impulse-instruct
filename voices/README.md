@@ -1,6 +1,6 @@
-# Voice references for NeuTTS Air
+# Voice references for Qwen3-TTS
 
-NeuTTS Air clones the timbre from a short reference clip per voice.
+Qwen3-TTS clones the timbre from a short reference clip per voice.
 Each voice here is a `.wav` + a matching `.txt` transcript:
 
 ```
@@ -11,7 +11,7 @@ voices/
   ...
 ```
 
-## What NeuTTS wants
+## What Qwen3-TTS wants
 
 - **Mono WAV**, 16–48 kHz
 - **3–15 seconds** of one speaker talking

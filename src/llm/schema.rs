@@ -317,7 +317,7 @@ pub fn param_json_schema() -> serde_json::Value {
             },
             "vocal": {
                 "type": "object",
-                "description": "Vocal formant synth — saw source through 3 parallel resonant bandpass filters tuned to vowel formants.  Sings A / E / I / O / U without a phoneme model.  LLM triggers: 'add a choir', 'vowel pad', 'sung lead', 'female vowels' (set `formant_shift` ~0.7), 'monster voice' (set `formant_shift` ~0.2 + low pitch).  Distinct from `neutts` which loads a neural model — vocal is pure DSP, plays melodies as vowels but doesn't pronounce words.",
+                "description": "Vocal formant synth — saw source through 3 parallel resonant bandpass filters tuned to vowel formants.  Sings A / E / I / O / U without a phoneme model.  LLM triggers: 'add a choir', 'vowel pad', 'sung lead', 'female vowels' (set `formant_shift` ~0.7), 'monster voice' (set `formant_shift` ~0.2 + low pitch).  Distinct from the `tts` module, which runs a neural voice-cloning model — vocal is pure DSP, plays melodies as vowels but doesn't pronounce words.",
                 "properties": {
                     "enabled":       { "type": "boolean" },
                     "volume":        { "type": "number", "minimum": 0.0, "maximum": 1.5 },

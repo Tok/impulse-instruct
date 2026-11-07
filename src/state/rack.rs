@@ -286,7 +286,7 @@ impl RackState {
                 | ModuleKind::ChiptuneVoice
                 | ModuleKind::VocalVoice
                 | ModuleKind::An1xVoice
-                | ModuleKind::NeuTts
+                | ModuleKind::Tts
                 | ModuleKind::FxReverb
                 | ModuleKind::FxDelay
                 | ModuleKind::FxChorus
@@ -641,7 +641,7 @@ impl Default for RackState {
         rack.add_module(ModuleKind::AmenSampler);
         rack.add_module(ModuleKind::NoiseVoice);
         rack.add_module(ModuleKind::GranularTexture);
-        rack.add_module(ModuleKind::NeuTts);
+        rack.add_module(ModuleKind::Tts);
 
         // ── FX + Mod zone — order matches the fixed chain in process_block ───
         rack.add_module(ModuleKind::FxWaveshaper);

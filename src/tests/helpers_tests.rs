@@ -181,38 +181,38 @@ mod apply_agent_mode_and_tts_tests {
     }
 
     #[test]
-    fn tts_true_adds_neutts_module_and_wires_a_control_cable() {
+    fn tts_true_adds_tts_module_and_wires_a_control_cable() {
         let (s, id) = fresh_with_agent();
-        let neutts_before = s
+        let tts_before = s
             .rack
             .modules
             .iter()
-            .filter(|m| m.kind == ModuleKind::NeuTts)
+            .filter(|m| m.kind == ModuleKind::Tts)
             .count();
         let tts_modules_before = s.tts_modules.len();
         let s = apply_agent_mode_and_tts(s, id, None, true);
-        let neutts_after = s
+        let tts_after = s
             .rack
             .modules
             .iter()
-            .filter(|m| m.kind == ModuleKind::NeuTts)
+            .filter(|m| m.kind == ModuleKind::Tts)
             .count();
-        assert_eq!(neutts_after, neutts_before + 1);
+        assert_eq!(tts_after, tts_before + 1);
         assert_eq!(s.tts_modules.len(), tts_modules_before + 1);
-        // The agent should now have a control cable to the new NeuTts module.
-        let neutts_id = s
+        // The agent should now have a control cable to the new Tts module.
+        let tts_id = s
             .rack
             .modules
             .iter()
-            .filter(|m| m.kind == ModuleKind::NeuTts)
+            .filter(|m| m.kind == ModuleKind::Tts)
             .last()
             .unwrap()
             .id;
         assert!(
             s.rack.cables.iter().any(|c| c.from.module_id == id
-                && c.to.module_id == neutts_id
+                && c.to.module_id == tts_id
                 && c.from.kind == PortKind::Control),
-            "expected control cable from agent to NeuTts"
+            "expected control cable from agent to Tts"
         );
     }
 
@@ -224,22 +224,22 @@ mod apply_agent_mode_and_tts_tests {
     }
 
     #[test]
-    fn tts_false_does_not_add_neutts_module() {
+    fn tts_false_does_not_add_tts_module() {
         let (s, id) = fresh_with_agent();
-        let neutts_before = s
+        let tts_before = s
             .rack
             .modules
             .iter()
-            .filter(|m| m.kind == ModuleKind::NeuTts)
+            .filter(|m| m.kind == ModuleKind::Tts)
             .count();
         let s = apply_agent_mode_and_tts(s, id, Some("dj"), false);
-        let neutts_after = s
+        let tts_after = s
             .rack
             .modules
             .iter()
-            .filter(|m| m.kind == ModuleKind::NeuTts)
+            .filter(|m| m.kind == ModuleKind::Tts)
             .count();
-        assert_eq!(neutts_after, neutts_before);
+        assert_eq!(tts_after, tts_before);
     }
 }
 

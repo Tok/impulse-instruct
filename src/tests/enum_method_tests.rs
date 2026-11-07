@@ -138,7 +138,7 @@ fn module_kind_labels_are_non_empty_uppercase_and_distinct() {
         ModuleKind::LlmAgent,
         ModuleKind::LlmConsole,
         ModuleKind::MasterOutput,
-        ModuleKind::NeuTts,
+        ModuleKind::Tts,
     ];
     let mut labels = std::collections::HashSet::new();
     for k in kinds {
@@ -230,7 +230,7 @@ fn allows_multiple_is_false_for_singletons() {
         ModuleKind::NoiseVoice,
         ModuleKind::GranularTexture,
         ModuleKind::GabberKick,
-        ModuleKind::NeuTts,
+        ModuleKind::Tts,
         ModuleKind::StepSequencer,
         ModuleKind::MasterOutput,
         ModuleKind::LlmConsole,

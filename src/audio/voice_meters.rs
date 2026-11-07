@@ -48,7 +48,7 @@ pub fn voice_meter_idx(kind: ModuleKind) -> Option<usize> {
         ModuleKind::VocalVoice => 16,
         ModuleKind::GranularTexture => 17,
         ModuleKind::GabberKick => 18,
-        ModuleKind::NeuTts => 19,
+        ModuleKind::Tts => 19,
         _ => return None,
     })
 }
@@ -169,7 +169,7 @@ mod tests {
             ModuleKind::VocalVoice,
             ModuleKind::GranularTexture,
             ModuleKind::GabberKick,
-            ModuleKind::NeuTts,
+            ModuleKind::Tts,
         ];
         let mut seen = [false; VOICE_METER_SLOTS];
         for kind in voice_kinds {

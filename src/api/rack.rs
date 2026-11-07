@@ -119,7 +119,7 @@ pub async fn post_rack_add(
         );
     }
     // Create per-module state for TTS modules.
-    if kind == crate::state::ModuleKind::NeuTts {
+    if kind == crate::state::ModuleKind::Tts {
         s.tts_modules.push(crate::state::TtsModuleState::new(id));
     }
     // Auto-pick a random amen sample when the AmenSampler module is added
@@ -196,7 +196,7 @@ pub async fn post_rack_agent(
         }
         if req.tts == Some(true) {
             // Add a TTS module and wire a control cable from this agent.
-            let tts_id = s.rack.add_module(crate::state::ModuleKind::NeuTts);
+            let tts_id = s.rack.add_module(crate::state::ModuleKind::Tts);
             s.tts_modules
                 .push(crate::state::TtsModuleState::new(tts_id));
             s.rack.connect_control(id, tts_id);

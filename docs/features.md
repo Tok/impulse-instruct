@@ -4,6 +4,46 @@ A detailed log of what's built.
 
 ---
 
+### TTS — Qwen3-TTS replaces NeuTTS Air
+
+Neuphonic gated the NeuTTS Air and `neucodec` Hugging Face repos (Aug
+2026), so fresh installs could no longer fetch the codec the server
+loads at startup without a login plus per-repo approval.  The MC / DJ
+voice now runs on **Qwen3-TTS** (Apache-2.0, ungated): the
+`Qwen/Qwen3-TTS-12Hz-1.7B-Base` voice-cloning model by default, or the
+0.6B Base via `TTS_MODEL=…` on smaller GPUs.
+
+**Same contract, new server.**  `scripts/tts-server.py` keeps the HTTP
+API the Rust side already spoke — `GET /health`, `POST /synthesize` with
+`voice_ref` (stem under `voices/`) or explicit `ref_audio`/`ref_text`
+paths, returning PCM-16 WAV — so the audio path is unchanged.  Encoded
+voice prompts are cached per reference (keyed on path + mtime); WAVs
+are built in memory instead of leaking `/tmp` files.  Measured on a
+4070 Ti SUPER: 5 s model load, ~4.5 GB VRAM, 1–2.5 s per line once a
+voice is cached.
+
+**Sampling knobs now work.**  NeuTTS parsed `temperature` / `top_k` /
+`top_p` but never passed them to inference; Qwen3-TTS receives all three.
+A `max_new_tokens` guard (12 codec frames per second of audio, generous
+6 chars/s + 3 s allowance) stops the rare runaway take.
+
+**Multilingual.**  The client filter kept only ASCII, which mangled
+anything with accents; `sanitize_tts_text` now keeps printable Unicode
+(drops control chars, caps at 200 chars) and the server runs with
+`language="Auto"`.
+
+**Setup.**  `./scripts/download-models.sh tts` (Windows: `.bat tts`)
+creates `.tts-venv/`, installs `qwen-tts` and pre-fetches the weights —
+no GGUF, no espeak-ng (still used only to regenerate the default voice
+references).  `neutts` / `neutts-q4` stay as aliases of `tts`.
+
+**Saved sessions keep loading.**  `ModuleKind::NeuTts` → `ModuleKind::Tts`
+and `LfoTarget::NeuTtsVolume` → `LfoTarget::TtsVolume`, with serde aliases
+for the old names (alongside the earlier `CoquiTts` / `EspeakNgTts`), and
+the `neutts` / `neuttsvolume` strings remain accepted from the LLM and API.
+
+---
+
 ### SF2 modulation surface complete — mod-LFO filter/volume targets + modulation envelope
 
 Closes the rest of the SF2 generator-driven modulation wishlist.

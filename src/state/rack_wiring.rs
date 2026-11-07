@@ -50,7 +50,7 @@ impl RackState {
         .iter()
         .filter_map(|&k| find(&self.modules, k))
         .collect();
-        let tts_id = find(&self.modules, ModuleKind::NeuTts);
+        let tts_id = find(&self.modules, ModuleKind::Tts);
         let reverb_id = find(&self.modules, ModuleKind::FxReverb);
         let delay_id = find(&self.modules, ModuleKind::FxDelay);
 

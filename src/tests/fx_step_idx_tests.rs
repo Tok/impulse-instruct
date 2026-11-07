@@ -171,7 +171,7 @@ fn kind_to_fx_step_returns_none_for_non_fx_kinds() {
         ModuleKind::LlmAgent,
         ModuleKind::LlmConsole,
         ModuleKind::LfoModule,
-        ModuleKind::NeuTts,
+        ModuleKind::Tts,
     ] {
         assert!(
             fx_plan::kind_to_fx_step(kind).is_none(),

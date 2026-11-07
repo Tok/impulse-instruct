@@ -2,7 +2,7 @@
 // Vocal formant synth — sings vowels (A / E / I / O / U) by
 // passing a sawtooth source through three parallel resonant
 // bandpass filters tuned to the formant frequencies of the
-// selected vowel.  Distinct from `NeuTts`: that voice loads a
+// selected vowel.  Distinct from `Tts`: that voice loads a
 // neural phoneme model and synthesises actual speech; this voice
 // is a pure DSP formant bank — no model, no language, just the
 // resonance pattern that makes vowel sounds recognisable.

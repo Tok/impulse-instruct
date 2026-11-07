@@ -343,7 +343,7 @@ fn lfo_target_opcodes_are_unique() {
         LfoTarget::MasterVolume,
         LfoTarget::StereoWidth,
         LfoTarget::GabberKickPan,
-        LfoTarget::NeuTtsVolume,
+        LfoTarget::TtsVolume,
     ];
     let mut seen = std::collections::HashSet::new();
     for v in variants {
@@ -426,7 +426,7 @@ fn kind_is_fx_rejects_voice_and_utility_kinds() {
         ModuleKind::LlmAgent,
         ModuleKind::LlmConsole,
         ModuleKind::LfoModule,
-        ModuleKind::NeuTts,
+        ModuleKind::Tts,
     ];
     for k in non_fx {
         assert!(

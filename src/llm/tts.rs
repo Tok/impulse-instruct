@@ -1,27 +1,37 @@
 // ─── llm/tts.rs ───────────────────────────────────────────────────────────────
-// TTS output via NeuTTS Air server.
-//   speak_neutts() — POST text + voice params to NeuTTS, push rendered audio
-//                    samples to the ring buffer for DSP FX routing.
+// TTS output via Qwen3-TTS server.
+//   speak_tts() — POST text + voice params to the TTS server, push rendered
+//                 audio samples to the ring buffer for DSP FX routing.
 
 use crate::audio::TtsSink;
-use crate::state::{TtsModuleState, tts_types::NEUTTS_PORT};
+use crate::state::{TtsModuleState, tts_types::TTS_PORT};
 
-/// Speak `text` via the NeuTTS Air server, pushing rendered PCM samples to the
-/// audio ring buffer.  FX (reverb, bitcrush, etc.) are applied downstream by
-/// the DSP via the NeuTts rack voice route.
-///
-/// No-ops silently if the NeuTTS server is unreachable.
-pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
-    let clean: String = text
-        .chars()
-        .filter(|c| c.is_ascii_graphic() || *c == ' ')
+/// Prepare LLM text for synthesis: drop control characters (newlines,
+/// tabs, escape codes) and cap at 200 characters.  Any printable Unicode
+/// is kept — Qwen3-TTS reads 10 languages, unlike the ASCII-only NeuTTS
+/// path this replaced.  Pure.
+pub fn sanitize_tts_text(text: &str) -> String {
+    text.chars()
+        .map(|c| if c.is_whitespace() { ' ' } else { c })
+        .filter(|c| !c.is_control())
         .take(200)
-        .collect();
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+/// Speak `text` via the Qwen3-TTS server, pushing rendered PCM samples to the
+/// audio ring buffer.  FX (reverb, bitcrush, etc.) are applied downstream by
+/// the DSP via the Tts rack voice route.
+///
+/// No-ops silently if the TTS server is unreachable.
+pub fn speak_tts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
+    let clean = sanitize_tts_text(text);
     if clean.is_empty() {
         return;
     }
 
-    // Build JSON payload for NeuTTS Air.
+    // Build JSON payload for Qwen3-TTS.
     let payload = serde_json::json!({
         "text": clean,
         "voice_ref": tts.voice_ref,
@@ -30,7 +40,7 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
         "top_p": tts.top_p,
     });
 
-    let url = format!("http://127.0.0.1:{}/synthesize", NEUTTS_PORT);
+    let url = format!("http://127.0.0.1:{}/synthesize", TTS_PORT);
 
     // Spawn a blocking thread so we don't block the LLM inference loop.
     let sink = tts_tx.clone();
@@ -50,14 +60,14 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
                 let code = resp.status().as_u16();
                 let body = resp.into_body().read_to_string().unwrap_or_default();
                 log::warn!(
-                    "NeuTTS /synthesize returned {} — voice_ref may be missing or invalid. Body: {}",
+                    "TTS /synthesize returned {} — voice_ref may be missing or invalid. Body: {}",
                     code,
                     body.chars().take(200).collect::<String>()
                 );
                 return;
             }
             Err(e) => {
-                log::warn!("NeuTTS server unreachable: {}", e);
+                log::warn!("TTS server unreachable: {}", e);
                 return;
             }
         };
@@ -67,18 +77,18 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
         if let Err(e) =
             std::io::Read::read_to_end(&mut client.into_body().into_reader(), &mut wav_bytes)
         {
-            log::warn!("NeuTTS: failed to read response body: {}", e);
+            log::warn!("TTS: failed to read response body: {}", e);
             return;
         }
         if wav_bytes.is_empty() {
-            log::warn!("NeuTTS: server returned empty body");
+            log::warn!("TTS: server returned empty body");
             return;
         }
 
         let target_sr = sink.target_sr;
         if let Some(mut samples) = read_wav_f32_bytes(&wav_bytes, target_sr) {
             if samples.is_empty() {
-                log::warn!("NeuTTS: returned WAV decoded to zero samples");
+                log::warn!("TTS: returned WAV decoded to zero samples");
                 return;
             }
             if pitch_snap && let Some(hz) = detect_pitch_hz(&samples, target_sr as f32) {
@@ -96,14 +106,14 @@ pub fn speak_neutts(text: &str, tts: &TtsModuleState, tts_tx: &TtsSink) {
                 }
             }
             log::info!(
-                "NeuTTS: pushed {}/{} samples to ring buffer (target_sr={}Hz)",
+                "TTS: pushed {}/{} samples to ring buffer (target_sr={}Hz)",
                 pushed,
                 sample_count,
                 target_sr,
             );
         } else {
             log::warn!(
-                "NeuTTS: failed to decode WAV response ({} bytes)",
+                "TTS: failed to decode WAV response ({} bytes)",
                 wav_bytes.len()
             );
         }

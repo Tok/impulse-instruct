@@ -1,7 +1,7 @@
 // ─── audio/dsp/vocal.rs ───────────────────────────────────────────────────────
 // Vocal formant synth — saw source through 3 parallel resonant
 // bandpass biquads tuned to the formant frequencies of the
-// played vowel.  Distinct from the `NeuTts` voice in shape: that
+// played vowel.  Distinct from the `Tts` voice in shape: that
 // one runs a neural phoneme model; this one is pure DSP — the
 // vowel character comes entirely from the formant resonance
 // pattern.

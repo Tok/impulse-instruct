@@ -10,9 +10,9 @@ fn default_rack_creates_tts_module_state() {
         .rack
         .modules
         .iter()
-        .filter(|m| m.kind == ModuleKind::NeuTts)
+        .filter(|m| m.kind == ModuleKind::Tts)
         .collect();
-    // Default rack has a NeuTts module
+    // Default rack has a Tts module
     assert!(
         !tts_modules.is_empty(),
         "default rack should have a TTS module"
@@ -41,7 +41,7 @@ fn tts_module_state_defaults() {
 #[test]
 fn tts_module_removed_with_rack_module() {
     let mut s = AppState::default();
-    let id = s.rack.add_module(ModuleKind::NeuTts);
+    let id = s.rack.add_module(ModuleKind::Tts);
     s.tts_modules.push(TtsModuleState::new(id));
     assert!(s.tts_modules.iter().any(|t| t.id == id));
     // Simulate removal (as done in API)
@@ -53,7 +53,7 @@ fn tts_module_removed_with_rack_module() {
 #[test]
 fn tts_modules_cleared_on_rack_reset() {
     let mut s = AppState::default();
-    let id = s.rack.add_module(ModuleKind::NeuTts);
+    let id = s.rack.add_module(ModuleKind::Tts);
     s.tts_modules.push(TtsModuleState::new(id));
     assert!(!s.tts_modules.is_empty());
     // Simulate rack reset (keep only core modules)
@@ -83,7 +83,7 @@ fn agent_finds_tts_via_control_cable() {
     // Add an agent
     let agent_id = s.rack.add_module(ModuleKind::LlmAgent);
     // Add a TTS module
-    let tts_id = s.rack.add_module(ModuleKind::NeuTts);
+    let tts_id = s.rack.add_module(ModuleKind::Tts);
     let mut tts_state = TtsModuleState::new(tts_id);
     tts_state.temperature = 1.2;
     s.tts_modules.push(tts_state);
@@ -96,7 +96,7 @@ fn agent_finds_tts_via_control_cable() {
             if s.rack
                 .modules
                 .iter()
-                .any(|m| m.id == target && m.kind == ModuleKind::NeuTts && m.enabled)
+                .any(|m| m.id == target && m.kind == ModuleKind::Tts && m.enabled)
             {
                 s.tts_modules.iter().find(|t| t.id == target)
             } else {
@@ -114,7 +114,7 @@ fn agent_finds_tts_via_control_cable() {
 fn agent_without_tts_cable_finds_nothing() {
     let mut s = AppState::default();
     let agent_id = s.rack.add_module(ModuleKind::LlmAgent);
-    let tts_id = s.rack.add_module(ModuleKind::NeuTts);
+    let tts_id = s.rack.add_module(ModuleKind::Tts);
     s.tts_modules.push(TtsModuleState::new(tts_id));
     // NO cable wired — agent should not find TTS
     let found = s.rack.cables.iter().find_map(|c| {
@@ -123,7 +123,7 @@ fn agent_without_tts_cable_finds_nothing() {
             if s.rack
                 .modules
                 .iter()
-                .any(|m| m.id == target && m.kind == ModuleKind::NeuTts)
+                .any(|m| m.id == target && m.kind == ModuleKind::Tts)
             {
                 s.tts_modules.iter().find(|t| t.id == target)
             } else {
@@ -140,7 +140,7 @@ fn agent_without_tts_cable_finds_nothing() {
 fn disabled_tts_module_not_found() {
     let mut s = AppState::default();
     let agent_id = s.rack.add_module(ModuleKind::LlmAgent);
-    let tts_id = s.rack.add_module(ModuleKind::NeuTts);
+    let tts_id = s.rack.add_module(ModuleKind::Tts);
     s.tts_modules.push(TtsModuleState::new(tts_id));
     s.rack.connect_control(agent_id, tts_id);
     // Disable the TTS module
@@ -153,7 +153,7 @@ fn disabled_tts_module_not_found() {
             if s.rack
                 .modules
                 .iter()
-                .any(|m| m.id == target && m.kind == ModuleKind::NeuTts && m.enabled)
+                .any(|m| m.id == target && m.kind == ModuleKind::Tts && m.enabled)
             {
                 s.tts_modules.iter().find(|t| t.id == target)
             } else {
@@ -170,8 +170,8 @@ fn disabled_tts_module_not_found() {
 fn multiple_tts_modules_agent_finds_wired_one() {
     let mut s = AppState::default();
     let agent_id = s.rack.add_module(ModuleKind::LlmAgent);
-    let tts1 = s.rack.add_module(ModuleKind::NeuTts);
-    let tts2 = s.rack.add_module(ModuleKind::NeuTts);
+    let tts1 = s.rack.add_module(ModuleKind::Tts);
+    let tts2 = s.rack.add_module(ModuleKind::Tts);
     let mut state1 = TtsModuleState::new(tts1);
     state1.temperature = 0.5;
     let mut state2 = TtsModuleState::new(tts2);
@@ -186,7 +186,7 @@ fn multiple_tts_modules_agent_finds_wired_one() {
             if s.rack
                 .modules
                 .iter()
-                .any(|m| m.id == target && m.kind == ModuleKind::NeuTts && m.enabled)
+                .any(|m| m.id == target && m.kind == ModuleKind::Tts && m.enabled)
             {
                 s.tts_modules.iter().find(|t| t.id == target)
             } else {
@@ -209,4 +209,78 @@ fn tts_module_state_serializes() {
     let back: TtsModuleState = serde_json::from_str(&json).unwrap();
     assert_eq!(back.id, 7);
     assert_eq!(back.voice_ref, "default");
+}
+
+// ── Engine switch NeuTTS → Qwen3-TTS (2026-11) ─────────────────────────────
+// Sessions and projects saved before the switch serialise the module kind as
+// "NeuTts" and the LFO target as "NeuTtsVolume"; both must still load.
+
+#[test]
+fn legacy_neutts_module_kind_deserialises_to_tts() {
+    let k: ModuleKind = serde_json::from_str("\"NeuTts\"").unwrap();
+    assert_eq!(k, ModuleKind::Tts);
+    // Older engines' aliases still hold too.
+    let k: ModuleKind = serde_json::from_str("\"CoquiTts\"").unwrap();
+    assert_eq!(k, ModuleKind::Tts);
+    // New saves use the engine-neutral name.
+    assert_eq!(serde_json::to_string(&ModuleKind::Tts).unwrap(), "\"Tts\"");
+}
+
+#[test]
+fn legacy_neutts_volume_lfo_target_deserialises() {
+    use crate::state::LfoTarget;
+    let t: LfoTarget = serde_json::from_str("\"NeuTtsVolume\"").unwrap();
+    assert_eq!(t, LfoTarget::TtsVolume);
+}
+
+#[test]
+fn sanitize_tts_text_keeps_unicode_drops_control_and_caps_length() {
+    use crate::llm::tts::sanitize_tts_text;
+    // Non-ASCII survives (the old filter stripped umlauts to "Der Bass ist zurck").
+    assert_eq!(
+        sanitize_tts_text("Der Bass ist zurück!"),
+        "Der Bass ist zurück!"
+    );
+    // Newlines/tabs become spaces; other control chars vanish; edges trimmed.
+    assert_eq!(sanitize_tts_text("\n drop\tit\u{7}  "), "drop it");
+    // 200-character cap counts chars, not bytes.
+    let long: String = "ü".repeat(500);
+    assert_eq!(sanitize_tts_text(&long).chars().count(), 200);
+    assert_eq!(sanitize_tts_text(" \n\t "), "");
+}
+
+/// Live round-trip through `speak_tts` → scripts/tts-server.py → WAV decode →
+/// ring buffer.  Needs the server running on TTS_PORT:
+///   .tts-venv/bin/python scripts/tts-server.py &
+///   cargo test tts_server_roundtrip -- --ignored
+#[test]
+#[ignore = "needs a running scripts/tts-server.py on TTS_PORT"]
+fn tts_server_roundtrip_pushes_samples() {
+    use crate::audio::TtsSink;
+    use parking_lot::Mutex;
+    use std::sync::Arc;
+    let (tx, mut rx) = rtrb::RingBuffer::<f32>::new(48_000 * 30);
+    let sink = TtsSink {
+        tx: Arc::new(Mutex::new(tx)),
+        target_sr: 48_000,
+    };
+    let mut tts = TtsModuleState::new(1);
+    tts.voice_ref = "mc".to_string();
+    // Non-ASCII on purpose: the pre-Qwen3 filter stripped it.
+    crate::llm::tts::speak_tts("Der Bass ist zurück, Selecta!", &tts, &sink);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let mut got = 0usize;
+    while std::time::Instant::now() < deadline {
+        while rx.pop().is_ok() {
+            got += 1;
+        }
+        if got > 48_000 {
+            break; // > 1 s of audio at the device rate
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    assert!(
+        got > 48_000,
+        "only {got} samples arrived from the TTS server"
+    );
 }

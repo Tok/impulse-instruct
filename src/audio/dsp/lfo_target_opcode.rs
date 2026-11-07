@@ -91,7 +91,7 @@ pub fn lfo_target_to_u8(t: LfoTarget) -> u8 {
         GabberKickDecay => 69,
         GabberKickClip => 70,
         GabberKickPan => 71,
-        NeuTtsVolume => 72,
+        TtsVolume => 72,
         FlangerRate => 73,
         FlangerDepth => 74,
         FlangerFeedback => 75,

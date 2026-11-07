@@ -56,7 +56,7 @@ fn title_fill(kind: ModuleKind) -> Color32 {
         | ModuleKind::GranularTexture
         | ModuleKind::GabberKick => 24,
         ModuleKind::An1xVoice => 28,
-        ModuleKind::NeuTts => 26,
+        ModuleKind::Tts => 26,
         ModuleKind::FxReverb
         | ModuleKind::FxDelay
         | ModuleKind::FxChorus

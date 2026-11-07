@@ -14,7 +14,7 @@ cargo test                           # unit tests (split across src/tests/)
 ./start.sh --dev                     # build + launch (debug + verbose)
 ./scripts/run-tests.sh --coverage    # HTML coverage report
 ./scripts/build-all.sh               # Linux + Windows EXE → dist/
-./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default) + NeuTTS Air Q8 (~803 MB, optional)
+./scripts/download-models.sh         # fetch Gemma 4 E4B GGUF (~4.6 GB, default) + offer Qwen3-TTS setup (`tts` target: .tts-venv + ~4.3 GB weights)
 ./scripts/download-samples.sh <pack> # fetch CC-licensed sample packs (salamander/sso/vsco2/instruments-all + reference-only amen/textures/wavetables/impulses)
 ./scripts/run-llm-tests.sh           # all LLM integration suites (needs running model)
 ./scripts/run-llm-style.sh           # artist/genre reference tests only
@@ -109,7 +109,7 @@ Quick summary of the key rules:
 - egui/eframe 0.37 - UI (panels attach to the root `Ui` via `App::ui`; translucent colours go through `theme::rgba_unmultiplied` / `theme::white_alpha`, not `Color32::from_rgba_unmultiplied`, to keep egui 0.28's linear-light alpha)
 - cpal 0.18 - audio I/O
 - axum 0.8 - HTTP (route params use `/{param}`, not `/:param`)
-- ureq 3 - llama-server / NeuTTS HTTP client
+- ureq 3 - llama-server / TTS-server HTTP client
 - midir 0.11 - MIDI
 - rtrb 0.4 - lock-free audio ring buffer
 - parking_lot 0.13 - `RwLock<AppState>` (not reentrant: never call `.read()`/`.write()` while holding a guard on the same thread)

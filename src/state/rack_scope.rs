@@ -234,7 +234,8 @@ pub fn parse_module_kind(name: &str) -> Option<ModuleKind> {
         "onsetgrid" | "onset_grid" | "onsetoverlay" | "groove" | "groovecheck" | "onsets" => {
             Some(OnsetGrid)
         }
-        "neutts" | "tts" | "voice" | "mc" => Some(NeuTts),
+        // "neutts" kept as a legacy alias for saved prompts / API callers.
+        "tts" | "neutts" | "voice" | "mc" => Some(Tts),
         _ => None,
     }
 }
@@ -473,8 +474,8 @@ pub fn rack_kind_name_matches(kind: ModuleKind, name: &str) -> bool {
                 "gabber" | "gabber_kick" | "hardcore" | "rotterdam"
             )
         }
-        ModuleKind::NeuTts => {
-            matches!(n.as_str(), "neutts" | "tts" | "mc" | "voice")
+        ModuleKind::Tts => {
+            matches!(n.as_str(), "tts" | "neutts" | "mc" | "voice")
         }
         ModuleKind::MasterOutput => {
             matches!(n.as_str(), "master" | "master_out" | "out" | "output")

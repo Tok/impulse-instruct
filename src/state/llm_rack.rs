@@ -49,7 +49,7 @@ pub(crate) fn apply_llm_rack_update(
                     },
                 );
             }
-            if kind == ModuleKind::NeuTts {
+            if kind == ModuleKind::Tts {
                 s.tts_modules.push(TtsModuleState::new(id));
             }
             // Scroll the UI to the newly-added module so it's visible

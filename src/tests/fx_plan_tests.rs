@@ -107,10 +107,10 @@ mod fx_plan_tests {
         let mut rack = RackState::default();
         enable_all_fx(&mut rack);
         let plan = compile_fx_plan(&rack);
-        let tts_route = plan.voice_routes.get(&ModuleKind::NeuTts);
+        let tts_route = plan.voice_routes.get(&ModuleKind::Tts);
         assert!(
             tts_route.is_some(),
-            "default rack: NeuTts should have a voice route"
+            "default rack: Tts should have a voice route"
         );
         assert!(
             !plan.voice_routes.contains_key(&ModuleKind::AcidBass),

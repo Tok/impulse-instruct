@@ -36,7 +36,7 @@ pub(super) fn draw_voice_content(
         ModuleKind::VocalVoice => crate::ui::panels::draw_vocal(app, ui),
         ModuleKind::GranularTexture => crate::ui::panels::draw_granular(app, ui),
         ModuleKind::GabberKick => crate::ui::panels::draw_gabber(app, ui),
-        ModuleKind::NeuTts => crate::ui::panels::draw_tts(app, ui, module_id),
+        ModuleKind::Tts => crate::ui::panels::draw_tts(app, ui, module_id),
         _ => {}
     }
 }

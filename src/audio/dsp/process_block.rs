@@ -355,7 +355,7 @@ impl DspState {
         let sends_chiptune = snap_sends(ModuleKind::ChiptuneVoice);
         let sends_vocal = snap_sends(ModuleKind::VocalVoice);
         let sends_granular = snap_sends(ModuleKind::GranularTexture);
-        let sends_tts = snap_sends(ModuleKind::NeuTts);
+        let sends_tts = snap_sends(ModuleKind::Tts);
         let have_voice_routes = !self.fx_plan.voice_routes.is_empty();
 
         // Snapshot sidechain routes into a stack-friendly array.  The
@@ -743,10 +743,10 @@ impl DspState {
 
             // TTS bus: pop one sample, apply TTS voice chain, duck synth and mix.
             // `tts_voice_volume` scales the bus post-FX — modulatable via
-            // the `NeuTtsVolume` LFO target.  Scaling AFTER FX keeps duck
+            // the `TtsVolume` LFO target.  Scaling AFTER FX keeps duck
             // activity tied to the raw sample stream regardless of gain.
             let tts_raw = self.tts_consumer.pop().unwrap_or(0.0);
-            // NeuTts meter slot — same envelope shape as the bus_*
+            // Tts meter slot — same envelope shape as the bus_*
             // voices.  Fed by the raw sample stream (pre-FX) so the
             // meter reflects what the TTS is producing rather than
             // what survives a downstream chain.

@@ -1,24 +1,24 @@
 // ─── ui/panels/tts.rs ─────────────────────────────────────────────────────────
-// Rack module panel for NeuTts voice cards.
+// Rack module panel for Tts voice cards.
 // Settings are per-module (stored in AppState.tts_modules).
 //
 // The panel can trigger speech two ways:
 //   1. SAY — user types a line, we synthesise it immediately through
-//      NeuTTS using this module's voice_ref / temp / top_k / top_p.
+//      the TTS server using this module's voice_ref / temp / top_k / top_p.
 //   2. THEME / RHYME / SING — send a prompt to whichever agent
 //      controls this TTS module (via control cable) and let it emit
 //      an mc_line; the existing LLM → TTS pipeline handles playback.
 
 use crate::state::TtsModuleState;
-use crate::state::tts_types::NEUTTS_PORT;
+use crate::state::tts_types::TTS_PORT;
 use crate::ui::{ImpulseApp, theme, widgets};
 
-/// Quick health check of the NeuTTS Python server.  Returns true if
-/// GET http://127.0.0.1:NEUTTS_PORT/health answers with 2xx.  Uses a
+/// Quick health check of the Qwen3-TTS Python server.  Returns true if
+/// GET http://127.0.0.1:TTS_PORT/health answers with 2xx.  Uses a
 /// 250ms timeout so a dead server doesn't stall the UI thread.
 /// Called infrequently (~1 Hz) — cached on `tts_server_online_at` below.
-fn check_neutts_alive() -> bool {
-    let url = format!("http://127.0.0.1:{}/health", NEUTTS_PORT);
+fn check_tts_alive() -> bool {
+    let url = format!("http://127.0.0.1:{}/health", TTS_PORT);
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_connect(Some(std::time::Duration::from_millis(250)))
         .timeout_global(Some(std::time::Duration::from_millis(250)))
@@ -31,23 +31,26 @@ fn check_neutts_alive() -> bool {
         .unwrap_or(false)
 }
 
-/// Spawn the NeuTTS Python server in the background.  Uses the optional
-/// .neutts-venv python if present (matches demo/lib.sh), else system
+/// Spawn the Qwen3-TTS Python server in the background.  Uses the
+/// .tts-venv python if present (matches demo/lib.sh), else system
 /// python3.  The spawned process is detached — we don't track its PID
 /// in the UI; the cleanup trap in demo/record-demo.sh or a manual
-/// `pkill -f neutts-server.py` handles shutdown.  No-op if spawning
+/// `pkill -f tts-server.py` handles shutdown.  No-op if spawning
 /// fails.
-fn spawn_neutts_server() {
-    let venv_py = std::path::Path::new(".neutts-venv/bin/python");
-    let python = if venv_py.exists() {
-        venv_py.to_string_lossy().into_owned()
+fn spawn_tts_server() {
+    #[cfg(windows)]
+    let (venv_py, system_py) = (".tts-venv/Scripts/python.exe", "python");
+    #[cfg(not(windows))]
+    let (venv_py, system_py) = (".tts-venv/bin/python", "python3");
+    let python = if std::path::Path::new(venv_py).exists() {
+        venv_py
     } else {
-        "python3".to_string()
+        system_py
     };
     let _ = std::process::Command::new(python)
-        .arg("scripts/neutts-server.py")
+        .arg("scripts/tts-server.py")
         .arg("--port")
-        .arg(NEUTTS_PORT.to_string())
+        .arg(TTS_PORT.to_string())
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -92,7 +95,7 @@ fn controlling_agent(app: &ImpulseApp, tts_module_id: u32) -> Option<(u32, Strin
 
 /// Send a one-shot inference prompt to the agent controlling this TTS
 /// module.  The agent's MC/DJ conversation mode causes it to emit an
-/// mc_line which the LLM thread routes back through NeuTTS.
+/// mc_line which the LLM thread routes back through the TTS server.
 fn ask_controller(app: &mut ImpulseApp, tts_module_id: u32, prompt: &str) {
     let Some((agent_id, _)) = controlling_agent(app, tts_module_id) else {
         return;
@@ -174,10 +177,10 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
     }
 
     ui.add_space(3.0);
-    widgets::section_header(ui, "NeuTTS Air");
+    widgets::section_header(ui, "Qwen3-TTS");
 
     // ── Server status + START button ────────────────────────────────────────
-    // Poll the NeuTTS /health endpoint at most once per second (keyed by
+    // Poll the TTS /health endpoint at most once per second (keyed by
     // ctx.input().time — shared across all TTS panels drawn this frame).
     // When offline, SAY / ASK and runtime mc_line synthesis all fail
     // silently at the HTTP POST, which is a confusing failure mode
@@ -189,15 +192,15 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
         .data(|d| d.get_temp::<f64>(egui::Id::unique("tts_health_check_at")))
         .unwrap_or(-10.0);
     if now - last_check > 1.0 {
-        app.neutts_online = check_neutts_alive();
+        app.tts_online = check_tts_alive();
         ui.ctx()
             .data_mut(|d| d.insert_temp(egui::Id::unique("tts_health_check_at"), now));
     }
     ui.horizontal(|ui| {
-        let (label, color) = if app.neutts_online {
-            ("NeuTTS: ONLINE", theme::CHALK)
+        let (label, color) = if app.tts_online {
+            ("TTS: ONLINE", theme::CHALK)
         } else {
-            ("NeuTTS: OFFLINE", theme::PIT)
+            ("TTS: OFFLINE", theme::PIT)
         };
         ui.label(
             egui::RichText::new(label)
@@ -205,17 +208,17 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
                 .size(7.0)
                 .color(color),
         );
-        if !app.neutts_online
+        if !app.tts_online
             && ui
                 .small_button(egui::RichText::new("START").monospace().size(7.0))
                 .on_hover_text(format!(
-                    "Spawn scripts/neutts-server.py on port {NEUTTS_PORT}.\n\
-                     Uses .neutts-venv/bin/python if present, else python3.\n\
+                    "Spawn scripts/tts-server.py on port {TTS_PORT}.\n\
+                     Uses .tts-venv/bin/python if present, else python3.\n\
                      First start takes a few seconds to load the model.",
                 ))
                 .clicked()
         {
-            spawn_neutts_server();
+            spawn_tts_server();
             // Reset the cache so the next frame re-polls immediately
             // once the server comes up.
             ui.ctx()
@@ -335,7 +338,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
         let clicked = ui
             .small_button(egui::RichText::new("SAY").monospace().size(7.5))
             .on_hover_text(
-                "With text: synthesise it immediately through NeuTTS.\n\
+                "With text: synthesise it immediately through Qwen3-TTS.\n\
                  Empty: ask the controlling agent to improvise something\n\
                  that fits its persona (rhyme, shout, sung hook, bleep…).",
             )
@@ -346,7 +349,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             app.log_text.push_str(&say_line);
             app.log_text.push('\n');
             log::info!("{}", say_line);
-            crate::llm::speak_neutts(&line, &tts_state, &app.tts_tx);
+            crate::llm::speak_tts(&line, &tts_state, &app.tts_tx);
         } else if clicked && line.is_empty() {
             // Empty SAY → fall through to the controlling agent.  The
             // prompt leaves the form open ("rhyme / sung hook / shout /
@@ -516,7 +519,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
         }
     });
 
-    // ── Volume — modulatable via the NeuTtsVolume LFO target ──────────────
+    // ── Volume — modulatable via the TtsVolume LFO target ──────────────
     labelled_row(ui, "VOLUME", &mut |ui| {
         let mut v = volume;
         if ui

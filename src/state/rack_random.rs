@@ -19,7 +19,7 @@ use super::ModuleKind;
 /// Curated pool of voices that can land in a randomised rack.  The
 /// order does not affect the result — `pick_distinct` walks the
 /// slice deterministically based on the seed-driven RNG.  Voices
-/// kept out (`SampleInstrument`, `NeuTts`) need user-loaded assets
+/// kept out (`SampleInstrument`, `Tts`) need user-loaded assets
 /// (a sample / a voice prompt) to be useful, so they don't make
 /// sense as random picks.
 const VOICE_POOL: &[ModuleKind] = &[

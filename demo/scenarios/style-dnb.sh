@@ -11,7 +11,7 @@
 #                        keyboard via ratio resampling
 #   - FxReverb / FxDelay — long plate wash + dotted-eighth tape echo
 #   - DNB agent     — writes the amen break ONLY
-#   - MC + NeuTTS   — short shout-out at the tail
+#   - MC + Qwen3-TTS   — short shout-out at the tail
 #
 # DESIGN DECISION — bass and piano are HARDCODED, not LLM-written.
 # Earlier passes asked the agent to write the bass pattern with rules
@@ -362,7 +362,7 @@ wait_seconds 3
 
 ask "drop one short, smooth shout-out — liquid D&B vibe, single line, atmospheric not hyped" MC 10
 
-say "MC steps up. Local Gemma writing the line, NeuTTS speaking it."
+say "MC steps up. Local Gemma writing the line, Qwen TTS speaking it."
 wait_seconds 25
 
 # ── Scene 11: End ──────────────────────────────────────────────────────────

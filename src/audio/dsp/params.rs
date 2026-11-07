@@ -843,10 +843,10 @@ pub struct AudioParams {
     pub rack_hoover: bool,
     pub rack_an1x: bool,
     pub rack_gabber_kick: bool,
-    /// NeuTts output bus gain (0..=1.5).  Scales the TTS ring-buffer
+    /// Tts output bus gain (0..=1.5).  Scales the TTS ring-buffer
     /// signal before FX and master mixing.  Derived from the first
     /// `TtsModuleState.volume` at frame boundary; exposed as an
-    /// `AudioParams` field so it's modulatable via the `NeuTtsVolume`
+    /// `AudioParams` field so it's modulatable via the `TtsVolume`
     /// LFO target like any other DSP knob.
     pub tts_voice_volume: f32,
 }

@@ -33,7 +33,7 @@ the speculative reorgs.
 ## Demo recording (non-coding, audio capture)
 
 - [ ] Acid demo re-record — two bass voices + delay/phaser/chorus/
-  ringmod, bigger NeuTTS quant for the MC line.
+  ringmod, Qwen3-TTS for the MC line.
 - [ ] `setup-mc-singer.sh` — Jungle MC + TTS Singer through autotune.
 - [ ] Preecho — agent writes drum anchors, build-up audible.
 - [ ] LFO assignment — agent schedules filter sweep via per-voice

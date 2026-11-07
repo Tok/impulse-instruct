@@ -329,7 +329,7 @@ pub struct ImpulseApp {
     /// single-WAV buffer.  Cached on path so the per-frame paint just
     /// reads the vec.  Empty / stale-path → rebuilt on next paint.
     pub(crate) sample_wave_cache: (String, Vec<(f32, f32)>),
-    pub(crate) neutts_online: bool,
+    pub(crate) tts_online: bool,
     pub(crate) granular_capture_rx: rtrb::Consumer<f32>,
     pub(crate) granular_tap: Vec<f32>, // ring buffer, ~3s master output for CAPTURE
     pub(crate) granular_tap_head: usize,
@@ -576,7 +576,7 @@ impl ImpulseApp {
             link_sync: crate::sync::LinkSync::new(120.0),
             last_link_bpm: 0.0,
             last_link_drift_resnap: None,
-            neutts_online: false,
+            tts_online: false,
             granular_capture_rx: audio.granular_capture_rx,
             granular_tap: vec![0.0; crate::audio::SAMPLE_RATE_HZ as usize * 3], // 3s ring buffer
             granular_tap_head: 0,

@@ -1,5 +1,5 @@
 // ─── state/tts_types.rs ──────────────────────────────────────────────────────
-// TTS-related types: conversation mode, per-module NeuTTS settings.
+// TTS-related types: conversation mode, per-module TTS voice settings.
 
 use serde::{Deserialize, Serialize};
 
@@ -29,10 +29,10 @@ impl ConversationMode {
     }
 }
 
-/// NeuTTS server port.
-pub const NEUTTS_PORT: u16 = 8770;
+/// TTS server port (scripts/tts-server.py).
+pub const TTS_PORT: u16 = 8770;
 
-/// Per-module TTS settings for NeuTTS Air.  Keyed by the TTS rack module's
+/// Per-module TTS settings for Qwen3-TTS.  Keyed by the TTS rack module's
 /// `id` in `AppState.tts_modules`.  An agent speaks through a TTS module when
 /// a control cable connects the agent to the TTS module.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -41,13 +41,13 @@ pub struct TtsModuleState {
     /// Voice reference stem — matches a file pair in `voices/{ref}.wav` + `.txt`.
     #[serde(default = "default_voice_ref")]
     pub voice_ref: String,
-    /// NeuTTS sampling temperature (0.5–1.5, default 0.8).
+    /// Sampling temperature (0.5–1.5, default 0.8).
     #[serde(default = "default_temperature")]
     pub temperature: f32,
-    /// NeuTTS top-k sampling (10–100, default 30).
+    /// Top-k sampling (10–100, default 30).
     #[serde(default = "default_top_k")]
     pub top_k: u16,
-    /// NeuTTS top-p sampling (0.5–1.0, default 0.9).
+    /// Top-p sampling (0.5–1.0, default 0.9).
     #[serde(default = "default_top_p")]
     pub top_p: f32,
     /// Snap synthesised voice to the nearest in-key note.
@@ -55,7 +55,7 @@ pub struct TtsModuleState {
     pub pitch_snap: bool,
     /// Per-module output volume multiplier (0.0..=1.5).  Scales the TTS
     /// bus signal before it's mixed into the master; defaults to 1.0.
-    /// Modulatable via the `NeuTtsVolume` LFO target.
+    /// Modulatable via the `TtsVolume` LFO target.
     #[serde(default = "default_tts_volume")]
     pub volume: f32,
 }

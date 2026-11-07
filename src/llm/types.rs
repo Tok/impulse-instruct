@@ -58,7 +58,7 @@ pub enum LlmAction {
         /// When Some("mc"), the UI dispatch also auto-wires TTS even if
         /// `tts` is false — MC without voice isn't meaningful.
         mode: Option<String>,
-        /// When true, spawn a NeuTts module alongside the agent and wire a
+        /// When true, spawn a Tts module alongside the agent and wire a
         /// control cable from agent → TTS (mirrors the /api/rack/agent
         /// `tts: true` path).
         tts: bool,

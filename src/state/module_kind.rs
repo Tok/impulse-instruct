@@ -58,14 +58,15 @@ pub enum ModuleKind {
     /// Vocal formant synth — saw source through 3 parallel
     /// resonant bandpass filters tuned to vowel-formant
     /// frequencies.  Sings A / E / I / O / U without a phoneme
-    /// model.  Sequencer-driven; distinct from `NeuTts`.
+    /// model.  Sequencer-driven; distinct from `Tts`.
     VocalVoice,
     GranularTexture,
     /// Dedicated hardcore-style kick voice — distinct from the 808/909 kicks.
     GabberKick,
-    // ── TTS voice module (NeuTTS Air) ───────────────────────────────────────
-    #[serde(alias = "EspeakNgTts", alias = "CoquiTts")]
-    NeuTts,
+    // ── TTS voice module (Qwen3-TTS) ───────────────────────────────────────
+    // Aliases keep sessions/projects saved under earlier TTS engines loading.
+    #[serde(alias = "EspeakNgTts", alias = "CoquiTts", alias = "NeuTts")]
+    Tts,
     // ── Sequencer ─────────────────────────────────────────────────────────────
     /// Main step sequencer — drives all voice modules.
     StepSequencer,
@@ -98,7 +99,7 @@ pub enum ModuleKind {
     FxGate,
     /// 16-band vocoder — N-band envelope follower on the sidechain
     /// modulates per-band amplitude on the main carrier.  Pairs with
-    /// `NeuTts` for talkbox-flavoured patches (TTS → modulator,
+    /// `Tts` for talkbox-flavoured patches (TTS → modulator,
     /// bass / hoover → carrier).  Tier 2 sidechain FX.
     FxVocoder,
     FxTapeSat,
@@ -367,7 +368,7 @@ impl ModuleKind {
             Self::VocalVoice => "VOCAL",
             Self::GranularTexture => "GRANULAR",
             Self::GabberKick => "GABBER KICK",
-            Self::NeuTts => "TTS VOICE",
+            Self::Tts => "TTS VOICE",
             Self::StepSequencer => "SEQUENCER",
             Self::FxReverb => "REVERB",
             Self::FxDelay => "DELAY",
@@ -524,7 +525,7 @@ impl ModuleKind {
             Self::GranularTexture => (3, 2),
             Self::GabberKick => (3, 2),
             Self::LlmAgent => (3, 2),
-            Self::NeuTts => (2, 3),
+            Self::Tts => (2, 3),
             Self::SpectrumAnalyzer => (4, 2),
             Self::ActivityTimeline => (4, 2),
             Self::StereoMeter => (2, 1),
@@ -689,7 +690,7 @@ impl ModuleKind {
             | Self::ChiptuneVoice
             | Self::VocalVoice
             | Self::GranularTexture
-            | Self::NeuTts
+            | Self::Tts
             | Self::GabberKick => Zone::Voice,
             Self::FxReverb
             | Self::FxDelay
@@ -794,7 +795,7 @@ impl ModuleKind {
                 | Self::ChiptuneVoice
                 | Self::VocalVoice
                 | Self::An1xVoice
-                | Self::NeuTts
+                | Self::Tts
                 | Self::FxReverb
                 | Self::FxDelay
                 | Self::FxChorus

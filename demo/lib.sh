@@ -8,15 +8,15 @@ TTS_DIR="${TTS_DIR:-$DEMO_DIR/tts_cache}"
 NARRATION_LIST="${NARRATION_LIST:-$DEMO_DIR/.narration_playlist}"
 XDO="python3 $DEMO_DIR/xdo.py"
 
-# TTS settings — NeuTTS Air for demo narration
-# Setup: ./scripts/setup-neutts.sh
+# TTS settings — Qwen3-TTS for demo narration
+# Setup: ./scripts/download-models.sh tts
 PROJECT_DIR="${DEMO_DIR}/.."
-NEUTTS_PORT="${NEUTTS_PORT:-8770}"
-NEUTTS_URL="http://127.0.0.1:${NEUTTS_PORT}"
-NEUTTS_VENV="${PROJECT_DIR}/.neutts-venv"
-NEUTTS_REF_AUDIO="${NEUTTS_REF_AUDIO:-${PROJECT_DIR}/voices/narrator.wav}"
-NEUTTS_REF_TEXT="${NEUTTS_REF_TEXT:-${PROJECT_DIR}/voices/narrator.txt}"
-NEUTTS_PID=""
+TTS_PORT="${TTS_PORT:-8770}"
+TTS_URL="http://127.0.0.1:${TTS_PORT}"
+TTS_VENV="${PROJECT_DIR}/.tts-venv"
+TTS_REF_AUDIO="${TTS_REF_AUDIO:-${PROJECT_DIR}/voices/narrator.wav}"
+TTS_REF_TEXT="${TTS_REF_TEXT:-${PROJECT_DIR}/voices/narrator.txt}"
+TTS_PID=""
 
 # Window ID — set by record-demo.sh after finding the app
 APP_WINDOW_ID="${APP_WINDOW_ID:-0}"
@@ -288,36 +288,36 @@ wait_for_api() {
     echo "  API is up (took ${waited}s)"
 }
 
-# ─── NeuTTS server lifecycle ──────────────────────────────────────────────────
+# ─── Qwen3-TTS server lifecycle ──────────────────────────────────────────────────
 
-start_neutts_server() {
-    if curl -sf "${NEUTTS_URL}/health" >/dev/null 2>&1; then
-        echo "  NeuTTS server already running on port ${NEUTTS_PORT}"
+start_tts_server() {
+    if curl -sf "${TTS_URL}/health" >/dev/null 2>&1; then
+        echo "  Qwen3-TTS server already running on port ${TTS_PORT}"
         return 0
     fi
-    local python="${NEUTTS_VENV}/bin/python"
+    local python="${TTS_VENV}/bin/python"
     [ -x "$python" ] || python="python3"
-    echo "  Starting NeuTTS server (port ${NEUTTS_PORT})..."
-    "$python" "${PROJECT_DIR}/scripts/neutts-server.py" --port "$NEUTTS_PORT" &
-    NEUTTS_PID=$!
+    echo "  Starting Qwen3-TTS server (port ${TTS_PORT})..."
+    "$python" "${PROJECT_DIR}/scripts/tts-server.py" --port "$TTS_PORT" &
+    TTS_PID=$!
     local waited=0
-    while ! curl -sf "${NEUTTS_URL}/health" >/dev/null 2>&1; do
+    while ! curl -sf "${TTS_URL}/health" >/dev/null 2>&1; do
         sleep 1
         waited=$((waited + 1))
-        if [ "$waited" -ge 30 ]; then
-            echo "  ERROR: NeuTTS server failed to start after 30s" >&2
+        if [ "$waited" -ge 90 ]; then
+            echo "  ERROR: Qwen3-TTS server failed to start after 90s" >&2
             return 1
         fi
     done
-    echo "  NeuTTS server ready (took ${waited}s, PID: $NEUTTS_PID)"
+    echo "  Qwen3-TTS server ready (took ${waited}s, PID: $TTS_PID)"
 }
 
-stop_neutts_server() {
-    if [ -n "$NEUTTS_PID" ]; then
-        kill "$NEUTTS_PID" 2>/dev/null
-        wait "$NEUTTS_PID" 2>/dev/null
-        NEUTTS_PID=""
-        echo "  NeuTTS server stopped"
+stop_tts_server() {
+    if [ -n "$TTS_PID" ]; then
+        kill "$TTS_PID" 2>/dev/null
+        wait "$TTS_PID" 2>/dev/null
+        TTS_PID=""
+        echo "  Qwen3-TTS server stopped"
     fi
 }
 
@@ -325,7 +325,7 @@ stop_neutts_server() {
 
 # Transform subtitle text into a TTS-friendly form.
 #
-# NeuTTS sometimes mispronounces bare acronyms (reads "AI" as the word "eye",
+# Qwen3-TTS sometimes mispronounces bare acronyms (reads "AI" as the word "eye",
 # runs "LFO" together as "elfo"), so we spell them out with dots for the
 # speech pass.  The subtitle keeps the original short form, since that reads
 # more naturally on screen.
@@ -344,9 +344,9 @@ tts_speakable() {
 }
 
 tts_generate() {
-    # Pre-generate a TTS clip using NeuTTS Air server. Returns the wav path.
+    # Pre-generate a TTS clip using Qwen3-TTS server. Returns the wav path.
     # Usage: tts_generate "clip_id" "Text to speak"
-    # Retries up to `TTS_MAX_ATTEMPTS` times (default 10). NeuTTS can:
+    # Retries up to `TTS_MAX_ATTEMPTS` times (default 10). Qwen3-TTS can:
     #   - Stall on the first few warm-up calls
     #   - Occasionally fail on specific phonetic inputs
     #   - Segfault outright, leaving the server dead — we detect that via
@@ -395,15 +395,15 @@ tts_generate() {
     if command -v jq >/dev/null 2>&1; then
         json=$(jq -nc \
             --arg text "$text" \
-            --arg ref_audio "$NEUTTS_REF_AUDIO" \
-            --arg ref_text "$NEUTTS_REF_TEXT" \
+            --arg ref_audio "$TTS_REF_AUDIO" \
+            --arg ref_text "$TTS_REF_TEXT" \
             --arg out "$outfile" \
             '{text:$text, ref_audio:$ref_audio, ref_text:$ref_text, out_path:$out}')
     else
         local esc
         esc=$(printf '%s' "$text" | sed 's/\\/\\\\/g; s/"/\\"/g')
         json=$(printf '{"text":"%s","ref_audio":"%s","ref_text":"%s","out_path":"%s"}' \
-            "$esc" "$NEUTTS_REF_AUDIO" "$NEUTTS_REF_TEXT" "$outfile")
+            "$esc" "$TTS_REF_AUDIO" "$TTS_REF_TEXT" "$outfile")
     fi
     local attempt=0
     local resp_code=""
@@ -412,12 +412,12 @@ tts_generate() {
         rm -f "$outfile"
         resp_code=$(curl -s -w "%{http_code}" \
             --max-time 120 \
-            -X POST "${NEUTTS_URL}/synthesize" \
+            -X POST "${TTS_URL}/synthesize" \
             -H "Content-Type: application/json" \
             --data-binary "$json" \
             -o "$outfile" 2>/dev/null || echo "000")
         if [ -s "$outfile" ]; then
-            # Length sanity-check: NeuTTS occasionally produces a runaway
+            # Length sanity-check: Qwen3-TTS occasionally produces a runaway
             # clip that drones on well past the input text.  A single such
             # clip playing under `say` (blocking) can stall the entire
             # scenario — we saw a 5-word line synthesised as 48 s of
@@ -429,21 +429,21 @@ tts_generate() {
                 ''|*[!0-9.]*) gen_dur="0" ;;
             esac
             if [ "$(printf '%s > %s\n' "$gen_dur" "$max_dur" | bc 2>/dev/null)" = "1" ]; then
-                echo "  WARN: NeuTTS attempt $attempt/$max_attempts produced ${gen_dur}s for ${est}s line (> ${max_dur}s ceiling): $text" >&2
+                echo "  WARN: Qwen3-TTS attempt $attempt/$max_attempts produced ${gen_dur}s for ${est}s line (> ${max_dur}s ceiling): $text" >&2
                 rm -f "$outfile"
             else
                 echo "$outfile"
                 return 0
             fi
         else
-            echo "  WARN: NeuTTS attempt $attempt/$max_attempts failed (HTTP $resp_code) for: $text" >&2
+            echo "  WARN: Qwen3-TTS attempt $attempt/$max_attempts failed (HTTP $resp_code) for: $text" >&2
         fi
         # Check if the server is even alive — if not (crashed, segfaulted,
         # OOM'd), restart it before burning more retries.
-        if ! curl -sf --max-time 3 "${NEUTTS_URL}/health" >/dev/null 2>&1; then
-            echo "  [tts] NeuTTS server unreachable — restarting…" >&2
-            NEUTTS_PID=""
-            start_neutts_server || {
+        if ! curl -sf --max-time 3 "${TTS_URL}/health" >/dev/null 2>&1; then
+            echo "  [tts] Qwen3-TTS server unreachable — restarting…" >&2
+            TTS_PID=""
+            start_tts_server || {
                 echo "  [tts] restart failed, will retry again" >&2
             }
         fi
@@ -454,7 +454,7 @@ tts_generate() {
             sleep 2
         fi
     done
-    echo "  ERROR: NeuTTS synth gave up after $max_attempts attempts for: $text" >&2
+    echo "  ERROR: Qwen3-TTS synth gave up after $max_attempts attempts for: $text" >&2
     rm -f "$outfile"
     echo "$outfile"
     return 1

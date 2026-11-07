@@ -242,7 +242,7 @@ mod mod_inputs_tests {
             ModuleKind::DrumKit909,
             ModuleKind::AmenSampler,
             ModuleKind::GranularTexture,
-            ModuleKind::NeuTts,
+            ModuleKind::Tts,
             ModuleKind::GabberKick,
             ModuleKind::StepSequencer,
             ModuleKind::FxChorus,

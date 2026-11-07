@@ -573,7 +573,7 @@ pub fn spawn_agent(
 }
 
 /// After an agent is spawned, optionally apply a conversation-mode override
-/// and add + wire a NeuTts module if TTS is requested.  Shared by the
+/// and add + wire a Tts module if TTS is requested.  Shared by the
 /// HTTP `/api/rack/agent` handler and the LLM `spawn_agent` action so both
 /// paths produce identical results.  No-op if `agent_id` doesn't exist.
 pub fn apply_agent_mode_and_tts(
@@ -599,7 +599,7 @@ pub fn apply_agent_mode_and_tts(
         }
     }
     if tts {
-        let tts_id = s.rack.add_module(crate::state::ModuleKind::NeuTts);
+        let tts_id = s.rack.add_module(crate::state::ModuleKind::Tts);
         s.tts_modules
             .push(crate::state::TtsModuleState::new(tts_id));
         s.rack.connect_control(agent_id, tts_id);

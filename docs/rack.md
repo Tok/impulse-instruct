@@ -44,8 +44,8 @@ pub enum ModuleKind {
     AmenSampler,    // Amen break sampler / loop slicer
     NoiseVoice,     // White/pink noise generator
 
-    // TTS voice module (NeuTTS Air)
-    NeuTts,         // Neural TTS voice cloning via local GGUF model
+    // TTS voice module (Qwen3-TTS; serde aliases: NeuTts, CoquiTts, EspeakNgTts)
+    Tts,            // Neural TTS voice cloning via the local Qwen3-TTS server
 
     // Sequencer
     StepSequencer,  // Main 16/32/64-step clock and pattern store
@@ -183,7 +183,7 @@ still render correctly:
 
 **Global zone:** StepSequencer, MasterOutput
 
-**Voice zone:** AcidBass, DrumKit808, DrumKit909, HooverLead, An1xVoice, AmenSampler, NeuTts
+**Voice zone:** AcidBass, DrumKit808, DrumKit909, HooverLead, An1xVoice, AmenSampler, Tts
 
 **FX zone (in processing order):**
 Waveshaper → Reverb → Delay → Bitcrush → Chorus → Phaser → RingMod → Eq → Compressor → TapeSat → Drive
@@ -192,7 +192,7 @@ Waveshaper → Reverb → Delay → Bitcrush → Chorus → Phaser → RingMod �
 
 **Default cables:**
 - Voice modules (AcidBass through AmenSampler) → MasterOutput
-- NeuTts → FxReverb (TTS bus bypasses the main voice mix)
+- Tts → FxReverb (TTS bus bypasses the main voice mix)
 - FX chain: each FX output → next FX input (serial chain)
 
 ---
@@ -268,7 +268,7 @@ StepSequencer
     +-- triggers --> AmenSampler --|    cable exists)            |
     +-- triggers --> NoiseVoice  --+                             |
                                                                  |
-NeuTts -------[tts cable]-------> FxReverb ------[tts mix]-+
+Tts ----------[tts cable]-------> FxReverb ------[tts mix]-+
 ```
 
 When AcidBass has an explicit cable to FxReverb, it routes through
@@ -296,6 +296,6 @@ without explicit cables share the global chain.
 - `compile_fx_plan` operational: global chain and per-voice routes both active in DSP.
 - Default cables wire the serial FX chain and TTS bus at startup.
 - Rack UI renders module cards; cable patching UI is in progress.
-- TTS module cards (NeuTts, NeuTts) render in the voice zone; TTS audio routes
+- TTS module cards (Tts) render in the voice zone; TTS audio routes
   through the reverb bus by default.
 - CV routing (LFO → parameter target) is data-modeled but not yet wired into the DSP.

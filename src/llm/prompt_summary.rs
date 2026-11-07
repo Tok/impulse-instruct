@@ -95,7 +95,7 @@ pub fn rack_voice_coverage_summary(state: &AppState) -> String {
         (ModuleKind::GabberKick, "gabber_kick"),
         (ModuleKind::NoiseVoice, "noise"),
         (ModuleKind::GranularTexture, "granular"),
-        (ModuleKind::NeuTts, "tts"),
+        (ModuleKind::Tts, "tts"),
     ];
     for (kind, label) in checks {
         if has(*kind) {

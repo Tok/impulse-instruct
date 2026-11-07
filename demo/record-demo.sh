@@ -200,7 +200,7 @@ echo ""
 #
 # Ordering rationale: Build → launch app (background) → pre-gen TTS.
 # Launching the app before TTS generation lets llama-server load Gemma 4 onto
-# the GPU while NeuTTS is still busy synthesising clips on CPU + GPU.  By the
+# the GPU while Qwen3-TTS is still busy synthesising clips on CPU + GPU.  By the
 # time the scenario runs and adds an agent, the model pool already has a warm
 # server — no 60-120s cold-start stall.
 
@@ -249,7 +249,7 @@ cleanup() {
     # any orphaned llama-server spawned by our app. Match on --model so
     # we don't touch unrelated llama-server instances the user may run.
     pkill -KILL -f 'llama-server.* --model' 2>/dev/null
-    stop_neutts_server 2>/dev/null
+    stop_tts_server 2>/dev/null
     # Clean up virtual recording sink
     destroy_recording_sink 2>/dev/null
     rm -f "$NARRATION_LIST"
@@ -297,7 +297,7 @@ fi
 echo ""
 echo "[3/6] Pre-generating TTS clips..."
 if [ "$NO_TTS" -eq 0 ]; then
-    start_neutts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
+    start_tts_server || { echo "  Falling back to no-TTS mode"; NO_TTS=1; }
 fi
 if [ "$NO_TTS" -eq 0 ]; then
     clip_id=""
@@ -342,12 +342,13 @@ if [ "$NO_TTS" -eq 0 ]; then
         echo "  Missing clips (all retries exhausted):"
         printf "%b" "$tts_failed_ids" | sed 's/^/    /'
     fi
-    # IMPORTANT: don't stop the NeuTTS server here.  The in-app TTS
+    # IMPORTANT: don't stop the Qwen3-TTS server here.  The in-app TTS
     # module (used for runtime mc_line synthesis when an MC agent is
     # spawned during the scenario) shares the same Python server on
     # port 8770 — stopping it would make scenario-time MC lines fail
-    # silently.  Memory is fine: NeuTTS Air is ~800 MB (Q8) and Gemma
-    # ~5 GB, comfortably under most GPU budgets.  The cleanup trap
+    # silently.  Memory: Qwen3-TTS 1.7B is ~4.5 GB (bf16) and Gemma E4B
+    # ~6 GB — ~11 GB together; use TTS_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base
+    # on smaller GPUs.  The cleanup trap
     # stops the server after the scenario finishes.
 
     # Pre-generate SRT from scenario + actual clip durations. Timings are

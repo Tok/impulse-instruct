@@ -108,7 +108,7 @@ mod vocal_module_tests {
     #[test]
     fn parses_from_aliases() {
         // "voice" deliberately omitted from the alias list — that
-        // word collides with the NeuTts voice and would render
+        // word collides with the Tts voice and would render
         // the parser ambiguous.
         for alias in ["vocal", "vocalvoice", "vowel", "formant", "choir"] {
             assert_eq!(

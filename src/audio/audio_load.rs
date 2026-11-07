@@ -208,7 +208,7 @@ pub(crate) fn resample_mono_linear(mono: &[f32], src_rate: u32) -> Vec<f32> {
 /// `i16::MIN` — full-scale PCM (`i16::MAX = 32767`) maps to
 /// `0.999969…`, just under unity, matching every other PCM-normalising
 /// audio library.  Used by the WAV / FLAC / AIFF / SF2 loaders + the
-/// scope ring capture + the NeuTTS i16 decoder.
+/// scope ring capture + the TTS i16 decoder.
 #[inline]
 pub(crate) fn i16_pcm_to_f32(raw: i16) -> f32 {
     raw as f32 / 32768.0

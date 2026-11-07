@@ -60,7 +60,7 @@ pub fn mod_inputs(kind: ModuleKind) -> &'static [ModInput] {
         // selectors so the user picks which to drive.
         VocalVoice => &[Selector, Selector, Selector],
         // ── Voices without a single pan (multi-voice kits / pan-less) ─────
-        DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | NeuTts => {
+        DrumKit808 | DrumKit909 | AmenSampler | GranularTexture | Tts => {
             &[Selector, Selector, Selector]
         }
         GabberKick => &[Selector, Selector, Selector],
@@ -278,7 +278,7 @@ pub fn lfo_target_short_label(target: LfoTarget) -> &'static str {
         GranularDensity => "G.DEN",
         GranularGrain => "G.GRN",
         GranularPos => "G.POS",
-        NeuTtsVolume => "TTS.VOL",
+        TtsVolume => "TTS.VOL",
         ReverbMix => "RVB.MX",
         ReverbSize => "RVB.SZ",
         ReverbDamp => "RVB.DP",
@@ -394,7 +394,7 @@ pub(crate) fn lfo_target_module_kind(target: LfoTarget) -> Option<ModuleKind> {
         GranularVolume | GranularDensity | GranularGrain | GranularPos => {
             Some(ModuleKind::GranularTexture)
         }
-        NeuTtsVolume => Some(ModuleKind::NeuTts),
+        TtsVolume => Some(ModuleKind::Tts),
         ReverbMix | ReverbSize | ReverbDamp => Some(ModuleKind::FxReverb),
         DelayTime | DelayFeedback | DelayMix => Some(ModuleKind::FxDelay),
         ChorusRate | ChorusDepth | ChorusMix => Some(ModuleKind::FxChorus),
@@ -476,7 +476,7 @@ pub fn parse_lfo_target(name: &str) -> Option<LfoTarget> {
         "granulardensity" => GranularDensity,
         "granulargrain" => GranularGrain,
         "granularpos" => GranularPos,
-        "neuttsvolume" | "ttsvolume" => NeuTtsVolume,
+        "ttsvolume" | "neuttsvolume" => TtsVolume, // legacy alias
         "reverbmix" => ReverbMix,
         "reverbsize" => ReverbSize,
         "reverbdamp" => ReverbDamp,

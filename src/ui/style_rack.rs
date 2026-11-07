@@ -25,7 +25,7 @@ fn is_always_keep(kind: ModuleKind) -> bool {
             | ModuleKind::MasterOutput
             | ModuleKind::LlmConsole
             | ModuleKind::LlmAgent
-            | ModuleKind::NeuTts
+            | ModuleKind::Tts
     )
 }
 

@@ -224,7 +224,7 @@ pub fn compile_fx_plan(rack: &RackState) -> FxPlan {
         ModuleKind::AmenSampler,
         ModuleKind::NoiseVoice,
         ModuleKind::GranularTexture,
-        ModuleKind::NeuTts,
+        ModuleKind::Tts,
     ];
 
     // Map voice module id → kind for quick lookup.

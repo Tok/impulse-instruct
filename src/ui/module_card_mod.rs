@@ -52,7 +52,7 @@ const ALL_TARGETS: &[LfoTarget] = &[
     LfoTarget::GranularDensity,
     LfoTarget::GranularGrain,
     LfoTarget::GranularPos,
-    LfoTarget::NeuTtsVolume,
+    LfoTarget::TtsVolume,
     LfoTarget::ReverbMix,
     LfoTarget::ReverbSize,
     LfoTarget::ReverbDamp,
@@ -258,7 +258,7 @@ pub fn has_cv_in(kind: ModuleKind) -> bool {
             | An1xVoice
             | AmenSampler
             | NoiseVoice
-            | NeuTts
+            | Tts
             | LfoScope
             | CvSeqScope
     )

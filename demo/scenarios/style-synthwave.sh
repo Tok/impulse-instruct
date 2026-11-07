@@ -90,7 +90,7 @@ ask "rhyme a short couplet about a beach car chase under a neon sunset — keep 
 
 wait_seconds 8
 
-say "Gemma writes the couplet, NeuTTS renders it. Pitch snap quantises to the key."
+say "Gemma writes the couplet, Qwen TTS renders it. Pitch snap quantises to the key."
 wait_seconds 3
 
 # ── Scene 7: Full scene ───────────────────────────────────────────────────

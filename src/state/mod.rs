@@ -529,7 +529,7 @@ impl Default for AppState {
         }
         // Create TTS module state for any TTS modules in the default rack.
         for m in &s.rack.modules {
-            if m.kind == ModuleKind::NeuTts {
+            if m.kind == ModuleKind::Tts {
                 s.tts_modules.push(TtsModuleState::new(m.id));
             }
         }

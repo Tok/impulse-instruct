@@ -781,7 +781,7 @@ pub fn run_llm_loop(
                                 let target = c.to.module_id;
                                 if s.rack.modules.iter().any(|m| {
                                     m.id == target
-                                        && m.kind == crate::state::ModuleKind::NeuTts
+                                        && m.kind == crate::state::ModuleKind::Tts
                                         && m.enabled
                                 }) {
                                     s.tts_modules.iter().find(|t| t.id == target)
@@ -795,10 +795,10 @@ pub fn run_llm_loop(
                         if let Some(tts_mod) = tts_mod {
                             let tts_text = output.mc_line.as_deref().unwrap_or_default();
                             log::info!("[TTS] module={}: {}", tts_mod.id, tts_text);
-                            speak_neutts(tts_text, tts_mod, &tts_tx);
+                            speak_tts(tts_text, tts_mod, &tts_tx);
                         } else {
                             log::warn!(
-                                "[TTS] agent {} emitted mc_line but no NeuTts module is cable-wired from it",
+                                "[TTS] agent {} emitted mc_line but no Tts module is cable-wired from it",
                                 src_id
                             );
                         }
@@ -918,4 +918,4 @@ pub fn run_llm_loop(
 }
 
 pub mod tts;
-pub use tts::speak_neutts;
+pub use tts::speak_tts;

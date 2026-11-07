@@ -11,20 +11,18 @@
 #   ./scripts/download-models.sh deepseek-r1-14b  # DeepSeek-R1-Distill-Qwen-14B (~9 GB, CoT, accurate)
 #   ./scripts/download-models.sh qwen3            # Qwen3-8B Q4_K_M (~5 GB, optional)
 #   ./scripts/download-models.sh qwen3-14b        # Qwen3-14B Q4_K_M (~9 GB, optional)
-#   ./scripts/download-models.sh neutts           # NeuTTS Air Q8 (~803 MB, default TTS)
-#   ./scripts/download-models.sh neutts-q4        # NeuTTS Air Q4 (~527 MB, smaller quant)
+#   ./scripts/download-models.sh tts              # Qwen3-TTS voice cloning (venv + ~4.3 GB weights)
 #
 # NOTE: A free HuggingFace account is required.
 #   Sign up at https://huggingface.co/join
 #   Then log in: huggingface-cli login
 #
-# TTS DEPENDENCIES: NeuTTS Air runs through a small Python helper, so it needs
-# Python 3.10+ and espeak-ng on the host.  The first `./download-models.sh
-# neutts` run creates a `.neutts-venv/` and installs the `neutts` package
-# automatically; without these, the MC/TTS rack module silently no-ops.
-#   Linux:   sudo apt install espeak-ng python3-venv
-#   macOS:   brew install espeak-ng
-#   Windows: install eSpeak-NG from https://github.com/espeak-ng/espeak-ng/releases
+# TTS DEPENDENCIES: Qwen3-TTS runs through a small Python server
+# (scripts/tts-server.py), so it needs Python 3.10+.  `./download-models.sh tts`
+# creates `.tts-venv/`, installs `qwen-tts` (pulls PyTorch) and pre-fetches the
+# weights; without it, the MC/TTS rack module silently no-ops.
+#   Linux:   sudo apt install python3-venv
+# Set TTS_MODEL=Qwen/Qwen3-TTS-12Hz-0.6B-Base for a lighter model on small GPUs.
 #
 # OTHER QUANTS / VARIANTS: the aliases above cover the curated set we test
 # against.  Many more quants and fine-tunes exist on HuggingFace — drop any
@@ -33,7 +31,7 @@
 #   Gemma 4 26B-A4B (all quants):  https://huggingface.co/unsloth/gemma-4-26B-A4B-it-GGUF
 #   Gemma 4 31B (all quants):      https://huggingface.co/unsloth/gemma-4-31B-it-GGUF
 #   Gemma 4 E4B / E2B:             https://huggingface.co/unsloth?search_models=gemma-4
-#   NeuTTS Air (Q4 / Q8):          https://huggingface.co/neuphonic
+#   Qwen3-TTS (1.7B / 0.6B Base):  https://huggingface.co/Qwen?search_models=Qwen3-TTS
 # ──────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 printf "\n  \033[38;2;110;110;110m▁▂▄▅▇██▇▅▄▂▁▁▂▄▅▇█\033[38;2;160;160;160m I M P U L S E • I N S T R U C T \033[38;2;110;110;110m█▇▅▄▂▁▁▂▄▅▇██▇▅▄▂▁\033[0m\n\n"
@@ -41,6 +39,59 @@ cd "$(dirname "$0")/.."
 
 MODEL_DIR="models"
 mkdir -p "$MODEL_DIR"
+
+# ── Qwen3-TTS setup (venv + weights; no GGUF) ─────────────────────────────────
+TTS_VENV=".tts-venv"
+TTS_MODEL_ID="${TTS_MODEL:-Qwen/Qwen3-TTS-12Hz-1.7B-Base}"
+
+tts_ready() {
+  [[ -x "$TTS_VENV/bin/python" ]] && "$TTS_VENV/bin/python" -c "import qwen_tts" &>/dev/null
+}
+
+setup_tts() {
+  echo ""
+  echo "─── Qwen3-TTS voice cloning setup ──────────────────────────────────────────"
+  PYTHON=""
+  for py in python3.13 python3.12 python3.11 python3.10 python3; do
+    if command -v "$py" &>/dev/null \
+      && "$py" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then
+      PYTHON="$py"; break
+    fi
+  done
+  if [[ -z "$PYTHON" ]]; then
+    echo "  Python 3.10+ not found. Skipping TTS setup."
+    return
+  fi
+
+  if [[ ! -d "$TTS_VENV" ]]; then
+    echo "  Creating Python venv ($TTS_VENV)..."
+    "$PYTHON" -m venv "$TTS_VENV"
+  fi
+  echo "  Installing qwen-tts (pulls PyTorch — a few GB on first install)..."
+  "$TTS_VENV/bin/pip" install --quiet --upgrade pip
+  "$TTS_VENV/bin/pip" install --quiet qwen-tts soundfile numpy
+
+  # Pre-fetch the weights so the first in-app utterance doesn't stall on a
+  # multi-GB download.  Qwen3-TTS repos are ungated (Apache-2.0): no login.
+  echo "  Fetching ${TTS_MODEL_ID} into the Hugging Face cache..."
+  "$TTS_VENV/bin/python" -c \
+    "import sys; from huggingface_hub import snapshot_download; snapshot_download(sys.argv[1])" \
+    "$TTS_MODEL_ID"
+
+  if [[ ! -f "voices/default.wav" ]]; then
+    echo "  Generating voice references..."
+    ./scripts/generate-voices.sh 2>/dev/null || true
+  fi
+
+  if tts_ready; then
+    echo ""
+    echo "  ✓ Qwen3-TTS ready (${TTS_MODEL_ID})"
+    echo "    Qwen3-TTS is released by Alibaba Cloud under Apache-2.0."
+  else
+    echo "  WARNING: qwen_tts import failed. TTS may not work."
+  fi
+  echo "─────────────────────────────────────────────────────────────────────────────"
+}
 
 # ── Model selection ───────────────────────────────────────────────────────────
 MODEL="${1:-gemma4}"
@@ -86,24 +137,20 @@ case "$MODEL" in
     MODEL_FILE="DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"
     MODEL_DESC="DeepSeek-R1-Distill-Qwen-14B Q4_K_M (~9 GB) — CoT, needs ~12 GB VRAM; newer distills may exist"
     ;;
-  neutts)
-    HF_REPO="neuphonic/neutts-air-q8-gguf"
-    MODEL_FILE="neutts-air-q8.gguf"
-    HF_FILE="neutts-air-Q8_0.gguf"
-    MODEL_DESC="NeuTTS Air Q8 GGUF (~803 MB) — neural TTS voice cloning, default"
-    ;;
-  neutts-q4)
-    HF_REPO="neuphonic/neutts-air-q4-gguf"
-    MODEL_FILE="neutts-air-q4.gguf"
-    HF_FILE="neutts-air-Q4_0.gguf"
-    MODEL_DESC="NeuTTS Air Q4 GGUF (~527 MB) — smaller, more compressed quant"
+  tts|neutts|neutts-q4)
+    MODEL="tts"   # NeuTTS targets were replaced by Qwen3-TTS (2026-11)
     ;;
   *)
     echo "Unknown model: '$MODEL'"
-    echo "Available: gemma4 (default), gemma-26b, gemma-26b-q3, gemma-26b-iq2, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, neutts (Q8), neutts-q4"
+    echo "Available: gemma4 (default), gemma-26b, gemma-26b-q3, gemma-26b-iq2, deepseek-r1-7b, deepseek-r1-14b, qwen3, qwen3-14b, tts"
     exit 1
     ;;
 esac
+
+if [[ "$MODEL" == "tts" ]]; then
+  setup_tts
+  exit 0
+fi
 
 OUTPUT_PATH="${MODEL_DIR}/${MODEL_FILE}"
 
@@ -226,112 +273,24 @@ case "$MODEL" in
     echo "DeepSeek-R1-Distill is released under the MIT License by DeepSeek AI."
     echo "Quantisation by bartowski. See: https://huggingface.co/${HF_REPO}"
     ;;
-  neutts|neutts-q4)
-    echo "NeuTTS Air is released by Neuphonic under the NeuTTS License."
-    echo "See: https://huggingface.co/${HF_REPO}"
-    ;;
 esac
 echo "─────────────────────────────────────────────────────────────────────────────"
 
-# ── NeuTTS Air setup function ─────────────────────────────────────────────────
-NEUTTS_VENV=".neutts-venv"
-NEUTTS_MODEL_Q8="${MODEL_DIR}/neutts-air-q8.gguf"
-NEUTTS_MODEL_Q4="${MODEL_DIR}/neutts-air-q4.gguf"
-# Default to Q8 (better quality) but accept an existing Q4 install.
-if [[ -f "$NEUTTS_MODEL_Q8" ]]; then
-  NEUTTS_MODEL="$NEUTTS_MODEL_Q8"
-elif [[ -f "$NEUTTS_MODEL_Q4" ]]; then
-  NEUTTS_MODEL="$NEUTTS_MODEL_Q4"
-else
-  NEUTTS_MODEL="$NEUTTS_MODEL_Q8"
-fi
-
-setup_neutts() {
-  echo ""
-  echo "─── NeuTTS Air voice cloning setup ─────────────────────────────────────────"
-  echo ""
-
-  # Check espeak-ng
-  if ! command -v espeak-ng &>/dev/null; then
-    echo "  espeak-ng not found — needed for NeuTTS phonemisation."
-    echo "  Install: sudo apt install espeak-ng"
-    echo "  Skipping NeuTTS setup."
-    return
-  fi
-
-  # Find Python
-  PYTHON=""
-  for py in python3.12 python3.11 python3.10 python3; do
-    if command -v "$py" &>/dev/null; then PYTHON="$py"; break; fi
-  done
-  if [[ -z "$PYTHON" ]]; then
-    echo "  Python 3.10+ not found. Skipping NeuTTS setup."
-    return
-  fi
-
-  # Create venv + install
-  if [[ ! -d "$NEUTTS_VENV" ]]; then
-    echo "  Creating Python venv ($NEUTTS_VENV)..."
-    "$PYTHON" -m venv "$NEUTTS_VENV"
-  fi
-  echo "  Installing neutts[llama]..."
-  "$NEUTTS_VENV/bin/pip" install --quiet --upgrade pip
-  "$NEUTTS_VENV/bin/pip" install --quiet "neutts[llama]" soundfile numpy
-
-  # Download model — prefer Q8 (default), fall back to existing Q4 if present.
-  if [[ ! -f "$NEUTTS_MODEL_Q8" && ! -f "$NEUTTS_MODEL_Q4" ]]; then
-    echo "  Downloading NeuTTS Air Q8 GGUF (~803 MB)..."
-    DL_FILE="neutts-air-Q8_0.gguf"
-    if [[ -n "${HF_CMD:-}" ]]; then
-      $HF_CMD download "neuphonic/neutts-air-q8-gguf" "$DL_FILE" --local-dir "$MODEL_DIR"
-      [[ -f "${MODEL_DIR}/${DL_FILE}" ]] && mv "${MODEL_DIR}/${DL_FILE}" "$NEUTTS_MODEL_Q8"
-    elif command -v wget &>/dev/null; then
-      wget -q --show-progress -O "$NEUTTS_MODEL_Q8" \
-        "https://huggingface.co/neuphonic/neutts-air-q8-gguf/resolve/main/$DL_FILE"
-    elif command -v curl &>/dev/null; then
-      curl -L --progress-bar -o "$NEUTTS_MODEL_Q8" \
-        "https://huggingface.co/neuphonic/neutts-air-q8-gguf/resolve/main/$DL_FILE"
-    fi
-    NEUTTS_MODEL="$NEUTTS_MODEL_Q8"
-  fi
-
-  # Generate voice references if missing
-  if [[ ! -f "voices/default.wav" ]]; then
-    echo "  Generating voice references..."
-    ./scripts/generate-voices.sh 2>/dev/null || true
-  fi
-
-  # Verify
-  if "$NEUTTS_VENV/bin/python" -c "from neutts import NeuTTS" 2>/dev/null; then
-    echo ""
-    echo "  ✓ NeuTTS Air ready (model: $(du -h "$NEUTTS_MODEL" 2>/dev/null | cut -f1 || echo '?'))"
-  else
-    echo "  WARNING: neutts import failed. TTS may not work."
-  fi
-  echo "─────────────────────────────────────────────────────────────────────────────"
-}
-
-# If called with explicit 'neutts' target, run setup and exit
-if [[ "$MODEL" == "neutts" ]]; then
-  setup_neutts
-  exit 0
-fi
-
 # ── Optional recommended downloads ────────────────────────────────────────────
 
-# NeuTTS Air (voice cloning for TTS modules)
-if [[ -f "$NEUTTS_MODEL" ]] && [[ -d "$NEUTTS_VENV" ]]; then
+# Qwen3-TTS (voice cloning for TTS modules)
+if tts_ready; then
   echo ""
-  echo "✓ NeuTTS Air already set up."
+  echo "✓ Qwen3-TTS already set up (.tts-venv)."
 else
   echo ""
-  echo "NeuTTS Air enables neural voice cloning for TTS modules (~803 MB download, Q8)."
-  read -r -p "Set up NeuTTS Air? [Y/n] " reply
+  echo "Qwen3-TTS enables neural voice cloning for TTS modules (~4.3 GB weights + PyTorch)."
+  read -r -p "Set up Qwen3-TTS? [Y/n] " reply
   reply="${reply:-y}"
-  if [[ "$reply" =~ ^[Yy]$ ]] || [[ -z "$reply" ]]; then
-    setup_neutts
+  if [[ "$reply" =~ ^[Yy]$ ]]; then
+    setup_tts
   else
-    echo "  Skipped. Run later: ./scripts/download-models.sh neutts"
+    echo "  Skipped. Run later: ./scripts/download-models.sh tts"
   fi
 fi
 
@@ -347,7 +306,7 @@ echo "    https://archive.org/details/amen-breaks"
 echo "    https://archive.org/details/amen-breaks-compilation"
 echo "    → extract .wav files into  samples/amen/"
 echo ""
-echo "  Voice references (for the NeuTTS MC / TTS module)"
+echo "  Voice references (for the Qwen3-TTS MC / TTS module)"
 echo "    https://archive.org/details/librivoxaudio      (clean, recommended)"
 echo "    https://commonvoice.mozilla.org/                (CC0 short clips)"
 echo "    → drop a 3–15s mono WAV into  voices/"

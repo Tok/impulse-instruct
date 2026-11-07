@@ -66,7 +66,7 @@ pub const RACK_PRESETS: &[RackPreset] = &[
             ModuleKind::AmenSampler,
             ModuleKind::NoiseVoice,
             ModuleKind::GranularTexture,
-            ModuleKind::NeuTts,
+            ModuleKind::Tts,
         ],
         fx: &[
             // Distortion / saturation family
@@ -133,7 +133,7 @@ pub const RACK_PRESETS: &[RackPreset] = &[
             ModuleKind::AmenSampler,
             ModuleKind::NoiseVoice,
             ModuleKind::GranularTexture,
-            ModuleKind::NeuTts,
+            ModuleKind::Tts,
         ],
         fx: &[
             // Same FX gallery as "Full"...
