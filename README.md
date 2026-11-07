@@ -112,7 +112,7 @@ Impulse Instruct doesn't bundle audio samples. Two modules benefit from user-dro
   [archive.org/details/amen-breaks](https://archive.org/details/amen-breaks) or
   [amen-breaks-compilation](https://archive.org/details/amen-breaks-compilation)
   and extract `.wav` files into `samples/amen/`. The module's GET button opens the page in your browser.
-- **Voice references** for the Qwen3-TTS MC / DJ module — a 3–15s clean mono WAV of one speaker, plus a matching `.txt` transcript. [LibriVox audiobooks on the Internet Archive](https://archive.org/details/librivoxaudio) are the easiest clean source. Drop `voices/myvoice.wav` + `voices/myvoice.txt`.
+- **Voice references** for the Qwen3-TTS MC / DJ module — a 3–15s clean mono WAV of one speaker, plus a matching `.txt` transcript. [LibriVox audiobooks on the Internet Archive](https://archive.org/details/librivoxaudio) are the easiest clean source. Drop `voices/myvoice.wav` + `voices/myvoice.txt` — [voices/README.md](voices/README.md) walks through picking, trimming and transcribing a clip.
 
 Both directories exist in the release zip with a README pointing at the same links.
 
