@@ -6,6 +6,7 @@
 pub mod few_shot;
 pub mod instructions;
 pub mod json_repair;
+pub mod lane_composition;
 pub mod lane_eval;
 pub mod lane_scheduler;
 pub mod lanes;

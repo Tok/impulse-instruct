@@ -70,15 +70,17 @@ fn evaluate_bass(state: &AppState, idx: usize) -> f32 {
     score += density * 0.40;
     weight += 0.40;
 
-    // Note variety: at least 2 distinct pitches, ideally 3+.
-    let distinct: std::collections::HashSet<u8> = active.iter().map(|s| s.note).collect();
-    let variety = match distinct.len() {
-        0 => 0.0,
-        1 => 0.35,
-        2 => 0.75,
-        _ => 1.0,
+    // Reward tonal agreement, not novelty: a tonic drone can be exactly right.
+    let (root, scale) = crate::llm::lane_composition::lane_key(state, LaneKind::Bass(idx));
+    let harmony = active
+        .iter()
+        .filter(|s| crate::state::note_in_scale(s.note, root, scale))
+        .count();
+    score += if n == 0 {
+        0.0
+    } else {
+        harmony as f32 / n as f32 * 0.25
     };
-    score += variety * 0.25;
     weight += 0.25;
 
     // Accent presence — system prompt asks for accents on some steps.
@@ -211,13 +213,12 @@ fn evaluate_melodic(state: &AppState, lane: MelodicLane) -> f32 {
         return 0.2;
     }
     let density = if (2..=12).contains(&n) { 1.0 } else { 0.6 };
-    let distinct: std::collections::HashSet<u8> = active.iter().map(|s| s.note).collect();
-    let variety = match distinct.len() {
-        0 | 1 => 0.4,
-        2 => 0.75,
-        _ => 1.0,
-    };
-    density * 0.6 + variety * 0.4
+    let harmony = active
+        .iter()
+        .filter(|s| crate::state::note_in_scale(s.note, seq.root_note, seq.scale))
+        .count() as f32
+        / n as f32;
+    density * 0.6 + harmony * 0.4
 }
 
 // ─── FX ───────────────────────────────────────────────────────────────────────

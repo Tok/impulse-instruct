@@ -20,7 +20,7 @@
 // LlamaServerBackend gets a wrapper, and tests get a mock, without
 // reshaping the app-wide `LlmBackend` trait.
 
-use crate::llm::lanes::{LaneKind, build_lane_prompt, lane_schema};
+use crate::llm::lanes::{LaneKind, build_lane_prompt};
 use crate::llm::planner::{
     LanePlan, build_planner_prompt, default_plan, parse_planner_output, planner_schema,
 };
@@ -190,7 +190,7 @@ pub fn run_pipeline<B: PipelineBackend>(
         progress(PipelineEvent::LaneStarted { lane });
         let t_lane = std::time::Instant::now();
         let system = build_lane_prompt(&state, lane);
-        let schema = lane_schema(lane);
+        let schema = crate::llm::lane_composition::composition_schema(&state, lane);
         match infer_lane_with_retry(backend, &system, user_prompt, &schema, sampling, lane) {
             Ok(raw) => {
                 // Log the raw lane output before filtering so we can see

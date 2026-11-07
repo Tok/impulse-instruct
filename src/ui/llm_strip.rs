@@ -32,12 +32,25 @@ impl ImpulseApp {
     /// LLM thread will see.  Direct API / OSC sends bypass this — they're
     /// not represented in the viz for v1.
     pub(crate) fn send_llm_infer(&mut self, prompt: String, one_shot: bool, agent_id: Option<u32>) {
+        // Setup is modal: no UI-triggered inference may edit the restored
+        // rack before the user has chosen what to keep or replace.
+        if self.show_wizard {
+            return;
+        }
         self.llm_queue.note_send(agent_id);
         let _ = self.llm_tx.try_send(crate::llm::LlmInput::Infer {
             prompt,
             one_shot,
             agent_id,
         });
+    }
+
+    pub(super) fn background_inference_ready(&self) -> bool {
+        super::util::background_inference_ready(
+            self.show_wizard,
+            self.startup_done,
+            self.state.read().llm.llm_initializing,
+        )
     }
 
     /// Effective jam prompt — style template if the active style sets

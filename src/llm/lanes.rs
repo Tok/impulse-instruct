@@ -187,7 +187,7 @@ impl LaneKind {
                     format!(
                         "Bass #{} is the SECONDARY voice — counterpoint bass #1 rather than \
                          doubling it. Different rhythm (fills where #1 rests), different \
-                         register (up a 5th or octave is a safe default), but the SAME key.",
+                         register (an octave is a safe default), but the SAME key.",
                         idx + 1,
                     )
                 };
@@ -198,15 +198,14 @@ impl LaneKind {
                      Tune synth via {synth_path}.\n\
                      TARGETS per 32-step loop: 8-14 active steps, 3-5 accents, 2-4 slides, \
                      2-3 non-zero pans in ±0.2..0.4. Accent/slide indices MUST be a subset \
-                     of steps; slides only between different-note active steps. Use 3-5 \
-                     distinct pitches (not one-note drones).\n\
+                     of steps; slides only between different-note active steps. Use a small pitch palette appropriate to the style; one-note drones are valid.\n\
                      Good example rhythms (32 steps): `[0,3,6,10,14,18,22,26]` classic \
                      sparse acid; `[0,3,6,10,14,15,18,22,23,28]` push/pull with pairs; \
                      `[0,2,5,8,13,16,19,24,27]` syncopated. AVOID even kick grids like \
                      `[0,4,8,12,16,20,24,28]` — that's drum territory.\n\
-                     Example C-minor notes (root 36): `[36,43,36,41,39,36,43,36,48,43,41,\
-                     36,39,41,36,43,36,41,39,43,36,46,43,36,39,43,48,41,36,43,39,36]` — \
-                     both halves use the full palette 36/39/41/43/46/48.\n\
+                     Choose notes from the HARMONY palette for the actual key. Repeat \
+                     the motif in the second half, with a small turnaround rather than \
+                     a new unrelated pitch at every step.\n\
                      {counterpoint} Do not write drums, FX, or other bass voices.",
                     voice = idx + 1,
                     synth_path = if idx == 0 {
@@ -322,13 +321,14 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
     // The rule is baked in as "stay in key unless the style explicitly
     // asks otherwise" so overrides are possible but never the default.
     let harmony_block = if matches!(lane, LaneKind::Bass(_) | LaneKind::Hoover | LaneKind::An1x) {
-        let scale_notes = scale_notes_in_c2_c3(state);
+        let (root, scale) = crate::llm::lane_composition::lane_key(state, lane);
+        let scale_notes = scale_notes_in_c2_c3(root, scale);
         format!(
             "\nHARMONY: key {} {}. In-key MIDI notes (C2–C3): [{}]. Default: stay \
-             in this scale so voices harmonise with each other. Break key only if \
+             in this scale so voices harmonise with each other. Leads/pads can use this palette one or two octaves higher. Break key only if \
              the style brief or the user prompt asks for it.\n",
-            root_name,
-            state.sequencer.scale.name(),
+            ROOT_NAMES[(root % 12) as usize],
+            scale.name(),
             scale_notes,
         )
     } else {
@@ -390,7 +390,7 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
          \n\
          STATE: {state_header}\n\
          LOCKED (never overwrite): {locked_str}\n\
-         {style_hint}{coverage}{harmony_block}{bass_context}{examples_block}\n\
+         {style_hint}{coverage}{harmony_block}{bass_context}{examples_block}{composition}\n\
          TASK: {task}\n\
          \n\
          The style above is USER-FIXED — if the user prompt says \"pick a style\" or \
@@ -398,8 +398,9 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
          required fields plus a one-sentence `_comment` describing what you changed \
          and why (producer voice, ≤ 80 chars). Skip `_thinking`. Prefer index lists \
          (`[0, 4, 8]`) over inline bool arrays — 4× shorter.\n\
-         Never emit an empty array like `[]` for a required pattern field — that \
-         silences the voice. If you don't have ideas, reuse the example rhythm above.",
+         Use empty rhythm arrays only for intentional silence. Generic examples are \
+         subordinate to the style and COMPOSITION guidance above.",
+        composition = crate::llm::lane_composition::composition_context(state, lane),
         lane_label = lane.label(),
         state_header = state_header,
         locked_str = locked_str,
@@ -416,9 +417,7 @@ pub fn build_lane_prompt(state: &AppState, lane: LaneKind) -> String {
 /// belong to the current scale.  Mirrors the `APPLYING THE KEY` block in
 /// the monolithic prompt — each melodic lane uses this as its note
 /// palette so voices stay in the same key by default.
-fn scale_notes_in_c2_c3(state: &AppState) -> String {
-    let root = state.sequencer.root_note;
-    let scale = state.sequencer.scale;
+fn scale_notes_in_c2_c3(root: u8, scale: crate::state::Scale) -> String {
     let intervals = scale.intervals();
     let mut out: Vec<String> = Vec::new();
     // MIDI 36 = C2, 48 = C3 — inclusive.

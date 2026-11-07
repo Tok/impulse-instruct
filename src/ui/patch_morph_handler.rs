@@ -19,6 +19,10 @@ impl ImpulseApp {
     /// Drive one cycle of the AI patch morph scheduler.  Cheap +
     /// idempotent — early-exits when no morph is in flight.
     pub(super) fn tick_patch_morph(&mut self) {
+        // Do not consume morph calls or enqueue nudges during rack setup.
+        if !self.background_inference_ready() {
+            return;
+        }
         // Snapshot the counters under a short read lock.  We don't
         // hold the lock across the LLM send to avoid contending
         // with the audio thread on the next bar boundary.

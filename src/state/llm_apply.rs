@@ -225,6 +225,37 @@ pub fn apply_llm_update(state: AppState, update: &serde_json::Value, scope: &[St
                 }
             }
         }
+        // Lead writers use sequencer fields, just like bass writers. Apply
+        // these independently of optional synth parameter objects.
+        for (name, allowed, pattern) in [
+            (
+                "hoover",
+                seq_scope_flags.hoover,
+                &mut s.sequencer.hoover_pattern,
+            ),
+            ("an1x", seq_scope_flags.an1x, &mut s.sequencer.an1x_pattern),
+        ] {
+            if !allowed {
+                continue;
+            }
+            let steps_key = format!("{name}_steps");
+            if !locked.contains(&format!("sequencer.{steps_key}"))
+                && let Some(arr) = seq.get(&steps_key).and_then(|v| v.as_array())
+            {
+                apply_llm_step_array(arr, pattern, MAX_STEPS, |step, active| step.active = active);
+            }
+            let notes_key = format!("{name}_notes");
+            if !locked.contains(&format!("sequencer.{notes_key}"))
+                && let Some(arr) = seq.get(&notes_key).and_then(|v| v.as_array())
+            {
+                for (step, note) in pattern.iter_mut().zip(arr) {
+                    if let Some(note) = note.as_u64() {
+                        step.note = note.min(127) as u8;
+                    }
+                }
+            }
+        }
+
         apply_bass_notes(&mut s, seq, seq_scope_flags, locked);
         apply_bass_pans(&mut s, seq, seq_scope_flags, locked);
         // Mirror voice 0 into the legacy single-voice `bass_pattern` only
@@ -844,7 +875,8 @@ pub fn apply_llm_intensity_array<F>(
 }
 
 ///
-/// Accepts: `[]` clear, `[0,4,8]` index list (< 16), `[1,0,…]` inline 0/1 (≥ 16).
+/// Accepts: `[]` clear, integer index lists (including dense lists), boolean arrays,
+/// and legacy inline 0/1 arrays (≥ 16). Integers >1 identify indices, not gates.
 /// `set_active` must update `active` plus any default fields.
 pub fn apply_llm_step_array<T, F>(
     arr: &[serde_json::Value],
@@ -862,7 +894,9 @@ pub fn apply_llm_step_array<T, F>(
         }
         return;
     }
-    if arr.len() < 16 {
+    if arr.iter().all(serde_json::Value::is_u64)
+        && (arr.len() < 16 || arr.iter().any(|v| v.as_u64().is_some_and(|n| n > 1)))
+    {
         // Index list: clear everything, then activate listed positions
         for item in items[..n].iter_mut() {
             set_active(item, false);

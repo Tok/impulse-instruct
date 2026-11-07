@@ -62,6 +62,11 @@ impl eframe::App for ImpulseApp {
             d.insert_temp(egui::Id::unique("ctrl_locked"), self.ctrl_locked);
         });
 
+        // A deferred cycle may belong to the rack being replaced. Drop it
+        // during setup; the heartbeat will choose from the completed rack.
+        if self.show_wizard {
+            self.jam_next_fire = None;
+        }
         self.drain_llm_outputs();
         self.drain_api_log();
         self.drain_midi_events();
@@ -100,7 +105,9 @@ impl eframe::App for ImpulseApp {
 
         // ── Auto-save: write session.json if the state changed ──────────────
         // (moved here to diagnose hang — see if save blocks)
-        if let Some((fire_at, pending_agent)) = self.jam_next_fire {
+        if self.background_inference_ready()
+            && let Some((fire_at, pending_agent)) = self.jam_next_fire
+        {
             if std::time::Instant::now() >= fire_at {
                 self.jam_next_fire = None;
                 if self.state.read().llm.heat > 0.0 {
@@ -130,7 +137,7 @@ impl eframe::App for ImpulseApp {
             let dormant = !any_inferring && self.jam_next_fire.is_none();
             let cooldown = std::time::Duration::from_millis(500);
             let cooldown_left = cooldown.saturating_sub(self.last_jam_kickoff.elapsed());
-            if heat > 0.0 && dormant && !initializing {
+            if self.background_inference_ready() && heat > 0.0 && dormant && !initializing {
                 if cooldown_left.is_zero() {
                     let next = {
                         let s = self.state.read();
