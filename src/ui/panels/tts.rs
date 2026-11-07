@@ -18,43 +18,11 @@ use crate::ui::{ImpulseApp, theme, widgets};
 /// 250ms timeout so a dead server doesn't stall the UI thread.
 /// Called infrequently (~1 Hz) — cached on `tts_server_online_at` below.
 fn check_tts_alive() -> bool {
-    let url = format!("http://127.0.0.1:{}/health", TTS_PORT);
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_connect(Some(std::time::Duration::from_millis(250)))
-        .timeout_global(Some(std::time::Duration::from_millis(250)))
-        .build()
-        .into();
-    agent
-        .get(&url)
-        .call()
-        .map(|r| r.status().is_success())
-        .unwrap_or(false)
+    crate::llm::tts_service::is_online()
 }
 
-/// Spawn the Qwen3-TTS Python server in the background.  Uses the
-/// .tts-venv python if present (matches demo/lib.sh), else system
-/// python3.  The spawned process is detached — we don't track its PID
-/// in the UI; the cleanup trap in demo/record-demo.sh or a manual
-/// `pkill -f tts-server.py` handles shutdown.  No-op if spawning
-/// fails.
 fn spawn_tts_server() {
-    #[cfg(windows)]
-    let (venv_py, system_py) = (".tts-venv/Scripts/python.exe", "python");
-    #[cfg(not(windows))]
-    let (venv_py, system_py) = (".tts-venv/bin/python", "python3");
-    let python = if std::path::Path::new(venv_py).exists() {
-        venv_py
-    } else {
-        system_py
-    };
-    let _ = std::process::Command::new(python)
-        .arg("scripts/tts-server.py")
-        .arg("--port")
-        .arg(TTS_PORT.to_string())
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn();
+    std::thread::spawn(crate::llm::tts_service::ensure_server);
 }
 
 /// Mutate the TtsModuleState for `mid` inside `app`.
@@ -213,7 +181,7 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
                 .small_button(egui::RichText::new("START").monospace().size(7.0))
                 .on_hover_text(format!(
                     "Spawn scripts/tts-server.py on port {TTS_PORT}.\n\
-                     Uses .tts-venv/bin/python if present, else python3.\n\
+                     Uses the installed .tts-venv environment.\n\
                      First start takes a few seconds to load the model.",
                 ))
                 .clicked()
@@ -232,6 +200,37 @@ pub fn draw_tts(app: &mut ImpulseApp, ui: &mut egui::Ui, module_id: u32) {
             .size(8.0)
             .color(theme::SMOKE)
     };
+
+    ui.horizontal_wrapped(|ui| {
+        let mut pitch = tts_state.pitch_st;
+        let mut drive = tts_state.mic_drive;
+        let mut room = tts_state.room_mix;
+        let mut backing = tts_state.music_duck;
+        if ui
+            .add(egui::Slider::new(&mut pitch, -12.0..=12.0).text("PITCH"))
+            .changed()
+        {
+            with_tts(app, module_id, |t| t.pitch_st = pitch);
+        }
+        if ui
+            .add(egui::Slider::new(&mut drive, 0.0..=1.0).text("MIC DRIVE"))
+            .changed()
+        {
+            with_tts(app, module_id, |t| t.mic_drive = drive);
+        }
+        if ui
+            .add(egui::Slider::new(&mut room, 0.0..=0.6).text("ROOM"))
+            .changed()
+        {
+            with_tts(app, module_id, |t| t.room_mix = room);
+        }
+        if ui
+            .add(egui::Slider::new(&mut backing, 0.0..=1.0).text("BACKING"))
+            .changed()
+        {
+            with_tts(app, module_id, |t| t.music_duck = backing);
+        }
+    });
 
     // ── Voice selector ──────────────────────────────────────────────────────
     let voices: Vec<String> = std::fs::read_dir("voices")

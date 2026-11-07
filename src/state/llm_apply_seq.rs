@@ -113,6 +113,11 @@ pub(super) fn apply_sequencer_globals(
     {
         s.sequencer.root_note = (v as u8).clamp(0, 11);
     }
+    if !locked.contains("sequencer.scale_snap")
+        && let Some(snap) = seq.get("scale_snap").and_then(Value::as_bool)
+    {
+        s.sequencer.scale_snap = snap;
+    }
     if !locked.contains("sequencer.scale")
         && let Some(v) = seq.get("scale").and_then(|v| v.as_str())
         && let Some(sc) = Scale::from_str(v)
@@ -335,8 +340,12 @@ pub(super) fn apply_melodic_lane_lens(
 /// `scale_snap` is on.  Caller has already verified scope + lock.
 fn write_bass_notes_to_voice(s: &mut AppState, arr: &[Value], voice_idx: usize) {
     let snap = s.sequencer.scale_snap;
-    let root = s.sequencer.root_note;
-    let scale = s.sequencer.scale;
+    let (root, scale) = s
+        .bass_voices
+        .get(voice_idx)
+        .filter(|voice| !voice.lock_key)
+        .map(|voice| (voice.root_note, voice.scale))
+        .unwrap_or((s.sequencer.root_note, s.sequencer.scale));
     for (i, val) in arr.iter().enumerate().take(MAX_STEPS) {
         if let Some(note) = val.as_u64() {
             let note = note.clamp(0, 127) as u8;

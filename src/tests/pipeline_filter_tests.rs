@@ -138,10 +138,8 @@ fn filter_strips_sequencer_subkeys_outside_lane_scope() {
 }
 
 #[test]
-fn filter_drops_empty_destructive_pattern_arrays() {
-    // Empty `bass_steps: []` would be interpreted by apply_llm_update as
-    // "clear every step" — a destructive silent-failure.  The filter
-    // drops it so the prior pattern survives.
+fn filter_preserves_intentional_rhythm_clear() {
+    // Empty rhythms intentionally clear a voice, including drumless styles.
     let raw = serde_json::json!({
         "sequencer": {
             "bass_steps": [],
@@ -151,8 +149,8 @@ fn filter_drops_empty_destructive_pattern_arrays() {
     let out = filter_lane_output(LaneKind::Bass(0), raw);
     let seq = out.get("sequencer").and_then(|s| s.as_object()).unwrap();
     assert!(
-        !seq.contains_key("bass_steps"),
-        "empty bass_steps must be dropped",
+        seq.contains_key("bass_steps"),
+        "empty bass_steps must survive as intentional silence",
     );
     assert!(
         seq.contains_key("bass_notes"),

@@ -20,7 +20,7 @@
 // LlamaServerBackend gets a wrapper, and tests get a mock, without
 // reshaping the app-wide `LlmBackend` trait.
 
-use crate::llm::lanes::{LaneKind, build_lane_prompt, lane_schema};
+use crate::llm::lanes::{LaneKind, build_lane_prompt};
 use crate::llm::planner::{
     LanePlan, build_planner_prompt, default_plan, parse_planner_output, planner_schema,
 };
@@ -147,7 +147,7 @@ pub fn run_pipeline<B: PipelineBackend>(
     // labels (e.g. after a style switch removes a voice mid-cycle), and
     // `default_plan` only reads the rack at construction.  Filtering
     // here means a no-op-prone lane never burns an inference call.
-    let plan = LanePlan {
+    let mut plan = LanePlan {
         lanes: plan
             .lanes
             .into_iter()
@@ -156,6 +156,9 @@ pub fn run_pipeline<B: PipelineBackend>(
         rationale: plan.rationale,
         from_retry: plan.from_retry,
     };
+    if state.llm.active_style.as_deref() == Some("jungle") {
+        crate::llm::jungle::order_intro(&mut plan.lanes);
+    }
     if plan.lanes.is_empty() {
         progress(PipelineEvent::PipelineDone {
             total_ms: t_start.elapsed().as_millis(),
@@ -190,8 +193,16 @@ pub fn run_pipeline<B: PipelineBackend>(
         progress(PipelineEvent::LaneStarted { lane });
         let t_lane = std::time::Instant::now();
         let system = build_lane_prompt(&state, lane);
-        let schema = lane_schema(lane);
-        match infer_lane_with_retry(backend, &system, user_prompt, &schema, sampling, lane) {
+        let schema = crate::llm::lane_composition::composition_schema(&state, lane);
+        match infer_lane_with_retry(
+            backend,
+            &system,
+            user_prompt,
+            &schema,
+            sampling,
+            lane,
+            state.llm.active_style.as_deref() == Some("jungle"),
+        ) {
             Ok(raw) => {
                 // Log the raw lane output before filtering so we can see
                 // what the model actually emitted — essential when a lane
@@ -273,15 +284,23 @@ fn run_planner<B: PipelineBackend>(
 /// stall the whole pipeline if a lane is fundamentally broken.
 pub(crate) const LANE_RETRY_TEMP_BUMP: f32 = 0.1;
 
-fn infer_lane_with_retry<B: PipelineBackend>(
+pub(crate) fn infer_lane_with_retry<B: PipelineBackend>(
     backend: &mut B,
     system: &str,
     user: &str,
     schema: &Value,
     sampling: &SamplingParams,
     lane: LaneKind,
+    strict_rhythms: bool,
 ) -> anyhow::Result<Value> {
-    match backend.infer_lane_json(system, user, schema, sampling) {
+    let mut infer = |prompt: &str, params: &SamplingParams| -> anyhow::Result<Value> {
+        let value = backend.infer_lane_json(system, prompt, schema, params)?;
+        if strict_rhythms {
+            crate::llm::jungle::validate_rhythms(&value)?;
+        }
+        Ok(value)
+    };
+    match infer(user, sampling) {
         Ok(v) => Ok(v),
         Err(first_err) => {
             let bumped = SamplingParams {
@@ -294,7 +313,15 @@ fn infer_lane_with_retry<B: PipelineBackend>(
                 bumped.temperature,
                 truncate(&first_err.to_string(), 160)
             );
-            backend.infer_lane_json(system, user, schema, &bumped)
+            let retry_prompt = if strict_rhythms {
+                format!(
+                    "{user}\nCorrection required: {}. Return corrected JSON matching the schema.",
+                    truncate(&first_err.to_string(), 300)
+                )
+            } else {
+                user.to_string()
+            };
+            infer(&retry_prompt, &bumped)
         }
     }
 }

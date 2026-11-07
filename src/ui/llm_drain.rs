@@ -120,7 +120,10 @@ impl ImpulseApp {
                 }
             }
             // Jam re-triggers unless heat is at zero (model is parked).
-            if out.text == "[jam_cycle_done]" && self.state.read().llm.heat > 0.0 {
+            if out.text == "[jam_cycle_done]"
+                && self.background_inference_ready()
+                && self.state.read().llm.heat > 0.0
+            {
                 {
                     // Advance ramps selectively (don't full-replace state — would overwrite API/rack edits).
                     let cur = self.state.read().clone();

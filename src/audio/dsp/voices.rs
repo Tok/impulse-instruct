@@ -768,3 +768,44 @@ pub(crate) fn drum_voice_idx(voice: &crate::state::DrumVoice) -> usize {
 }
 
 // Amen/WAV and Granular voices are in samplers.rs (split for line-count limit).
+
+#[cfg(test)]
+mod jungle_texture_tests {
+    use super::*;
+
+    #[test]
+    fn jungle_texture_is_a_quiet_continuous_background() {
+        let style = crate::llm::styles::StyleCatalog::get()
+            .find_by_id("jungle")
+            .unwrap();
+        let state = crate::state::apply_llm_update(
+            crate::state::AppState::default(),
+            style.baseline_params.as_ref().unwrap(),
+            &[],
+        );
+        let params = crate::audio::dsp::AudioParams::from_app_state(&state);
+        let mut noise = NoiseVoice::new(123);
+        let mut bass = crate::audio::dsp::bass303::Bass303::default();
+        bass.trigger(45, 0.0, 0.0, crate::audio::dsp::TuningSystem::TwelveTet);
+        let mut noise_energy = 0.0;
+        let mut bass_energy = 0.0;
+        for i in 0..96_000 {
+            if i == 2200 {
+                bass.gate_off();
+            }
+            let n = noise.process(48_000.0, &params);
+            let b = bass.process(&params, &params.bass_voice_params[0]);
+            assert!(n.is_finite());
+            noise_energy += n * n;
+            bass_energy += b * b;
+        }
+        let noise_rms = (noise_energy / 96_000.0_f32).sqrt();
+        let bass_rms = (bass_energy / 96_000.0_f32).sqrt();
+        println!("texture RMS={noise_rms:.4}, bass RMS={bass_rms:.4}");
+        assert!(noise_rms > 0.001, "texture should be audible");
+        assert!(
+            noise_rms < bass_rms * 0.5,
+            "texture should stay behind sparse bass"
+        );
+    }
+}

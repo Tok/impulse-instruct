@@ -576,6 +576,21 @@ impl ImpulseApp {
                             &theme::NOTE_TEMP,
                         )
                     };
+                    let peak = self
+                        .spectrum_magnitudes
+                        .iter()
+                        .copied()
+                        .fold(-96.0_f32, f32::max);
+                    let playing = !self.show_wizard && self.state.read().sequencer.running;
+                    let id = egui::Id::unique("header_temperature_readout");
+                    let previous = ui
+                        .ctx()
+                        .data(|data| data.get_temp::<super::widgets::TemperatureReadout>(id))
+                        .unwrap_or_default();
+                    let reading =
+                        previous.advance(live, peak, ui.input(|input| input.stable_dt), playing);
+                    ui.ctx().data_mut(|data| data.insert_temp(id, reading));
+                    let live = reading.value;
                     let bank = super::widgets::bank_temperature(&self.state.read());
                     super::widgets::draw_temp_chip(ui, live, bank);
                 });

@@ -82,7 +82,8 @@ setup_tts() {
     "$TTS_MODEL_ID"
 
   if [[ ! -f "voices/default.wav" ]]; then
-    echo "  Generating placeholder voice references (espeak-ng)..."
+    echo "  Generating voice references (espeak-ng placeholders + neural MC;"
+    echo "  the MC's one-time VoiceDesign download is several GB)..."
     # scripts/ in a dev checkout, next to this script in the release zip.
     for gen in ./scripts/generate-voices.sh ./generate-voices.sh; do
       [[ -x "$gen" ]] && { "$gen" 2>/dev/null || true; break; }

@@ -185,15 +185,13 @@ fn task_footer_mentions_lane_label() {
 }
 
 #[test]
-fn prompt_warns_against_empty_array_emissions() {
-    // Every lane prompt includes the anti-empty-array rule so the model
-    // doesn't silence a voice by emitting `[]`.  Losing this rule
-    // regressed a recurrent bug in past versions.
+fn prompt_allows_only_intentional_silence() {
+    // Preserve the distinction between intentional rests and missing output.
     let s = AppState::default();
     for lane in [LaneKind::Bass(0), LaneKind::KitA, LaneKind::Fx] {
         let p = build_lane_prompt(&s, lane);
         assert!(
-            p.to_lowercase().contains("empty array") || p.contains("`[]`"),
+            p.contains("empty rhythm arrays only for intentional silence"),
             "{lane:?} prompt must warn against emitting empty arrays",
         );
     }

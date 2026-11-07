@@ -31,6 +31,20 @@ if exist "voices\mc.wav" if "%FORCE%"=="0" (
     echo   mc: exists
     goto :dj
 )
+if exist ".tts-venv\Scripts\python.exe" if exist "scripts\design-mc-voice.py" (
+    if "%FORCE%"=="1" (
+        .tts-venv\Scripts\python.exe scripts\design-mc-voice.py --replace
+    ) else (
+        .tts-venv\Scripts\python.exe scripts\design-mc-voice.py
+    )
+    if not errorlevel 1 goto :dj
+)
+REM Neural design unavailable: keep an existing reference, else espeak-ng MC.
+if exist "voices\mc.wav" (
+    echo   mc: neural reference failed; keeping existing voices\mc.wav
+    goto :dj
+)
+echo   mc: neural reference unavailable; using espeak-ng fallback
 espeak-ng -v en+m3 -p 65 -s 170 -w voices\mc.wav "Selector! Big up the junglist massive! We have the bass, we have the breaks, we have the riddim. Pull up and rewind! This one goes out to all the ravers in the building tonight."
 echo Selector! Big up the junglist massive! We have the bass, we have the breaks, we have the riddim. Pull up and rewind! This one goes out to all the ravers in the building tonight.> voices\mc.txt
 echo   mc: generated

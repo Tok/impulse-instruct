@@ -66,7 +66,16 @@ pub(crate) fn load_and_cache(app: &mut ImpulseApp, path: &str) {
         let _ = app.audio_tx.push(AudioCommand::LoadSampler(data));
     }
     let meta = crate::audio::read_wav_meta(path);
-    app.state.write().amen.meta = meta;
+    let mut s = app.state.write();
+    if meta.is_some()
+        && !s.llm.locked_params.contains("amen.source_bpm")
+        && let Some(bpm) = crate::ui::util::sample_bpm_hint(path)
+    {
+        s.amen.source_bpm = bpm;
+    }
+    s.amen.meta = meta;
+    drop(s);
+    app.push_audio_params();
 }
 
 /// Synthetic path label used by the REC→CHOP button so the amen

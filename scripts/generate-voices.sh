@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─── generate-voices.sh ──────────────────────────────────────────────────────
-# Generate TTS reference voice clips from espeak-ng.
+# Generate an original neural MC reference and espeak-ng development voices.
 # Run once after setup — creates voices/*.wav + *.txt pairs that Qwen3-TTS
 # uses as voice-cloning references.
 #
@@ -26,11 +26,6 @@ if [ -f ../Cargo.toml ]; then cd ..; fi
 VOICES_DIR="voices"
 mkdir -p "$VOICES_DIR"
 
-if ! command -v espeak-ng >/dev/null 2>&1; then
-    echo "ERROR: espeak-ng not found. Install: sudo apt install espeak-ng"
-    exit 1
-fi
-
 FORCE=0
 TARGET=""
 for arg in "$@"; do
@@ -50,6 +45,27 @@ generate_voice() {
         return
     fi
 
+    if [[ "$name" == "mc" ]]; then
+        local replace=()
+        [[ "$FORCE" -eq 1 ]] && replace=(--replace)
+        if [[ -x .tts-venv/bin/python ]] && [[ -f scripts/design-mc-voice.py ]] \
+            && .tts-venv/bin/python scripts/design-mc-voice.py "${replace[@]}"; then
+            return
+        fi
+        # Neural design unavailable (no TTS venv, no GPU memory, ...): keep an
+        # existing reference, otherwise fall through to the espeak-ng MC so the
+        # remaining voices are still generated and the MC is never silent.
+        if [[ -f "$wav" ]]; then
+            echo "  mc: neural reference failed; keeping existing $wav"
+            return
+        fi
+        echo "  mc: neural reference unavailable; using espeak-ng fallback"
+    fi
+
+    if ! command -v espeak-ng >/dev/null 2>&1; then
+        echo "ERROR: espeak-ng is required for development voice $name"
+        return 1
+    fi
     espeak-ng -v "$voice" -p "$pitch" -s "$speed" -w "$wav" "$text"
     echo "$text" > "$txt"
 

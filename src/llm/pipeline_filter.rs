@@ -9,10 +9,7 @@
 //
 //   • `filter_lane_output` strips any JSON keys outside the lane's
 //     scope, drops `sequencer` subkeys outside the lane's allowed
-//     subkeys, and discards empty pattern arrays (treating
-//     `"bass_steps": []` as "clear voice" was a destructive silent-
-//     failure mode when the model emitted required arrays without
-//     having anything useful to say).
+//     subkeys. Empty rhythms clear a voice; empty pitch arrays are ignored.
 //
 // `pipeline.rs` re-exports both via `pub use` so existing imports
 // (`crate::llm::pipeline::filter_lane_output`) keep working.
@@ -46,39 +43,20 @@ pub fn lane_apply_scope(lane: LaneKind) -> Vec<String> {
 /// Top-level keys outside `output_keys()` are dropped.  Inside
 /// `sequencer`, only the lane's `sequencer_subkeys()` survive.
 ///
-/// Also drops empty pattern arrays (`"bass_steps": []`) — the apply
-/// layer treats `[]` as "clear everything", which is a destructive
-/// silent-failure mode when the model emits empty required arrays
-/// to satisfy the schema without having anything useful to say.
+/// Empty rhythms are preserved for intentional silence; empty pitch arrays are ignored.
 pub fn filter_lane_output(lane: LaneKind, raw: Value) -> Value {
     let allowed_top: &[&str] = lane.output_keys();
     // `_thinking` and `_comment` are meta-fields carried through for
     // logging / UI; always let them pass.
     let carry_over = ["_thinking", "_comment", "mc_line"];
-    // Pattern arrays where "empty means clear" — an empty emission is
-    // almost certainly a model giving up on required fields rather than
-    // the user asking for silence.  Drop these before apply so the
-    // existing pattern survives.
+    // Empty pitch arrays contain no replacement data; empty rhythms are
+    // intentional silence and must survive filtering.
     let destructive_if_empty = [
-        "bass_steps",
-        "bass2_steps",
-        "bass3_steps",
-        "bass4_steps",
         "bass_notes",
         "bass2_notes",
         "bass3_notes",
         "bass4_notes",
-        "kick_a_steps",
-        "snare_a_steps",
-        "hihat_a_steps",
-        "kick_b_steps",
-        "snare_b_steps",
-        "clap_b_steps",
-        "hihat_b_steps",
-        "amen_steps",
-        "hoover_steps",
         "hoover_notes",
-        "an1x_steps",
         "an1x_notes",
     ];
 
@@ -102,9 +80,7 @@ pub fn filter_lane_output(lane: LaneKind, raw: Value) -> Value {
                     if !allowed_sub.iter().any(|a| a == sk) {
                         continue;
                     }
-                    // Drop empty pattern arrays — the apply layer would
-                    // interpret them as "clear this voice", wiping the
-                    // user's current pattern with silence.
+                    // Ignore empty pitch data, but preserve explicit rhythm clears.
                     if destructive_if_empty.contains(&sk.as_str())
                         && sv.as_array().is_some_and(|a| a.is_empty())
                     {

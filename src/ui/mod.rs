@@ -53,6 +53,7 @@ mod windows_prefs;
 mod windows_sysinfo;
 mod windows_undo_timeline;
 mod wizard;
+mod wizard_style;
 
 /// Convert a dot-path + float value into a nested JSON object.
 /// "bass.cutoff", 0.4  →  {"bass": {"cutoff": 0.4}}
@@ -391,6 +392,7 @@ pub struct ImpulseApp {
     pub(crate) show_wizard: bool,
     pub(crate) wizard_selected: usize,
     pub(crate) wizard_rack_preset: usize,
+    pub(crate) wizard_include_viz: bool,
     /// Optional style id that seeds the wizard's rack instead of the
     /// generic `RACK_PRESETS` picks.  `Some(id)` causes `apply_wizard_preset`
     /// to route through `style_rack::apply` with the style's `rack_modules`
@@ -641,6 +643,7 @@ impl ImpulseApp {
 
             wizard_rack_preset: 3, // default to "Full" (everything — 303 + both drum kits + hoover + an1x + amen + FX chain)
             wizard_style_id: None,
+            wizard_include_viz: true,
             prefs_tab: 0,
             llm_tab: 0,
             startup_done: false,

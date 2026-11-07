@@ -4,6 +4,67 @@ A detailed log of what's built.
 
 ---
 
+## v0.7.9 — Jungle, MC voice, Rack Setup redesign
+
+**Music generation and Jungle**
+- Pattern completeness and harmonic consistency improved; all 29 styles
+  audited (`docs/style-composition-audit.md`).
+- Background inference no longer modifies the rack before Rack Setup
+  finishes.
+- Jungle prompts, defaults and validation reworked around sampled breaks,
+  sparse tonic/fifth sub-bass motifs, and a stable tempo and key.
+- Bass patterns span the whole loop instead of clustering in the first
+  quarter.
+- Bass sustain and audibility improved; recurring volume dips on Jungle
+  bass and Amen edits removed.
+- Fresh Jungle setups generate the Amen first, then bass, and clear
+  unlocked leftover bass patterns.
+- Style-created Amen sample selection and filename BPM detection fixed;
+  slice-array validation tightened.
+- Quiet, slowly filtered pink-noise background.
+- Sequencer style tag set correctly when creating a style-based rack.
+
+**Jungle MC / TTS**
+- The existing MC voice is wired into Jungle's lane pipeline and draws on
+  the style's shout-out catalogue.
+- TTS server starts on demand.
+- Health-check timeouts / BrokenPipe errors fixed: the server handles HTTP
+  concurrently while model generation stays serialized.
+- Neural MC reference generator (`scripts/design-mc-voice.py`, Qwen3-TTS
+  VoiceDesign) replaces robotic eSpeak conditioning. `generate-voices`
+  calls it and falls back to eSpeak when the TTS venv isn't set up; the
+  release zip now includes it.
+- Adjustable voice pitch, mic distortion, room reverb and backing-track
+  ducking.
+- Playback no longer picks up orphaned TTS settings from a previous rack.
+- Jungle defaults: MC volume 25 %, pitch −2 semitones, full mic drive,
+  room mix 12 %, no ducking; short calls at least 90 s apart.
+- Mix defaults: bass volume / sub level 100 %, Amen volume 55 %.
+
+**Rack Setup**
+- Wider, compact two-column layout without internal scrolling.
+- Styles grouped into families; only the selected family's variations
+  are shown.
+- Separate Start / Resume button.
+- Clear selected-agent highlighting and a selection summary.
+- Visualization modules enabled by default.
+- Choosing a new style or general rack leaves Resume selection.
+
+**Header**
+- Huth temperature readout stabilized: live readings suppressed during
+  setup and while stopped; smoothing, noise gating and a short-gap hold.
+
+**Upgrade notes**
+- `voices/mc.wav` is generated locally, not shipped. Existing TTS users
+  who still have the robotic eSpeak MC can upgrade with
+  `.tts-venv/bin/python scripts/design-mc-voice.py --replace`
+  (Windows: `.tts-venv\Scripts\python.exe scripts\design-mc-voice.py --replace`);
+  the old reference is backed up under `target/voice-backups/`.
+- Saved sessions keep their previous mix settings; start a fresh Jungle
+  setup to get the new defaults.
+
+---
+
 ### TTS — Qwen3-TTS replaces NeuTTS Air
 
 Neuphonic gated the NeuTTS Air and `neucodec` Hugging Face repos (Aug

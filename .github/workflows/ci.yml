@@ -169,6 +169,9 @@ jobs:
           # ships its README skeleton so users know where packs go.
           mkdir -p bundle/scripts
           cp scripts/tts-server.py bundle/scripts/tts-server.py
+          # Neural MC reference generator, called by generate-voices as
+          # scripts/design-mc-voice.py (voices/mc.wav itself is never shipped).
+          cp scripts/design-mc-voice.py bundle/scripts/design-mc-voice.py
           cp scripts/generate-voices.sh  bundle/generate-voices.sh
           cp scripts/generate-voices.bat bundle/generate-voices.bat
           chmod +x bundle/generate-voices.sh

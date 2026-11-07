@@ -19,6 +19,14 @@ use super::params::{AudioParams, BassVoiceParams, LfoParamsCopy, MAX_AMEN_SLICES
 
 impl AudioParams {
     pub fn from_app_state(s: &AppState) -> Self {
+        // Restored sessions can retain TTS settings for modules removed by
+        // Rack Setup. Only a live, enabled module may control the speech bus.
+        let tts = s
+            .rack
+            .modules
+            .iter()
+            .filter(|m| m.kind == ModuleKind::Tts && m.enabled)
+            .find_map(|m| s.tts_modules.iter().find(|t| t.id == m.id));
         let bass = &s.bass_voices[0].synth;
         let bvp: [BassVoiceParams; crate::state::MAX_BASS_VOICES] =
             std::array::from_fn(|i| BassVoiceParams::from_bass_state(&s.bass_voices[i].synth));
@@ -730,15 +738,10 @@ impl AudioParams {
                 .modules
                 .iter()
                 .any(|m| m.kind == ModuleKind::GabberKick && m.enabled),
-            // TTS bus volume — take the first TTS module's volume as the
-            // bus-level gain.  Multiple Tts modules share a single
-            // ring buffer (they all push into `tts_tx`), so this is a
-            // bus-wide multiplier rather than per-instance.
-            tts_voice_volume: s
-                .tts_modules
-                .first()
-                .map(|m| m.volume.clamp(0.0, 1.5))
-                .unwrap_or(1.0),
+            // Speech shares one ring buffer; use the first enabled rack
+            // TTS module, never an orphaned entry from an earlier setup.
+            tts_music_duck: tts.map(|m| m.music_duck.clamp(0.0, 1.0)).unwrap_or(1.0),
+            tts_voice_volume: tts.map(|m| m.volume.clamp(0.0, 1.5)).unwrap_or(0.0),
         }
     }
 }

@@ -849,4 +849,5 @@ pub struct AudioParams {
     /// `AudioParams` field so it's modulatable via the `TtsVolume`
     /// LFO target like any other DSP knob.
     pub tts_voice_volume: f32,
+    pub tts_music_duck: f32,
 }

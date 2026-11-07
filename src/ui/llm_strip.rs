@@ -32,12 +32,25 @@ impl ImpulseApp {
     /// LLM thread will see.  Direct API / OSC sends bypass this — they're
     /// not represented in the viz for v1.
     pub(crate) fn send_llm_infer(&mut self, prompt: String, one_shot: bool, agent_id: Option<u32>) {
+        // Setup is modal: no UI-triggered inference may edit the restored
+        // rack before the user has chosen what to keep or replace.
+        if self.show_wizard {
+            return;
+        }
         self.llm_queue.note_send(agent_id);
         let _ = self.llm_tx.try_send(crate::llm::LlmInput::Infer {
             prompt,
             one_shot,
             agent_id,
         });
+    }
+
+    pub(super) fn background_inference_ready(&self) -> bool {
+        super::util::background_inference_ready(
+            self.show_wizard,
+            self.startup_done,
+            self.state.read().llm.llm_initializing,
+        )
     }
 
     /// Effective jam prompt — style template if the active style sets
@@ -149,6 +162,7 @@ impl ImpulseApp {
                     s.fx = next.fx;
                     s.hoover = next.hoover;
                     s.an1x = next.an1x;
+                    s.amen = next.amen;
                     s.noise_voice = next.noise_voice;
                     s.lfo = next.lfo;
                     // Rack, llm_agents, llm queues, ui_prefs, etc. left
@@ -169,6 +183,10 @@ impl ImpulseApp {
                 );
             }
         }
+        let snapshot = self.state.read().clone();
+        *self.state.write() = crate::llm::jungle_mc::configure(snapshot);
+        self.push_fx_plan();
+
         // Propagate style to all sub-agents that don't have style_locked
         let style_id = self.state.read().llm.active_style.clone();
         if let Some(sid) = style_id {
