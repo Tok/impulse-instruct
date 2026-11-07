@@ -363,7 +363,7 @@ mod agent_clock;
 pub use agent_clock::agent_clock;
 
 mod temperature;
-pub use temperature::{bank_temperature, draw_temp_chip};
+pub use temperature::{TemperatureReadout, bank_temperature, draw_temp_chip};
 
 // ─── Glass Group ─────────────────────────────────────────────────────────────
 
