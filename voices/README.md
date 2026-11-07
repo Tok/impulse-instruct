@@ -98,4 +98,6 @@ If you just want placeholder voices to develop against:
 ```
 
 This synthesises `default / dj / narrator / robot` via espeak-ng
-— robotic but functional — and uses VoiceDesign for `mc`.
+— robotic but functional — and uses VoiceDesign for `mc`.  Without the
+TTS venv (`download-models tts`) the MC falls back to an espeak-ng voice
+too; run `design-mc-voice.py --replace` later to upgrade it.

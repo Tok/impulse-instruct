@@ -48,8 +48,18 @@ generate_voice() {
     if [[ "$name" == "mc" ]]; then
         local replace=()
         [[ "$FORCE" -eq 1 ]] && replace=(--replace)
-        .tts-venv/bin/python scripts/design-mc-voice.py "${replace[@]}"
-        return
+        if [[ -x .tts-venv/bin/python ]] && [[ -f scripts/design-mc-voice.py ]] \
+            && .tts-venv/bin/python scripts/design-mc-voice.py "${replace[@]}"; then
+            return
+        fi
+        # Neural design unavailable (no TTS venv, no GPU memory, ...): keep an
+        # existing reference, otherwise fall through to the espeak-ng MC so the
+        # remaining voices are still generated and the MC is never silent.
+        if [[ -f "$wav" ]]; then
+            echo "  mc: neural reference failed; keeping existing $wav"
+            return
+        fi
+        echo "  mc: neural reference unavailable; using espeak-ng fallback"
     fi
 
     if ! command -v espeak-ng >/dev/null 2>&1; then
