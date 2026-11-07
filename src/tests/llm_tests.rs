@@ -613,3 +613,47 @@ mod dsp_tests {
         assert!((c5 / c4 - 2.0).abs() < 0.001);
     }
 }
+
+/// Regression: the mock loop's transport-preserving writeback held its
+/// `state.write()` guard while calling `state.read()` for the persona
+/// name.  parking_lot's RwLock is not reentrant, so the LLM thread
+/// deadlocked on itself and froze UI, audio and API threads behind it.
+/// Mock mode is what every no-model / failed-llama-server start runs.
+#[cfg(test)]
+mod mock_loop_tests {
+    use crate::llm::LlmInput;
+    use crate::llm::mock::run_mock_loop;
+    use crate::state::AppState;
+    use parking_lot::RwLock;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    #[test]
+    fn mock_infer_with_param_update_does_not_deadlock() {
+        let state = Arc::new(RwLock::new(AppState::default()));
+        let (in_tx, in_rx) = crossbeam_channel::unbounded();
+        let (out_tx, out_rx) = crossbeam_channel::unbounded();
+        let loop_state = Arc::clone(&state);
+        let worker = std::thread::spawn(move || run_mock_loop(loop_state, in_rx, out_tx));
+
+        in_tx
+            .send(LlmInput::Infer {
+                prompt: "make it acid".to_string(),
+                one_shot: true,
+                agent_id: None,
+            })
+            .unwrap();
+        let out = out_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("mock loop produced no output — deadlocked on AppState?");
+        assert!(
+            out.param_update.is_some(),
+            "prompt must exercise the param-update writeback path"
+        );
+        // Lock must be free again for other threads.
+        assert!(state.try_write_for(Duration::from_secs(1)).is_some());
+
+        drop(in_tx);
+        worker.join().unwrap();
+    }
+}
