@@ -248,7 +248,7 @@ cleanup() {
     # Drop doesn't run on SIGKILL, and even SIGTERM can race — sweep
     # any orphaned llama-server spawned by our app. Match on --model so
     # we don't touch unrelated llama-server instances the user may run.
-    pkill -KILL -f 'llama-server .* --model' 2>/dev/null
+    pkill -KILL -f 'llama-server.* --model' 2>/dev/null
     stop_neutts_server 2>/dev/null
     # Clean up virtual recording sink
     destroy_recording_sink 2>/dev/null
