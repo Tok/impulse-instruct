@@ -218,7 +218,7 @@ pub use module_kind::{GRID_COLS, ModuleKind, Zone};
 pub use rack::{
     Cable, CableColor, FEEDBACK_GAIN_MAX, PortDir, PortKind, PortRef, RackModule, RackState,
 };
-pub use rack_presets::RACK_PRESETS;
+pub use rack_presets::{RACK_PRESETS, add_setup_visualizations};
 pub use rack_scope::{parse_module_kind, rack_kind_name_matches, scope_from_control_cables};
 
 // Amen sampler + bass voice state live in their own modules to keep LOC

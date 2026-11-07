@@ -215,3 +215,45 @@ impl RackState {
         rack
     }
 }
+
+/// Curated visual feedback for new setups; preserves the chosen instruments.
+pub fn add_setup_visualizations(mut state: super::AppState) -> super::AppState {
+    for kind in [
+        ModuleKind::StereoMeter,
+        ModuleKind::SpectrumAnalyzer,
+        ModuleKind::BarOscilloscope,
+        ModuleKind::EventStream,
+        ModuleKind::LoudnessMeter,
+        ModuleKind::PhaseWheel,
+    ] {
+        if !state.rack.modules.iter().any(|module| module.kind == kind) {
+            state.rack.add_module(kind);
+        }
+    }
+    state.rack.wire_default_cables();
+    state
+}
+
+#[cfg(test)]
+mod setup_tests {
+    use super::*;
+
+    #[test]
+    fn setup_visualizations_preserve_instruments_and_do_not_duplicate() {
+        let mut state = crate::state::AppState::default();
+        state.rack = RackState::from_preset(&RACK_PRESETS[1]);
+        let original = state.rack.modules.clone();
+        let once = add_setup_visualizations(state);
+        assert_eq!(once.rack.modules.len(), original.len() + 6);
+        let twice = add_setup_visualizations(once.clone());
+        assert_eq!(twice.rack.modules.len(), once.rack.modules.len());
+        assert_eq!(twice.rack.cables.len(), once.rack.cables.len());
+        assert!(original.iter().all(|old| {
+            twice
+                .rack
+                .modules
+                .iter()
+                .any(|new| new.id == old.id && new.kind == old.kind)
+        }));
+    }
+}

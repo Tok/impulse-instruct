@@ -34,7 +34,7 @@ pub fn configure(mut state: AppState) -> AppState {
     tts.mic_drive = 0.85;
     tts.room_mix = 0.22;
     tts.music_duck = 0.8;
-    tts.volume = 0.8;
+    tts.volume = 0.6;
     state.rack.connect_control(agent_id, tts_id);
     state.rack.wire_default_cables();
     state

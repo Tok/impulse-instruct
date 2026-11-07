@@ -437,4 +437,5 @@ fn old_tts_sessions_keep_clean_defaults_and_jungle_preserves_the_backing() {
     let params = crate::audio::dsp::AudioParams::from_app_state(&state);
     assert_eq!(params.tts_music_duck, 0.8);
     assert_eq!(state.tts_modules[0].pitch_st, -2.0);
+    assert_eq!(state.tts_modules[0].volume, 0.6);
 }
